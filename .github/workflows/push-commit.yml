@@ -79,3 +79,4 @@ jobs:
             --platform linux/amd64 \
             --tag myusername/backend:${{ github.sha }} \
             --file Dockerfile \
+            .
