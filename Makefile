@@ -5,6 +5,13 @@ NC = \033[0m
 
 all: build
 
+prepare:
+	@echo -e ":: $(GREEN) Preparing environment...$(NC)"
+	@echo -e ":: $(GREEN) Downloading go dependencies...$(NC)"
+	@go mod download \
+		&& echo -e ":: $(BLUE) Successfully downloaded go dependencies$(NC)" \
+		|| (echo -e ":: $(RED) Failed to download go dependencies$(NC)" && exit 1)
+
 run:
 	@echo -e ":: $(GREEN)Starting backend...$(NC)"
 	@go build -o bin/backend cmd/backend/main.go && \
