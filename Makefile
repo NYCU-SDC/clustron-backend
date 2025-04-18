@@ -16,3 +16,7 @@ build:
 	@echo -e ":: $(GREEN)Building backend...$(NC)"
 	@echo -e "  -> Building backend binary..."
 	@go build -o bin/backend cmd/backend/main.go && echo -e "==> $(BLUE)Build completed successfully$(NC)" || (echo -e "==> $(RED)Build failed$(NC)" && exit 1)
+
+test:
+	@echo -e ":: $(GREEN)Running tests...$(NC)"
+	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || echo -e "==> $(RED)Tests failed$(NC)"
