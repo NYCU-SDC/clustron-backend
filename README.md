@@ -46,3 +46,16 @@ go install github.com/vektra/mockery/v3@v3.2.2      # not recommanded by the doc
 ```
 
 You can also find more OS-spacific installing methods from to documentation.
+
+## Run the backend
+You can simply start the backend service via command:
+```
+make run
+```
+
+## Build the backend
+To build the backend code into binary, run:
+```
+make build
+```
+The binary file will be `./bin/backend`.
