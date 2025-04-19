@@ -45,7 +45,7 @@ go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 go install github.com/vektra/mockery/v3@v3.2.2      # not recommanded by the documentation
 ```
 
-You can also find more OS-spacific installing methods from to documentation.
+You can also find more OS-spacific installing methods from the documentation.
 
 ## Run the backend
 You can simply start the backend service via command:
@@ -59,3 +59,38 @@ To build the backend code into binary, run:
 make build
 ```
 The binary file will be `./bin/backend`.
+
+## Pre-push hook (Optional)
+We recommand you enable the pre-push hook if wish to commit to this repository.
+This will run checks before the code is pushed to the remote.
+
+The pre-push hook is run via [lefthook](https://lefthook.dev).
+
+### MacOS
+```
+brew install lefthook
+```
+### Go install 
+```
+go install github.com/evilmartians/lefthook@latest
+```
+You can also find more OS-spacific installing methods from the documentation.
+
+After installed lefthook, update git hook to use lefthook:
+```
+# run at project root
+left hook install
+```
+Then you are good to go!
+The pre-push checks will be envoked when you do `git push`.
+
+If the checks didn't pass, the push will be blocked.
+
+To temporary by pass the pre-push check and push:
+```
+git push origin --no-verify
+```
+To disable pre-push action until re-open it:
+```
+left hook uninstall
+```
