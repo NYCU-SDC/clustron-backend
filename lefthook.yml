@@ -1,0 +1,6 @@
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+pre-push:
+  commands:
+    lint:
+      run: golangci-lint run
