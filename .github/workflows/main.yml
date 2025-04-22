@@ -2,7 +2,7 @@ name: Lint, Test, and Build Backend
 
 on:
   push:
-    branches-ignore:
+    branches:
       - main
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.24'
+          go-version: '1.24'
 
       - name: Lint
         uses: golangci/golangci-lint-action@v7
@@ -23,6 +23,7 @@ jobs:
           version: v2.0
 
   Test:
+    needs: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -56,7 +57,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.24'
+          go-version: '1.24'
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
@@ -66,7 +67,7 @@ jobs:
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-            mockery-version: '2.53.3'
+          mockery-version: '2.53.3'
 
       - name: Build
         run: |
