@@ -6,7 +6,28 @@ on:
       - main
 
 jobs:
+  check-if-in-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      in_pr: ${{ steps.check.outputs.result }}
+    steps:
+      - name: Check if branch is part of an open PR
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+            return prs.data.length > 0;
+
   Lint:
+    needs: check-if-in-pr
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
     runs-on:  ubuntu-latest
     steps:
       - name: Checkout source
@@ -23,6 +44,8 @@ jobs:
           version: v2.0
 
   Test:
+    needs: check-if-in-pr
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -47,7 +70,8 @@ jobs:
         run: make test
 
   Build:
-    needs: Test
+    needs: [check-if-in-pr, Test]
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
     runs-on:  ubuntu-latest
     steps:
       - name: Checkout source
