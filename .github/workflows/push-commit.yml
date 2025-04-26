@@ -1,0 +1,109 @@
+name: Lint, Test, and Build Backend
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  check-if-in-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      in_pr: ${{ steps.check.outputs.result }}
+    steps:
+      - name: Check if branch is part of an open PR
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+            return prs.data.length > 0;
+
+  Lint:
+    needs: check-if-in-pr
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
+    runs-on:  ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+            go-version: '1.24'
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.0
+
+  Test:
+    needs: check-if-in-pr
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Sqlc
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: '1.25.0'
+
+      - name: Setup mockery
+        uses: brokeyourbike/go-mockery-action@v0
+        with:
+          mockery-version: '2.53.3'
+
+      - name: Test
+        run: make test
+
+  Build:
+    needs: [check-if-in-pr, Test]
+    if: needs.check-if-in-pr.outputs.in_pr == 'false'
+    runs-on:  ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+            go-version: '1.24'
+
+      - name: Setup Sqlc
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: '1.25.0'
+
+      - name: Setup mockery
+        uses: brokeyourbike/go-mockery-action@v0
+        with:
+            mockery-version: '2.53.3'
+
+      - name: Build
+        run: |
+          go mod download
+          make build
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag myusername/backend:${{ github.sha }} \
+            --file Dockerfile \
+            .
