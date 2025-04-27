@@ -43,6 +43,7 @@ type PublicKeyResponse struct {
 	PublicKey string `json:"publicLey"`
 }
 
+//go:generate mockery --name Store
 type Store interface {
 	GetSettingByUserId(ctx context.Context, userId uuid.UUID) (Setting, error)
 	UpdateSetting(ctx context.Context, userId uuid.UUID, setting Setting) (Setting, error)
@@ -229,14 +230,14 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	var request AddPublicKeyRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, request)
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	err = validatePublicKey(request.PublicKey)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		handlerutil.WriteJSONResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -278,7 +279,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	var request DeletePublicKeyRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, request)
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
