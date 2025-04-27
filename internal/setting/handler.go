@@ -151,7 +151,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) GetUserPublicKeysHandler( (w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetUserPublicKeysHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
