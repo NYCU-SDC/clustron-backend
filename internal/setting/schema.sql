@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS settings (
     user_id UUID REFERENCES users(id) NOT NULL,
     username VARCHAR(255) NOT NULL,
@@ -5,8 +7,8 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 CREATE TABLE IF NOT EXISTS public_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) NOT NULL,
-    keyname VARCHAR(255) NOT NULL,
-    public_key TEXT NOT NULL,
-    PRIMARY KEY (user_id, keyname)
+    title VARCHAR(255) NOT NULL,
+    public_key TEXT NOT NULL
 )

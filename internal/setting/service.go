@@ -62,7 +62,7 @@ func (s *Service) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) (
 
 	publicKeys, err := s.query.GetPublicKeys(ctx, userId)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userId.String(), logger, "get public keys by user id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", userId.String(), logger, "get public keys by user id")
 		span.RecordError(err)
 		return nil, err
 	}
@@ -70,14 +70,29 @@ func (s *Service) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) (
 	return publicKeys, err
 }
 
-func (s *Service) AddPublicKey(ctx context.Context, publicKey PublicKey) (PublicKey, error) {
+func (s *Service) GetPublicKeyById(ctx context.Context, id uuid.UUID) (PublicKey, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeyById")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	publicKey, err := s.query.GetPublicKey(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", id.String(), logger, "get public key by id")
+		span.RecordError(err)
+		return PublicKey{}, err
+	}
+
+	return publicKey, nil
+}
+
+func (s *Service) AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddPublicKey")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	addedPublicKey, err := s.query.AddPublicKey(ctx, AddPublicKeyParams(publicKey))
+	addedPublicKey, err := s.query.AddPublicKey(ctx, publicKey)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "add public key")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
 		span.RecordError(err)
 		return PublicKey{}, err
 	}
@@ -85,17 +100,14 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey PublicKey) (Public
 	return addedPublicKey, nil
 }
 
-func (s *Service) DeletePublicKey(ctx context.Context, publicKey PublicKey) error {
+func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "DeletePublicKey")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.query.DeletePublicKey(ctx, DeletePublicKeyParams{
-		UserID:  publicKey.UserID,
-		Keyname: publicKey.Keyname,
-	})
+	err := s.query.DeletePublicKey(ctx, id)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "delete public key")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
 		span.RecordError(err)
 		return err
 	}

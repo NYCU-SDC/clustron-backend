@@ -13,38 +13,54 @@ import (
 )
 
 const addPublicKey = `-- name: AddPublicKey :one
-INSERT INTO public_keys (user_id, keyname, public_key) VALUES ($1, $2, $3) RETURNING user_id, keyname, public_key
+INSERT INTO public_keys (user_id, title, public_key) VALUES ($1, $2, $3) RETURNING id, user_id, title, public_key
 `
 
 type AddPublicKeyParams struct {
 	UserID    uuid.UUID
-	Keyname   string
+	Title     string
 	PublicKey string
 }
 
 func (q *Queries) AddPublicKey(ctx context.Context, arg AddPublicKeyParams) (PublicKey, error) {
-	row := q.db.QueryRow(ctx, addPublicKey, arg.UserID, arg.Keyname, arg.PublicKey)
+	row := q.db.QueryRow(ctx, addPublicKey, arg.UserID, arg.Title, arg.PublicKey)
 	var i PublicKey
-	err := row.Scan(&i.UserID, &i.Keyname, &i.PublicKey)
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.PublicKey,
+	)
 	return i, err
 }
 
 const deletePublicKey = `-- name: DeletePublicKey :exec
-DELETE FROM public_keys WHERE user_id = $1 AND keyname = $2
+DELETE FROM public_keys WHERE id = $1
 `
 
-type DeletePublicKeyParams struct {
-	UserID  uuid.UUID
-	Keyname string
-}
-
-func (q *Queries) DeletePublicKey(ctx context.Context, arg DeletePublicKeyParams) error {
-	_, err := q.db.Exec(ctx, deletePublicKey, arg.UserID, arg.Keyname)
+func (q *Queries) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePublicKey, id)
 	return err
 }
 
+const getPublicKey = `-- name: GetPublicKey :one
+SELECT id, user_id, title, public_key FROM public_keys WHERE id = $1
+`
+
+func (q *Queries) GetPublicKey(ctx context.Context, id uuid.UUID) (PublicKey, error) {
+	row := q.db.QueryRow(ctx, getPublicKey, id)
+	var i PublicKey
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.PublicKey,
+	)
+	return i, err
+}
+
 const getPublicKeys = `-- name: GetPublicKeys :many
-SELECT user_id, keyname, public_key FROM public_keys WHERE user_id = $1
+SELECT id, user_id, title, public_key FROM public_keys WHERE user_id = $1
 `
 
 func (q *Queries) GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]PublicKey, error) {
@@ -56,7 +72,12 @@ func (q *Queries) GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]Public
 	var items []PublicKey
 	for rows.Next() {
 		var i PublicKey
-		if err := rows.Scan(&i.UserID, &i.Keyname, &i.PublicKey); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.PublicKey,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
