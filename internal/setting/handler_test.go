@@ -75,7 +75,6 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 		PublicKey: exampleValidKey,
 	}, nil)
 
-	// Create a new handler
 	h := setting.NewHandler(validator.New(), logger, store)
 
 	for _, tc := range testCase {
@@ -93,6 +92,74 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			h.AddUserPublicKeyHandler(w, r)
+
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
+
+func TestHandler_DeletePublicKeyHandler(t *testing.T) {
+	publicKey := setting.PublicKey{
+		ID:        uuid.MustParse("33a40641-45bb-4b47-aa33-113c7c562328"),
+		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+		Title:     "Test Title",
+		PublicKey: exampleValidKey,
+	}
+
+	testCase := []struct {
+		name           string
+		user           jwt.User
+		body           setting.DeletePublicKeyRequest
+		expectedStatus int
+	}{
+		{
+			name: "Should delete public key",
+			user: jwt.User{
+				ID:       publicKey.UserID.String(),
+				Username: "testuser",
+				Role:     "user",
+			},
+			body: setting.DeletePublicKeyRequest{
+				Id: publicKey.ID.String(),
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return permission denied when user is not the owner of the public key",
+			user: jwt.User{
+				ID:       "8814749c-49db-451d-9c78-5118138a7612",
+				Username: "testuser",
+				Role:     "user",
+			},
+			body: setting.DeletePublicKeyRequest{
+				Id: publicKey.ID.String(),
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+	}
+
+	// Mock the dependencies
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	store := mocks.NewStore(t)
+	store.On("GetPublicKeyById", mock.Anything, publicKey.ID).Return(publicKey, nil)
+	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
+
+	h := setting.NewHandler(validator.New(), logger, store)
+
+	for _, tc := range testCase {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBody, err := json.Marshal(tc.body)
+			if err != nil {
+				t.Fatalf("failed to marshal request body: %v", err)
+			}
+			r := httptest.NewRequest(http.MethodDelete, "/api/setting/publicKey", bytes.NewReader(requestBody))
+			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, tc.user))
+			w := httptest.NewRecorder()
+
+			h.DeletePublicKeyHandler(w, r)
 
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})

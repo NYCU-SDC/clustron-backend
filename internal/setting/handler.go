@@ -284,9 +284,14 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 		problem.WriteError(traceCtx, w, err, logger)
 		return
 	}
+	publicKeyId, err := uuid.Parse(request.Id)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
 	// Check if the public key belongs to the user
-	publicKey, err := h.settingStore.GetPublicKeyById(traceCtx, userId)
+	publicKey, err := h.settingStore.GetPublicKeyById(traceCtx, publicKeyId)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
@@ -294,12 +299,6 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	if publicKey.UserID != userId {
 		logger.Warn("Public key id does not match user id", zap.String("userId", userId.String()), zap.String("publicKeyId", request.Id))
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-		return
-	}
-
-	publicKeyId, err := uuid.Parse(request.Id)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
