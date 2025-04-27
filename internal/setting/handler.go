@@ -208,7 +208,6 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-	return
 }
 
 func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request) {
