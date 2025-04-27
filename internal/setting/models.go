@@ -10,8 +10,9 @@ import (
 )
 
 type PublicKey struct {
+	ID        uuid.UUID
 	UserID    uuid.UUID
-	Keyname   string
+	Title     string
 	PublicKey string
 }
 

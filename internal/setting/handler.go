@@ -25,24 +25,31 @@ type UpdateSettingRequest struct {
 
 type SettingResponse struct {
 	Username      string `json:"username"`
-	LinuxUsername string `json:"linux_username"`
+	LinuxUsername string `json:"linuxUsername"`
 }
 
-type PublicKeyRequest struct {
-	KeyName   string `json:"key_name"`
-	PublicKey string `json:"public_key"`
+type AddPublicKeyRequest struct {
+	Title     string `json:"title" validate:"required"`
+	PublicKey string `json:"publicKey" validate:"required"`
 }
+
+type DeletePublicKeyRequest struct {
+	Id string `json:"id" validate:"required,uuid"`
+}
+
 type PublicKeyResponse struct {
-	KeyName   string `json:"key_name"`
-	PublicKey string `json:"public_key"`
+	Id        string `json:"id"`
+	Title     string `json:"title"`
+	PublicKey string `json:"publicLey"`
 }
 
 type Store interface {
 	GetSettingByUserId(ctx context.Context, userId uuid.UUID) (Setting, error)
 	UpdateSetting(ctx context.Context, userId uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([]PublicKey, error)
-	AddPublicKey(ctx context.Context, publicKey PublicKey) (PublicKey, error)
-	DeletePublicKey(ctx context.Context, publicKey PublicKey) error
+	GetPublicKeyById(ctx context.Context, id uuid.UUID) (PublicKey, error)
+	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
+	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 }
 
 type Handler struct {
@@ -185,7 +192,7 @@ func (h *Handler) GetUserPublicKeysHandler( (w http.ResponseWriter, r *http.Requ
 	if short {
 		for i, publicKey := range publicKeys {
 			response[i] = PublicKeyResponse{
-				KeyName:   publicKey.Keyname,
+				Title:     publicKey.Title,
 				PublicKey: publicKey.PublicKey[:10],
 			}
 		}
@@ -194,7 +201,7 @@ func (h *Handler) GetUserPublicKeysHandler( (w http.ResponseWriter, r *http.Requ
 	} else {
 		for i, publicKey := range publicKeys {
 			response[i] = PublicKeyResponse{
-				KeyName:   publicKey.Keyname,
+				Title:     publicKey.Title,
 				PublicKey: publicKey.PublicKey,
 			}
 		}
@@ -222,7 +229,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var request PublicKeyRequest
+	var request AddPublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, request)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
@@ -234,9 +241,9 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	publicKey := PublicKey{
+	publicKey := AddPublicKeyParams{
 		UserID:    userId,
-		Keyname:   request.KeyName,
+		Title:     request.Title,
 		PublicKey: request.PublicKey,
 	}
 
@@ -247,7 +254,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	response := PublicKeyResponse{
-		KeyName:   addedPublicKey.Keyname,
+		Title:     addedPublicKey.Title,
 		PublicKey: addedPublicKey.PublicKey,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -271,19 +278,32 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var request PublicKeyRequest
+	var request DeletePublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, request)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	publicKey := PublicKey{
-		UserID:  userId,
-		Keyname: request.KeyName,
+	// Check if the public key belongs to the user
+	publicKey, err := h.settingStore.GetPublicKeyById(traceCtx, userId)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if publicKey.UserID != userId {
+		logger.Warn("Public key id does not match user id", zap.String("userId", userId.String()), zap.String("publicKeyId", request.Id))
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
 	}
 
-	err = h.settingStore.DeletePublicKey(traceCtx, publicKey)
+	publicKeyId, err := uuid.Parse(request.Id)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.settingStore.DeletePublicKey(traceCtx, publicKeyId)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
