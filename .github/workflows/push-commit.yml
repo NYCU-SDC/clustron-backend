@@ -7,7 +7,7 @@ on:
 
 jobs:
   check-if-in-pr:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       in_pr: ${{ steps.check.outputs.result }}
     steps:
@@ -28,7 +28,7 @@ jobs:
   Lint:
     needs: check-if-in-pr
     if: needs.check-if-in-pr.outputs.in_pr == 'false'
-    runs-on:  ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
   Test:
     needs: check-if-in-pr
     if: needs.check-if-in-pr.outputs.in_pr == 'false'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
   Build:
     needs: [check-if-in-pr, Test]
     if: needs.check-if-in-pr.outputs.in_pr == 'false'
-    runs-on:  ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

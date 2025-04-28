@@ -7,7 +7,7 @@ on:
 
 jobs:
   Lint:
-    runs-on:  ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
           version: v2.0
 
   Test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
 
   Build:
     needs: Test
-    runs-on:  ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
