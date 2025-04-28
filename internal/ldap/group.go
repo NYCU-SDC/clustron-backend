@@ -44,8 +44,15 @@ func (c *Client) CreateGroup(groupName string, gidNumber string, memberUids []st
 	err = c.Conn.Add(addRequest)
 	if err != nil {
 		var ldapErr *ldap.Error
-		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultEntryAlreadyExists {
-			return fmt.Errorf("%w: %s", ErrGroupNameExists, groupName)
+		if errors.As(err, &ldapErr) {
+			switch ldapErr.ResultCode {
+			case ldap.LDAPResultEntryAlreadyExists:
+				return fmt.Errorf("%w: %s", ErrGroupNameExists, groupName)
+			case ldap.LDAPResultConstraintViolation:
+				c.Logger.Warn("constraint violation detected (probably gidNumber or cn duplicate)",
+					zap.String("groupName", groupName), zap.String("gidNumber", gidNumber), zap.Error(err))
+				return fmt.Errorf("%w: %s", ErrGroupConstraintViolation, groupName)
+			}
 		}
 		c.Logger.Error("failed to create group", zap.String("group_name", groupName), zap.Error(err))
 		return fmt.Errorf("failed to create group: %w", err)

@@ -53,10 +53,17 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	err = c.Conn.Add(addRequest)
 	if err != nil {
 		var ldapErr *ldap.Error
-		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultEntryAlreadyExists {
-			return fmt.Errorf("%w: %s", ErrUserExists, uid)
+		if errors.As(err, &ldapErr) {
+			switch ldapErr.ResultCode {
+			case ldap.LDAPResultEntryAlreadyExists:
+				return fmt.Errorf("%w: %s", ErrUserExists, uid)
+			case ldap.LDAPResultConstraintViolation:
+				c.Logger.Warn("constraint violation detected",
+					zap.String("uid", uid), zap.String("uidNumber", uidNumber), zap.Error(err))
+				return fmt.Errorf("%w: %s", ErrUserConstraintViolation, uid)
+			}
 		}
-		c.Logger.Error("Failed to create user", zap.String("uid", uid), zap.Error(err))
+		c.Logger.Error("failed to create user", zap.String("uid", uid), zap.Error(err))
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
