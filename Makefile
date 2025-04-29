@@ -26,4 +26,4 @@ build:
 
 test:
 	@echo -e ":: $(GREEN)Running tests...$(NC)"
-	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || echo -e "==> $(RED)Tests failed$(NC)"
+	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
