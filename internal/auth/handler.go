@@ -73,7 +73,7 @@ func NewHandler(validator *validator.Validate, logger *zap.Logger, config config
 		oauthConfig: &oauth2.Config{
 			ClientID:     config.OauthClientID,
 			ClientSecret: config.OauthClientSecret,
-			RedirectURL:  "http://" + config.Host + ":" + config.Port + "/api/oauth2/google/callback",
+			RedirectURL:  fmt.Sprintf("http://%s:%s/api/oauth2/google/callback", config.Host, config.Port),
 			Scopes: []string{
 				"https://www.googleapis.com/auth/userinfo.email",
 				"https://www.googleapis.com/auth/userinfo.profile",
@@ -176,7 +176,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithToken := fmt.Sprintf("%s?token=%s&refresh_token=%s", callbackURL, jwtToken, refreshToken.ID.String())
+	redirectWithToken := fmt.Sprintf("%s?token=%s&refreshToken=%s", callbackURL, jwtToken, refreshToken.ID.String())
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
 }
 
@@ -186,7 +186,7 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Validate the request and extract the refresh token
-	pathRefreshToken := r.PathValue("refresh_token")
+	pathRefreshToken := r.PathValue("refreshToken")
 	if pathRefreshToken == "" {
 		problem.WriteError(traceCtx, w, errors.New("missing refresh token"), logger)
 		return
