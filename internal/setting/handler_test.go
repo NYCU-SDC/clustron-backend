@@ -63,6 +63,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
+
 	store := mocks.NewStore(t)
 	store.On("AddPublicKey", mock.Anything, setting.AddPublicKeyParams{
 		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
@@ -89,6 +90,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 				Username: "testuser",
 				Role:     "user",
 			}))
+
 			w := httptest.NewRecorder()
 
 			h.AddUserPublicKeyHandler(w, r)
