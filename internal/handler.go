@@ -1,3 +1,5 @@
 package internal
 
-var UserContextKey = "user"
+type contextKey string
+
+var UserContextKey contextKey = "user"

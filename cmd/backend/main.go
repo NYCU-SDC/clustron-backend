@@ -4,10 +4,13 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/trace"
+	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/middleware"
 	"github.com/google/uuid"
@@ -85,10 +88,10 @@ func main() {
 
 	logger.Info("Starting database migration...")
 
-	//err = databaseutil.MigrationUp(cfg.MigrationSource, cfg.DatabaseURL, logger)
-	//if err != nil {
-	//	logger.Fatal("Failed to run database migration", zap.Error(err))
-	//}
+	err = databaseutil.MigrationUp(cfg.MigrationSource, cfg.DatabaseURL, logger)
+	if err != nil {
+		logger.Fatal("Failed to run database migration", zap.Error(err))
+	}
 
 	dbPool, err := initDatabasePool(cfg.DatabaseURL)
 	if err != nil {
@@ -103,18 +106,28 @@ func main() {
 
 	validator := internal.NewValidator()
 
-	// Handler
-	authHandler := auth.NewHandler(validator, logger, cfg)
+	// Service
+	userService := user.NewService(logger, dbPool)
+	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 
-	// Middleware
+	// Handler
+	authHandler := auth.NewHandler(validator, logger, cfg, userService, jwtService)
+
+	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
 	recovered := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
+
+	// Auth Middleware
+	//jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
+	//authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/oauth2/google", traced.HandlerFunc(authHandler.Oauth2WithGoogle))
 	mux.HandleFunc("GET /api/oauth2/google/callback", traced.HandlerFunc(authHandler.Callback))
+	mux.HandleFunc("GET /api/oauth2/debug/token", traced.HandlerFunc(authHandler.DebugToken))
+	mux.HandleFunc("GET /api/refreshToken/{refresh_token}", traced.HandlerFunc(authHandler.RefreshToken))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

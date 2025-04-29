@@ -82,7 +82,7 @@ func Load() (Config, *LogBuffer) {
 
 	var err error
 
-	config, err = FromFile("config.yaml", config)
+	config, err = FromFile("config.yaml", config, logger)
 	if err != nil {
 		logger.Warn("Failed to load config from file", err, map[string]string{"path": "config.yaml"})
 	}
@@ -100,12 +100,17 @@ func Load() (Config, *LogBuffer) {
 	return *config, logger
 }
 
-func FromFile(filePath string, config *Config) (*Config, error) {
+func FromFile(filePath string, config *Config, logger *LogBuffer) (*Config, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return config, err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			logger.Warn("Failed to close config file", err, map[string]string{"path": filePath})
+		}
+	}(file)
 
 	fileConfig := Config{}
 	if err := yaml.NewDecoder(file).Decode(&fileConfig); err != nil {
