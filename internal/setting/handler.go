@@ -2,7 +2,7 @@ package setting
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
@@ -63,7 +63,7 @@ type Handler struct {
 func validatePublicKey(key string) error {
 	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key))
 	if err != nil {
-		return errors.New("invalid public key format")
+		return fmt.Errorf("invalid public key format: %w", err)
 	}
 	return nil
 }
