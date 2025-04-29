@@ -11,4 +11,4 @@ INSERT INTO refresh_tokens (user_id, expiration_date) VALUES ($1, $2) RETURNING 
 UPDATE refresh_tokens SET is_active = FALSE WHERE id = $1 RETURNING *;
 
 -- name: Delete :execrows
-DELETE FROM refresh_tokens WHERE expiration_date > now() OR is_active = FALSE;
+DELETE FROM refresh_tokens WHERE expiration_date < now() OR is_active = FALSE;

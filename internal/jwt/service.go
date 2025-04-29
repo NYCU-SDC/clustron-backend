@@ -197,9 +197,12 @@ func (s Service) GenerateRefreshToken(ctx context.Context, user User) (RefreshTo
 		return RefreshToken{}, err
 	}
 
+	expirationDate := time.Now()
+	newDate := expirationDate.Add(s.refreshTokenExpiration)
+
 	refreshToken, err := s.queries.Create(traceCtx, CreateParams{
 		UserID:         user.ID,
-		ExpirationDate: pgtype.Timestamptz{Time: time.Now().Add(s.refreshTokenExpiration), Valid: true},
+		ExpirationDate: pgtype.Timestamptz{Time: newDate, Valid: true},
 	})
 
 	if err != nil {

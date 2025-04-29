@@ -127,7 +127,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth2/google", traced.HandlerFunc(authHandler.Oauth2WithGoogle))
 	mux.HandleFunc("GET /api/oauth2/google/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth2/debug/token", traced.HandlerFunc(authHandler.DebugToken))
-	mux.HandleFunc("GET /api/refreshToken/{refresh_token}", traced.HandlerFunc(authHandler.RefreshToken))
+	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(authHandler.RefreshToken))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

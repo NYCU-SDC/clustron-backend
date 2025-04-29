@@ -34,7 +34,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (RefreshToken, e
 }
 
 const delete = `-- name: Delete :execrows
-DELETE FROM refresh_tokens WHERE expiration_date > now() OR is_active = FALSE
+DELETE FROM refresh_tokens WHERE expiration_date < now() OR is_active = FALSE
 `
 
 func (q *Queries) Delete(ctx context.Context) (int64, error) {
