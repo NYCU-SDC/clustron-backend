@@ -23,7 +23,7 @@ type UpdateSettingRequest struct {
 	LinuxUsername string `json:"linux_username"`
 }
 
-type SettingResponse struct {
+type BasicSettingResponse struct {
 	Username      string `json:"username"`
 	LinuxUsername string `json:"linuxUsername"`
 }
@@ -101,7 +101,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	response := SettingResponse{
+	response := BasicSettingResponse{
 		Username:      setting.Username,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
@@ -145,7 +145,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	response := SettingResponse{
+	response := BasicSettingResponse{
 		Username:      updatedSetting.Username,
 		LinuxUsername: updatedSetting.LinuxUsername.String,
 	}
