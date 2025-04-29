@@ -298,7 +298,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	}
 	if publicKey.UserID != userId {
 		logger.Warn("Public key id does not match user id", zap.String("userId", userId.String()), zap.String("publicKeyId", request.Id))
-		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
 		return
 	}
 
