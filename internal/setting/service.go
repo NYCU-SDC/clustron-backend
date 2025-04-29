@@ -45,7 +45,6 @@ func (s *Service) UpdateSetting(ctx context.Context, userId uuid.UUID, setting S
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
-
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userId.String(), logger, "update setting")
 		span.RecordError(err)
