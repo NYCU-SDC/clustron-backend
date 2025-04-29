@@ -136,7 +136,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			body: setting.DeletePublicKeyRequest{
 				Id: publicKey.ID.String(),
 			},
-			expectedStatus: http.StatusForbidden,
+			expectedStatus: http.StatusNotFound,
 		},
 	}
 
