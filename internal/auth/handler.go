@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/user"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,13 +89,15 @@ func (h *Handler) Oauth2WithGoogle(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	c := r.URL.Query().Get("c")
-	var state string
-	if c == "" {
-		state = url.QueryEscape("http://localhost:8080/api/oauth2/debug/token")
-	} else {
-		state = url.QueryEscape(c)
+	callback := r.URL.Query().Get("c")
+	redirectTo := r.URL.Query().Get("r")
+	if callback == "" {
+		callback = "http://localhost:8080/api/oauth2/debug/token"
 	}
+	if redirectTo != "" {
+		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
+	}
+	state := base64.StdEncoding.EncodeToString([]byte(callback))
 
 	authURL := h.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
@@ -114,7 +117,14 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := r.URL.Query().Get("state")
-	callbackURL, _ := url.QueryUnescape(state)
+	callbackURL, _ := base64.StdEncoding.DecodeString(state)
+	callback, err := url.Parse(string(callbackURL))
+	if err != nil {
+		problem.WriteError(traceCtx, w, errors.New("invalid state"), logger)
+		return
+	}
+	redirectTo := callback.Query().Get("r")
+	callback.RawQuery = ""
 
 	token, err := h.oauthConfig.Exchange(traceCtx, code)
 	if err != nil {
@@ -176,7 +186,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithToken := fmt.Sprintf("%s?token=%s&refreshToken=%s", callbackURL, jwtToken, refreshToken.ID.String())
+	var redirectWithToken string
+	if redirectTo != "" {
+		redirectWithToken = fmt.Sprintf("%s?token=%s&refreshToken=%s&r=%s", callback, jwtToken, refreshToken.ID.String(), redirectTo)
+	} else {
+		redirectWithToken = fmt.Sprintf("%s?token=%s&refreshToken=%s", callback, jwtToken, refreshToken.ID.String())
+	}
+
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
 }
 
