@@ -20,7 +20,7 @@ import (
 
 type UpdateSettingRequest struct {
 	Username      string `json:"username" validate:"required"`
-	LinuxUsername string `json:"linux_username"`
+	LinuxUsername string `json:"linux_username" validate:"excludesall= \t\r\n"`
 }
 
 type BasicSettingResponse struct {

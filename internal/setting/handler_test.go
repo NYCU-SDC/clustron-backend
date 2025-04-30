@@ -167,3 +167,75 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_UpdateUserSettingHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           setting.UpdateSettingRequest
+		expectedStatus int
+	}{
+		{
+			name: "Should update user setting",
+			body: setting.UpdateSettingRequest{
+				Username:      "testuser",
+				LinuxUsername: "testuser",
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should update user setting without linux username",
+			body: setting.UpdateSettingRequest{
+				Username: "testuser",
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when username is empty",
+			body: setting.UpdateSettingRequest{
+				LinuxUsername: "testuser",
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when linux username contain space",
+			body: setting.UpdateSettingRequest{
+				Username:      "testuser",
+				LinuxUsername: "test user",
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	// Mock the dependencies
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	store := mocks.NewStore(t)
+	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
+		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+		Username: "testuser",
+	}, nil)
+
+	h := setting.NewHandler(validator.New(), logger, store)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBody, err := json.Marshal(tc.body)
+			if err != nil {
+				t.Fatalf("failed to marshal request body: %v", err)
+			}
+			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
+			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, jwt.User{
+				ID:       "7942c917-4770-43c1-a56a-952186b9970e",
+				Username: "testuser",
+				Role:     "user",
+			}))
+			w := httptest.NewRecorder()
+
+			h.UpdateUserSettingHandler(w, r)
+
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
