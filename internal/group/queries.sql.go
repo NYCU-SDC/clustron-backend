@@ -71,19 +71,19 @@ func (q *Queries) FindById(ctx context.Context, id uuid.UUID) (Group, error) {
 	return i, err
 }
 
-const findByUserIdASC = `-- name: FindByUserIdASC :many
-SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY $2::text ASC LIMIT $4 OFFSET $3
+const findByUserWithPageASC = `-- name: FindByUserWithPageASC :many
+SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY $2::text ASC LIMIT $4 OFFSET $3
 `
 
-type FindByUserIdASCParams struct {
+type FindByUserWithPageASCParams struct {
 	UserID uuid.UUID
 	Sortby string
 	Page   int32
 	Size   int32
 }
 
-func (q *Queries) FindByUserIdASC(ctx context.Context, arg FindByUserIdASCParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, findByUserIdASC,
+func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithPageASCParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, findByUserWithPageASC,
 		arg.UserID,
 		arg.Sortby,
 		arg.Page,
@@ -93,13 +93,20 @@ func (q *Queries) FindByUserIdASC(ctx context.Context, arg FindByUserIdASCParams
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []Group
 	for rows.Next() {
-		var group_id uuid.UUID
-		if err := rows.Scan(&group_id); err != nil {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, group_id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -107,19 +114,19 @@ func (q *Queries) FindByUserIdASC(ctx context.Context, arg FindByUserIdASCParams
 	return items, nil
 }
 
-const findByUserIdDESC = `-- name: FindByUserIdDESC :many
-SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY $2::text DESC LIMIT $4 OFFSET $3
+const findByUserWithPageDESC = `-- name: FindByUserWithPageDESC :many
+SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY $2::text DESC LIMIT $4 OFFSET $3
 `
 
-type FindByUserIdDESCParams struct {
+type FindByUserWithPageDESCParams struct {
 	UserID uuid.UUID
 	Sortby string
 	Page   int32
 	Size   int32
 }
 
-func (q *Queries) FindByUserIdDESC(ctx context.Context, arg FindByUserIdDESCParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, findByUserIdDESC,
+func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWithPageDESCParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, findByUserWithPageDESC,
 		arg.UserID,
 		arg.Sortby,
 		arg.Page,
@@ -129,13 +136,20 @@ func (q *Queries) FindByUserIdDESC(ctx context.Context, arg FindByUserIdDESCPara
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []Group
 	for rows.Next() {
-		var group_id uuid.UUID
-		if err := rows.Scan(&group_id); err != nil {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, group_id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -143,23 +157,23 @@ func (q *Queries) FindByUserIdDESC(ctx context.Context, arg FindByUserIdDESCPara
 	return items, nil
 }
 
-const getAllGroupCount = `-- name: GetAllGroupCount :one
+const getAllGroupsCount = `-- name: GetAllGroupsCount :one
 SELECT COUNT(*) FROM groups
 `
 
-func (q *Queries) GetAllGroupCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getAllGroupCount)
+func (q *Queries) GetAllGroupsCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getAllGroupsCount)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
-const getUserGroupCount = `-- name: GetUserGroupCount :one
+const getUserGroupsCount = `-- name: GetUserGroupsCount :one
 SELECT COUNT(*) FROM memberships WHERE user_id = $1
 `
 
-func (q *Queries) GetUserGroupCount(ctx context.Context, userID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getUserGroupCount, userID)
+func (q *Queries) GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserGroupsCount, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

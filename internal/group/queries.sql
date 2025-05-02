@@ -1,7 +1,7 @@
--- name: GetAllGroupCount :one
+-- name: GetAllGroupsCount :one
 SELECT COUNT(*) FROM groups;
 
--- name: GetUserGroupCount :one
+-- name: GetUserGroupsCount :one
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
 -- name: GetWithPageASC :many
@@ -13,11 +13,11 @@ SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 -- name: FindById :one
 SELECT * FROM groups WHERE id = $1;
 
--- name: FindByUserIdASC :many
-SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
+-- name: FindByUserWithPageASC :many
+SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 
--- name: FindByUserIdDESC :many
-SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
+-- name: FindByUserWithPageDESC :many
+SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
