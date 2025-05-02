@@ -14,10 +14,14 @@ CREATE TABLE IF NOT EXISTS memberships (
     group_id UUID REFERENCES groups(id) NOT NULL,
     role VARCHAR(50) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+)
+
+CREATE TABLE IF NOT EXISTS group_role (
+    role VARCHAR(50) PRIMARY KEY
 )
 
 CREATE TABLE IF NOT EXISTS group_access_level (
-    role VARCHAR(50) PRIMARY KEY,
-    access_level ENUM('organizer', 'group-admin', 'user') DEFAULT 'user',
+    role FOREIGN KEY REFERENCES group_role(role),
+    access_level ENUM('organizer', 'group-admin', 'user') DEFAULT 'user'
 );
