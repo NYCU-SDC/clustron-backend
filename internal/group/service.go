@@ -23,6 +23,21 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
+func (s *Service) GetAllGroupCount(ctx context.Context) (int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAllGroupCount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	count, err := s.queries.GetAllGroupCount(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get all groups count")
+		span.RecordError(err)
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
 func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAll")
 	defer span.End()

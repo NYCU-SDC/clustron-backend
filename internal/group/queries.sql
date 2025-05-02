@@ -1,3 +1,9 @@
+-- name: GetAllGroupCount :one
+SELECT COUNT(*) FROM groups;
+
+-- name: GetUserGroupCount :one
+SELECT COUNT(*) FROM memberships WHERE user_id = $1;
+
 -- name: GetWithPageASC :many
 SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 

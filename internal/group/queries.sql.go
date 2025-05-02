@@ -143,6 +143,28 @@ func (q *Queries) FindByUserIdDESC(ctx context.Context, arg FindByUserIdDESCPara
 	return items, nil
 }
 
+const getAllGroupCount = `-- name: GetAllGroupCount :one
+SELECT COUNT(*) FROM groups
+`
+
+func (q *Queries) GetAllGroupCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getAllGroupCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getUserGroupCount = `-- name: GetUserGroupCount :one
+SELECT COUNT(*) FROM memberships WHERE user_id = $1
+`
+
+func (q *Queries) GetUserGroupCount(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserGroupCount, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getWithPageASC = `-- name: GetWithPageASC :many
 SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text ASC LIMIT $3 OFFSET $2
 `
