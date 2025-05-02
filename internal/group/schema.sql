@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS groups (
     is_archived BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-)
+);
 
 CREATE TABLE IF NOT EXISTS memberships (
     user_id UUID REFERENCES users(id) NOT NULL,
@@ -15,13 +15,9 @@ CREATE TABLE IF NOT EXISTS memberships (
     role VARCHAR(50) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-)
-
-CREATE TABLE IF NOT EXISTS group_role (
-    role VARCHAR(50) PRIMARY KEY
-)
+);
 
 CREATE TABLE IF NOT EXISTS group_access_level (
-    role FOREIGN KEY REFERENCES group_role(role),
+    role VARCHAR(50) PRIMARY KEY,
     access_level ENUM('organizer', 'group-admin', 'user') DEFAULT 'user'
 );

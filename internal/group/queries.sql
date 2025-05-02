@@ -1,11 +1,17 @@
--- name: GetAll :many
-SELECT * FROM groups;
+-- name: GetWithPageASC :many
+SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 
--- name: GetByID :one
+-- name: GetWithPageDESC :many
+SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
+
+-- name: FindById :one
 SELECT * FROM groups WHERE id = $1;
 
--- name:GetByUserID :many
-SELECT group FROM mamberships WHERE user_id = $1;
+-- name: FindByUserIdASC :many
+SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
+
+-- name: FindByUserIdDESC :many
+SELECT group_id FROM memberships WHERE user_id = $1 ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
