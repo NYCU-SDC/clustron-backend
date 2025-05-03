@@ -39,7 +39,7 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	dn := fmt.Sprintf("uid=%s,%s", uid, base)
 
 	addRequest := ldap.NewAddRequest(dn, nil)
-	addRequest.Attribute("objectClass", []string{"inetOrgPerson", "posixAccount"})
+	addRequest.Attribute("objectClass", []string{"inetOrgPerson", "posixAccount", "ldapPublicKey"})
 	addRequest.Attribute("uid", []string{uid})
 	addRequest.Attribute("cn", []string{cn})
 	addRequest.Attribute("sn", []string{sn})
