@@ -30,9 +30,6 @@ func TestMain(m *testing.M) {
 			"LDAP_DOMAIN=clustron.prj.internal.sdc.nycu.club",
 			"LDAP_ADMIN_PASSWORD=admin",
 		},
-		Mounts: []string{
-			"/Users/yichen/GolandProjects/clustron-backend/internal/ldap/testdata/openssh-lpk.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-openssh-lpk.ldif",
-		},
 	}, func(config *docker.HostConfig) {
 		config.AutoRemove = true
 	})
