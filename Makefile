@@ -27,3 +27,13 @@ build:
 test:
 	@echo -e ":: $(GREEN)Running tests...$(NC)"
 	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
+
+gen:
+	@echo -e ":: $(GREEN)Generating schema and code...$(NC)"
+	@echo -e "  -> Running schema creation script..."
+	@./scripts/create_full_schema.sh || (echo -e "  -> $(RED)Schema creation failed$(NC)" && exit 1)
+	@echo -e "  -> Generating SQLC code..."
+	@sqlc generate || (echo -e "  -> $(RED)SQLC generation failed$(NC)" && exit 1)
+	@echo -e "  -> Running go generate..."
+	@go generate ./... || (echo -e "  -> $(RED)Go generate failed$(NC)" && exit 1)
+	@echo -e "==> $(BLUE)Generation completed$(NC)"

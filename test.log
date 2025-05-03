@@ -1,0 +1,12 @@
+-e :: [0;32mGenerating schema and code...[0m
+-e   -> Running schema creation script...
+-e   -> Generating SQLC code...
+-e   -> Running go generate...
+-e ==> [0;34mGeneration completed[0m
+-e :: [0;32mRunning tests...[0m
+	github.com/NYCU-SDC/clustron-backend/cmd/backend		coverage: 0.0% of statements
+	github.com/NYCU-SDC/clustron-backend/internal/jwt		coverage: 0.0% of statements
+	github.com/NYCU-SDC/clustron-backend/internal/ldap		coverage: 0.0% of statements
+ok  	github.com/NYCU-SDC/clustron-backend/internal/setting	(cached)	coverage: 20.3% of statements
+	github.com/NYCU-SDC/clustron-backend/internal/setting/mocks		coverage: 0.0% of statements
+-e ==> [0;34mAll tests passed[0m
