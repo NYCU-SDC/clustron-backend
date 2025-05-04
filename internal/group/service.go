@@ -177,3 +177,46 @@ func (s *Service) UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group,
 
 	return group, nil
 }
+
+func (s *Service) CheckIsUserInGroup(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "CheckIsUserInGroup")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	_, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userId.String()+" "+groupId.String(), logger, "get membership")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetUserGroupRelationShip")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	membership, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userId.String()+" "+groupId.String(), logger, "get membership")
+		span.RecordError(err)
+		return "", err
+	}
+
+	accessLevel, err := s.queries.AccessLevelFromRole(ctx, membership.Role)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_access_level", "role", membership.Role, logger, "get access level")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return accessLevel, nil
+}

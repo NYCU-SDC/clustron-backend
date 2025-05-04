@@ -20,7 +20,7 @@ type Group struct {
 
 type GroupAccessLevel struct {
 	Role        string
-	AccessLevel interface{}
+	AccessLevel string
 }
 
 type Membership struct {

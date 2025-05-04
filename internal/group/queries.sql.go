@@ -12,6 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const accessLevelFromRole = `-- name: AccessLevelFromRole :one
+SELECT access_level FROM group_access_level WHERE role = $1
+`
+
+func (q *Queries) AccessLevelFromRole(ctx context.Context, role string) (string, error) {
+	row := q.db.QueryRow(ctx, accessLevelFromRole, role)
+	var access_level string
+	err := row.Scan(&access_level)
+	return access_level, err
+}
+
 const archive = `-- name: Archive :one
 UPDATE groups SET is_archived = TRUE WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
 `
@@ -166,6 +177,28 @@ func (q *Queries) GetAllGroupsCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getUserGroupMembership = `-- name: GetUserGroupMembership :one
+SELECT user_id, group_id, role, created_at, updated_at FROM memberships WHERE user_id = $1 AND group_id = $2
+`
+
+type GetUserGroupMembershipParams struct {
+	UserID  uuid.UUID
+	GroupID uuid.UUID
+}
+
+func (q *Queries) GetUserGroupMembership(ctx context.Context, arg GetUserGroupMembershipParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, getUserGroupMembership, arg.UserID, arg.GroupID)
+	var i Membership
+	err := row.Scan(
+		&i.UserID,
+		&i.GroupID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getUserGroupsCount = `-- name: GetUserGroupsCount :one

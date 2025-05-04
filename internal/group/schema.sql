@@ -19,5 +19,5 @@ CREATE TABLE IF NOT EXISTS memberships (
 
 CREATE TABLE IF NOT EXISTS group_access_level (
     role VARCHAR(50) PRIMARY KEY,
-    access_level ENUM('organizer', 'group-admin', 'user') DEFAULT 'user'
+    access_level VARCHAR(50) NOT NULL
 );
