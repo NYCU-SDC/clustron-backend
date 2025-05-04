@@ -8,6 +8,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -155,6 +156,149 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	group, err := h.Store.GetById(traceCtx, groupUUID)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		Id:          group.ID.String(),
+		Title:       group.Title,
+		Description: group.Description.String,
+		IsArchived:  group.IsArchived.Bool,
+		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.Tracer.Start(r.Context(), "CreateHandler")
+	defer span.End()
+	logger := h.Logger.With(zap.String("handler", "CreateHandler"))
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if user.Role.String != "admin" {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	var request CreateRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.Validator, r, &request)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	group, err := h.Store.CreateGroup(traceCtx, CreateParams{
+		Title:       request.Title,
+		Description: pgtype.Text{String: request.Description, Valid: true},
+	})
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		Id:          group.ID.String(),
+		Title:       group.Title,
+		Description: group.Description.String,
+		IsArchived:  group.IsArchived.Bool,
+		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)
+}
+
+func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.Tracer.Start(r.Context(), "ArchiveHandler")
+	defer span.End()
+	logger := h.Logger.With(zap.String("handler", "ArchiveHandler"))
+
+	groupId := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupId)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if user.Role.String != "admin" {
+		accessLevel, err := h.Auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+		if err != nil {
+			problem.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		if accessLevel != "organizer" {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
+	}
+
+	group, err := h.Store.ArchiveGroup(traceCtx, groupUUID)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		Id:          group.ID.String(),
+		Title:       group.Title,
+		Description: group.Description.String,
+		IsArchived:  group.IsArchived.Bool,
+		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.Tracer.Start(r.Context(), "ArchiveHandler")
+	defer span.End()
+	logger := h.Logger.With(zap.String("handler", "ArchiveHandler"))
+
+	groupId := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupId)
+	if err != nil {
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		problem.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if user.Role.String != "admin" {
+		accessLevel, err := h.Auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+		if err != nil {
+			problem.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		if accessLevel != "organizer" {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
+	}
+
+	group, err := h.Store.UnarchiveGroup(traceCtx, groupUUID)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return
