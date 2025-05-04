@@ -168,6 +168,29 @@ func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWith
 	return items, nil
 }
 
+const findUserGroupById = `-- name: FindUserGroupById :one
+SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2
+`
+
+type FindUserGroupByIdParams struct {
+	UserID  uuid.UUID
+	GroupID uuid.UUID
+}
+
+func (q *Queries) FindUserGroupById(ctx context.Context, arg FindUserGroupByIdParams) (Group, error) {
+	row := q.db.QueryRow(ctx, findUserGroupById, arg.UserID, arg.GroupID)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.IsArchived,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAllGroupsCount = `-- name: GetAllGroupsCount :one
 SELECT COUNT(*) FROM groups
 `

@@ -16,7 +16,6 @@ import (
 )
 
 type Auth interface {
-	CheckIsUserInGroup(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) error
 	GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error)
 }
 
@@ -29,6 +28,7 @@ type Store interface {
 	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
 	ArchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
 	UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
+	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
 }
 
 type Response struct {
@@ -147,15 +147,12 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var group Group
 	if user.Role.String != "admin" {
-		err = h.Auth.CheckIsUserInGroup(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
-			return
-		}
+		group, err = h.Store.FindUserGroupById(traceCtx, user.ID, groupUUID)
+	} else {
+		group, err = h.Store.GetById(traceCtx, groupUUID)
 	}
-
-	group, err := h.Store.GetById(traceCtx, groupUUID)
 	if err != nil {
 		problem.WriteError(traceCtx, w, err, logger)
 		return

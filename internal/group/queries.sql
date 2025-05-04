@@ -13,6 +13,9 @@ SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 -- name: FindById :one
 SELECT * FROM groups WHERE id = $1;
 
+-- name: FindUserGroupById :one
+SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2;
+
 -- name: FindByUserWithPageASC :many
 SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 

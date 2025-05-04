@@ -178,22 +178,22 @@ func (s *Service) UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group,
 	return group, nil
 }
 
-func (s *Service) CheckIsUserInGroup(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) error {
+func (s *Service) FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CheckIsUserInGroup")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
+	group, err := s.queries.FindUserGroupById(ctx, FindUserGroupByIdParams{
 		UserID:  userId,
 		GroupID: groupId,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userId.String()+" "+groupId.String(), logger, "get membership")
 		span.RecordError(err)
-		return err
+		return Group{}, err
 	}
 
-	return nil
+	return group, nil
 }
 
 func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error) {
