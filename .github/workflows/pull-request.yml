@@ -102,4 +102,4 @@ jobs:
 
       - name: Deploy container to local
         run: |
-          ~/deploy.sh "Snapshot" "${{ github.event.number }}" "${{ env.title }}"
+          ~/deploy.sh "Snapshot" "${{ github.event.number }}" "${{ github.event.pull_request.title }}"
