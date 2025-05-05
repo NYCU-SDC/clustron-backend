@@ -85,6 +85,11 @@ func (c *Client) DeleteGroup(groupName string) error {
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 	err := c.Conn.Del(deleteRequest)
 	if err != nil {
+		var ldapErr *ldap.Error
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
+			c.Logger.Warn("Group does not exist", zap.String("group_name", groupName))
+			return fmt.Errorf("%w: %s", ErrGroupNotFound, groupName)
+		}
 		c.Logger.Error("Failed to delete group", zap.String("group_name", groupName), zap.Error(err))
 		return fmt.Errorf("failed to delete group: %v", err)
 	}
