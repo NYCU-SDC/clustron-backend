@@ -96,14 +96,3 @@ jobs:
         run: |
           go mod download
           make build
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            --tag myusername/backend:${{ github.sha }} \
-            --file Dockerfile \
-            .
