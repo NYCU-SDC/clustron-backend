@@ -1,0 +1,17 @@
+name: Close Snapshot
+
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  Close:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Close snapshot
+        run: |
+          ~/deploy.sh Close
