@@ -40,15 +40,22 @@ type Response struct {
 	UpdatedAt   string `json:"updatedAt"`
 }
 
+type AddMemberRequest struct {
+	Member string `json:"member"` // email or student id
+	Role   string `json:"role"`
+}
+
 type CreateRequest struct {
-	Title       string `json:"title" validate:"required"`
-	Description string `json:"description" validate:"required"`
+	Title       string             `json:"title" validate:"required"`
+	Description string             `json:"description" validate:"required"`
+	Members     []AddMemberRequest `json:"members"`
 }
 
 type Handler struct {
 	Validator         *validator.Validate
 	Logger            *zap.Logger
 	Tracer            trace.Tracer
+	ProblemWriter     *problem.HttpWriter
 	Store             Store
 	Auth              Auth
 	PaginationFactory pagination.Factory[Response]
@@ -59,6 +66,7 @@ func NewHandler(validator *validator.Validate, logger *zap.Logger, store Store, 
 		Validator:         validator,
 		Logger:            logger,
 		Tracer:            otel.Tracer("group/handler"),
+		ProblemWriter:     problem.New(),
 		Store:             store,
 		Auth:              auth,
 		PaginationFactory: pagination.NewFactory[Response](200, []string{"created_at"}),
@@ -73,14 +81,14 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	pageRequest, err := h.PaginationFactory.GetRequest(r)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 	}
 
 	// verify the role to determine how much data to return
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -89,23 +97,23 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	if user.Role.String == "admin" {
 		groups, err = h.Store.GetAll(traceCtx, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 		totalCount, err = h.Store.GetAllGroupCount(traceCtx)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	} else {
 		groups, err = h.Store.GetByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 		totalCount, err = h.Store.GetUserGroupsCount(traceCtx, user.ID)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	}
@@ -136,14 +144,14 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	groupId := r.PathValue("group_id")
 	groupUUID, err := uuid.Parse(groupId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -154,7 +162,7 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		group, err = h.Store.GetById(traceCtx, groupUUID)
 	}
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -178,7 +186,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -190,7 +198,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	var request CreateRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.Validator, r, &request)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -199,7 +207,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		Description: pgtype.Text{String: request.Description, Valid: true},
 	})
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -223,21 +231,21 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	groupId := r.PathValue("group_id")
 	groupUUID, err := uuid.Parse(groupId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	if user.Role.String != "admin" {
 		accessLevel, err := h.Auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 		if accessLevel != "organizer" {
@@ -248,7 +256,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	group, err := h.Store.ArchiveGroup(traceCtx, groupUUID)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -272,21 +280,21 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	groupId := r.PathValue("group_id")
 	groupUUID, err := uuid.Parse(groupId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	if user.Role.String != "admin" {
 		accessLevel, err := h.Auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 		if accessLevel != "organizer" {
@@ -297,7 +305,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	group, err := h.Store.UnarchiveGroup(traceCtx, groupUUID)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
