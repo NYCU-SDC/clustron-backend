@@ -38,4 +38,4 @@ UPDATE groups SET is_archived = FALSE WHERE id = $1 RETURNING *;
 SELECT * FROM memberships WHERE user_id = $1 AND group_id = $2;
 
 -- name: AccessLevelFromRole :one
-SELECT access_level FROM group_access_level WHERE role = $1;
+SELECT access_level FROM group_role WHERE id = $1;

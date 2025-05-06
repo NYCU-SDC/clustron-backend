@@ -13,11 +13,11 @@ import (
 )
 
 const accessLevelFromRole = `-- name: AccessLevelFromRole :one
-SELECT access_level FROM group_access_level WHERE role = $1
+SELECT access_level FROM group_role WHERE id = $1
 `
 
-func (q *Queries) AccessLevelFromRole(ctx context.Context, role string) (string, error) {
-	row := q.db.QueryRow(ctx, accessLevelFromRole, role)
+func (q *Queries) AccessLevelFromRole(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, accessLevelFromRole, id)
 	var access_level string
 	err := row.Scan(&access_level)
 	return access_level, err
@@ -203,7 +203,7 @@ func (q *Queries) GetAllGroupsCount(ctx context.Context) (int64, error) {
 }
 
 const getUserGroupMembership = `-- name: GetUserGroupMembership :one
-SELECT user_id, group_id, role, created_at, updated_at FROM memberships WHERE user_id = $1 AND group_id = $2
+SELECT user_id, group_id, role_id, created_at, updated_at FROM memberships WHERE user_id = $1 AND group_id = $2
 `
 
 type GetUserGroupMembershipParams struct {
@@ -217,7 +217,7 @@ func (q *Queries) GetUserGroupMembership(ctx context.Context, arg GetUserGroupMe
 	err := row.Scan(
 		&i.UserID,
 		&i.GroupID,
-		&i.Role,
+		&i.RoleID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

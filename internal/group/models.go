@@ -18,15 +18,16 @@ type Group struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
-type GroupAccessLevel struct {
-	Role        string
+type GroupRole struct {
+	ID          uuid.UUID
+	Role        pgtype.Text
 	AccessLevel string
 }
 
 type Membership struct {
 	UserID    uuid.UUID
 	GroupID   uuid.UUID
-	Role      string
+	RoleID    uuid.UUID
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }

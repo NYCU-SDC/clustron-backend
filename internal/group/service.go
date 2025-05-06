@@ -211,9 +211,9 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID,
 		return "", err
 	}
 
-	accessLevel, err := s.queries.AccessLevelFromRole(ctx, membership.Role)
+	accessLevel, err := s.queries.AccessLevelFromRole(ctx, membership.RoleID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_access_level", "role", membership.Role, logger, "get access level")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_access_level", "role", membership.RoleID.String(), logger, "get access level")
 		span.RecordError(err)
 		return "", err
 	}
