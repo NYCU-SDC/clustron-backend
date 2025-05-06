@@ -226,6 +226,22 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name: "Should get group for organizer in this group",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"),
+				Role: pgtype.Text{String: "organizer", Valid: true},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "Should not get group for organizer not in this group",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"),
+				Role: pgtype.Text{String: "organizer", Valid: true},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name: "Should get group for user in this group",
 			user: jwt.User{
 				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
@@ -254,14 +270,24 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 
-	// Get group by ID for user in this group
+	// Get group by ID for organizer in this group
 	store.On("FindUserGroupById", mock.Anything, testCases[1].user.ID, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 
-	// Get group by ID for user not in this group
+	// Get group by ID for organizer not in this group
 	store.On("FindUserGroupById", mock.Anything, testCases[2].user.ID, groupId).Return(group.Group{},
+		databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId), logger, "get membership"))
+
+	// Get group by ID for user in this group
+	store.On("FindUserGroupById", mock.Anything, testCases[3].user.ID, groupId).Return(group.Group{
+		Title:       "Test Group",
+		Description: pgtype.Text{String: "Test Description", Valid: true},
+	}, nil)
+
+	// Get group by ID for user not in this group
+	store.On("FindUserGroupById", mock.Anything, testCases[4].user.ID, groupId).Return(group.Group{},
 		databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId), logger, "get membership"))
 
 	auth := mocks.NewAuth(t)
