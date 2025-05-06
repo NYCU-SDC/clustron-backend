@@ -42,7 +42,9 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
+		defer func(conn *ldap.Conn) {
+			_ = conn.Close()
+		}(conn)
 		return conn.Bind("cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club", "admin")
 	}))
 
