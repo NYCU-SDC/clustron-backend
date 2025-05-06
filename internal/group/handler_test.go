@@ -176,12 +176,12 @@ func TestHandler_GetAllHandler(t *testing.T) {
 	store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
 
 	// When organizer call GetAll
-	store.On("GetByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2], nil)
-	store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3")).Return(2, nil)
+	store.On("GetByUserId", mock.Anything, testCases[1].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2], nil)
+	store.On("GetUserGroupsCount", mock.Anything, testCases[1].user.ID).Return(2, nil)
 
 	// When user call GetAll
-	store.On("GetByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1], nil)
-	store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2")).Return(1, nil)
+	store.On("GetByUserId", mock.Anything, testCases[2].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1], nil)
+	store.On("GetUserGroupsCount", mock.Anything, testCases[2].user.ID).Return(1, nil)
 
 	auth := mocks.NewAuth(t)
 
@@ -211,6 +211,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 }
 
 func TestHandler_GetByIdHandler(t *testing.T) {
+	groupId := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
 	testCases := []struct {
 		name       string
 		user       jwt.User
@@ -248,20 +249,20 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 	}
 	store := mocks.NewStore(t)
 	// Directly get group by ID
-	store.On("GetById", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(group.Group{
+	store.On("GetById", mock.Anything, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 
 	// Get group by ID for user in this group
-	store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(group.Group{
+	store.On("FindUserGroupById", mock.Anything, testCases[1].user.ID, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 
 	// Get group by ID for user not in this group
-	store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(group.Group{},
-		databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "user_id and group_id", "a9e0fd99-10de-4ad1-b519-e8430ed089e5 7942c917-4770-43c1-a56a-952186b9970e", logger, "get membership"))
+	store.On("FindUserGroupById", mock.Anything, testCases[2].user.ID, groupId).Return(group.Group{},
+		databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId), logger, "get membership"))
 
 	auth := mocks.NewAuth(t)
 
@@ -269,8 +270,8 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/groups/7942c917-4770-43c1-a56a-952186b9970e", nil)
-			r.SetPathValue("group_id", "7942c917-4770-43c1-a56a-952186b9970e")
+			r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/groups/%s", groupId.String()), nil)
+			r.SetPathValue("group_id", groupId.String())
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
