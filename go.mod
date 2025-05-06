@@ -3,8 +3,9 @@ module github.com/NYCU-SDC/clustron-backend
 go 1.24.2
 
 require (
-	github.com/NYCU-SDC/summer v0.0.0-20250426171651-0f5d3fb8e82b
+	github.com/NYCU-SDC/summer v0.0.0-20250502102047-bd5dd8e11774
 	github.com/go-ldap/ldap/v3 v3.4.11
+	github.com/go-playground/validator/v10 v10.26.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/stretchr/testify v1.10.0
@@ -22,7 +23,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.26.0 // indirect
 	github.com/golang-migrate/migrate/v4 v4.18.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -31,6 +31,7 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
