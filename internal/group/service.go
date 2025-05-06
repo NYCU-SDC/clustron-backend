@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"fmt"
 	"github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -206,7 +207,7 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID,
 		GroupID: groupId,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userId.String()+" "+groupId.String(), logger, "get membership")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", userId.String(), groupId.String()), logger, "get membership")
 		span.RecordError(err)
 		return "", err
 	}

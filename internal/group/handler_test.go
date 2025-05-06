@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/NYCU-SDC/clustron-backend/internal"
 	"github.com/NYCU-SDC/clustron-backend/internal/group"
 	"github.com/NYCU-SDC/clustron-backend/internal/group/mocks"
@@ -274,6 +275,92 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			h.GetByIdHandler(w, r)
+
+			assert.Equal(t, tc.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestHandler_ArchiveHandler(t *testing.T) {
+	groupId := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
+
+	testCases := []struct {
+		name       string
+		user       jwt.User
+		wantStatus int
+	}{
+		{
+			name: "Should archive group for admin",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+				Role: pgtype.Text{String: "admin", Valid: true},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "Should archive group for organizer",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"),
+				Role: pgtype.Text{String: "organizer", Valid: true},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "Should not archive group for organizer not in this group",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"),
+				Role: pgtype.Text{String: "user", Valid: true},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "Should not archive group for group-admin",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"),
+				Role: pgtype.Text{String: "user", Valid: true},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "Should not archive group for user",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
+				Role: pgtype.Text{String: "user", Valid: true},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+	}
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	store := mocks.NewStore(t)
+	store.On("ArchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
+		Title:       "Test Group",
+		Description: pgtype.Text{String: "Test Description", Valid: true},
+	}, nil)
+
+	auth := mocks.NewAuth(t)
+	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
+		"organizer", nil)
+	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
+		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
+	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
+		"group-admin", nil)
+	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
+		"user", nil)
+
+	h := group.NewHandler(validator.New(), logger, store, auth)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/groups/%s/archive", groupId.String()), nil)
+			r.SetPathValue("group_id", groupId.String())
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
+			w := httptest.NewRecorder()
+
+			h.ArchiveHandler(w, r)
 
 			assert.Equal(t, tc.wantStatus, w.Code)
 		})
