@@ -177,12 +177,10 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	q := r.URL.Query()
-	raw := q.Get("short")
-	var short bool
-	if raw == "" {
-		short = true
-	} else {
-		short, err = strconv.ParseBool(raw)
+	short := true // default true: frontend usually only needs short public key
+	if q.Has("short") {
+		var err error
+		short, err = strconv.ParseBool(q.Get("short"))
 		if err != nil {
 			problem.WriteError(traceCtx, w, err, logger)
 			return
