@@ -15,10 +15,12 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=Auth
 type Auth interface {
 	GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error)
 }
 
+//go:generate mockery --name=Store
 type Store interface {
 	GetAllGroupCount(ctx context.Context) (int, error)
 	GetUserGroupsCount(ctx context.Context, userId uuid.UUID) (int, error)
@@ -190,7 +192,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" {
+	if user.Role.String != "admin" && user.Role.String != "organizer" {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
