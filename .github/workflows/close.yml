@@ -14,4 +14,4 @@ jobs:
 
       - name: Close snapshot
         run: |
-          ~/deploy.sh "Close" "{{ github.event.number }}"
+          ~/deploy.sh "Close" "${{ github.event.number }}"
