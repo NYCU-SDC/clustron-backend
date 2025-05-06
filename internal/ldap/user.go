@@ -44,7 +44,9 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	addRequest.Attribute("cn", []string{cn})
 	addRequest.Attribute("sn", []string{sn})
 	addRequest.Attribute("userPassword", []string{"<invalid>"})
-	addRequest.Attribute("sshPublicKey", []string{sshPublicKey})
+	if sshPublicKey != "" {
+		addRequest.Attribute("sshPublicKey", []string{sshPublicKey})
+	}
 	addRequest.Attribute("uidNumber", []string{uidNumber})
 	addRequest.Attribute("gidNumber", []string{gidNumber})
 	addRequest.Attribute("homeDirectory", []string{fmt.Sprintf("/home/%s", uid)})
