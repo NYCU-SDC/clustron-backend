@@ -179,7 +179,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	q := r.URL.Query()
 	raw := q.Get("short")
 	var short bool
-	if raw != "" {
+	if raw == "" {
 		short = true
 	} else {
 		short, err = strconv.ParseBool(raw)
