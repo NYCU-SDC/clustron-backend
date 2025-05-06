@@ -369,12 +369,19 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 	}, nil)
 
 	auth := mocks.NewAuth(t)
+	// Organizer in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
 		"organizer", nil)
+
+	// Organizer not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
+
+	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
 		"group-admin", nil)
+
+	// User in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
 		"user", nil)
 
@@ -455,12 +462,20 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 	}, nil)
 
 	auth := mocks.NewAuth(t)
+
+	// Organizer in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
 		"organizer", nil)
+
+	// Organizer not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
+
+	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
 		"group-admin", nil)
+
+	// User in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
 		"user", nil)
 
