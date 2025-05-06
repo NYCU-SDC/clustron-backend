@@ -6,20 +6,19 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"os"
 	"testing"
 	"time"
 )
 
-var client *Client
+func newTestClient(t *testing.T) (*Client, func()) {
+	t.Helper()
 
-func TestMain(m *testing.M) {
-	logger, _ := zap.NewDevelopment()
+	logger := zap.NewNop()
+
 	pool, err := dockertest.NewPool("")
-	if err != nil {
-		logger.Fatal("Could not connect to docker", zap.Error(err))
-	}
+	require.NoError(t, err)
 	pool.MaxWait = 120 * time.Second
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
@@ -33,29 +32,19 @@ func TestMain(m *testing.M) {
 	}, func(config *docker.HostConfig) {
 		config.AutoRemove = true
 	})
-	if err != nil {
-		logger.Fatal("Could not start resource", zap.Error(err))
-	}
+	require.NoError(t, err)
+
+	cleanup := func() { _ = pool.Purge(resource) }
 
 	port := resource.GetPort("389/tcp")
-	fmt.Println("LDAP is listening on", port)
-
-	err = pool.Retry(func() error {
+	require.NoError(t, pool.Retry(func() error {
 		conn, err := ldap.DialURL(fmt.Sprintf("ldap://localhost:%s", port))
 		if err != nil {
 			return err
 		}
-		defer func(conn *ldap.Conn) {
-			err := conn.Close()
-			if err != nil {
-				logger.Warn("Failed to close LDAP connection", zap.Error(err))
-			}
-		}(conn)
+		defer conn.Close()
 		return conn.Bind("cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club", "admin")
-	})
-	if err != nil {
-		logger.Fatal("Failed to connect to LDAP server", zap.Error(err))
-	}
+	}))
 
 	cfg := &Config{
 		LDAPHost:    "localhost",
@@ -65,23 +54,12 @@ func TestMain(m *testing.M) {
 		LDAPBindPwd: "admin",
 	}
 
-	client, err = NewClient(cfg, logger)
-	if err != nil {
-		logger.Fatal("Failed to create LDAP client", zap.Error(err))
-	}
+	client, err := NewClient(cfg, logger)
+	require.NoError(t, err)
 
-	if err := setupBaseDIT(client.Conn, cfg.LDAPBaseDN); err != nil {
-		logger.Fatal("Failed to setup base DIT", zap.Error(err))
-	}
+	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
 
-	code := m.Run()
-
-	// Explicitly purge the container before exit
-	if purgeErr := pool.Purge(resource); purgeErr != nil {
-		logger.Warn("Failed to purge resource", zap.Error(purgeErr))
-	}
-
-	os.Exit(code)
+	return client, cleanup
 }
 
 func setupBaseDIT(c *ldap.Conn, baseDN string) error {
@@ -102,4 +80,14 @@ func setupBaseDIT(c *ldap.Conn, baseDN string) error {
 		}
 	}
 	return nil
+}
+
+func setupUser(t *testing.T, c *Client, uid, cn, sn, key, uidNumber string) {
+	t.Helper()
+	require.NoError(t, c.CreateUser(uid, cn, sn, key, uidNumber))
+}
+
+func setupGroup(t *testing.T, c *Client, groupName, gidNumber string, members []string) {
+	t.Helper()
+	require.NoError(t, c.CreateGroup(groupName, gidNumber, members))
 }
