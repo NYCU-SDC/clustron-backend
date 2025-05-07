@@ -18,7 +18,7 @@ import (
 func newTestClient(t *testing.T) (*Client, func()) {
 	t.Helper()
 
-	logger, err := zap.NewDevelopment()
+	logger, _ := zap.NewDevelopment()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
