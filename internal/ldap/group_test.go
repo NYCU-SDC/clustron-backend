@@ -90,8 +90,6 @@ func TestClient_GetGroupInfo(t *testing.T) {
 			defer done()
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
-			//require.NoError(t, client.CreateUser(user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001"))
-			//require.NoError(t, client.CreateGroup(groupName, gidNumber, []string{user1}))
 			setupGroup(t, client, groupName, gidNumber, []string{user1})
 
 			entry, err := client.GetGroupInfo(tc.groupName)
