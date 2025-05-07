@@ -39,12 +39,14 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	dn := fmt.Sprintf("uid=%s,%s", uid, base)
 
 	addRequest := ldap.NewAddRequest(dn, nil)
-	addRequest.Attribute("objectClass", []string{"inetOrgPerson", "posixAccount"})
+	addRequest.Attribute("objectClass", []string{"inetOrgPerson", "posixAccount", "ldapPublicKey"})
 	addRequest.Attribute("uid", []string{uid})
 	addRequest.Attribute("cn", []string{cn})
 	addRequest.Attribute("sn", []string{sn})
 	addRequest.Attribute("userPassword", []string{"<invalid>"})
-	addRequest.Attribute("sshPublicKey", []string{sshPublicKey})
+	if sshPublicKey != "" {
+		addRequest.Attribute("sshPublicKey", []string{sshPublicKey})
+	}
 	addRequest.Attribute("uidNumber", []string{uidNumber})
 	addRequest.Attribute("gidNumber", []string{gidNumber})
 	addRequest.Attribute("homeDirectory", []string{fmt.Sprintf("/home/%s", uid)})
@@ -164,8 +166,13 @@ func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
 	err := c.Conn.Modify(modifyRequest)
 	if err != nil {
 		var ldapErr *ldap.Error
-		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
-			return fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+		if errors.As(err, &ldapErr) {
+			switch ldapErr.ResultCode {
+			case ldap.LDAPResultNoSuchObject:
+				return fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+			case ldap.LDAPResultAttributeOrValueExists:
+				return fmt.Errorf("%w: %s", ErrPublicKeyExists, uid)
+			}
 		}
 		c.Logger.Error("failed to add SSH public key", zap.String("uid", uid), zap.Error(err))
 		return fmt.Errorf("failed to add SSH public key: %w", err)
@@ -182,10 +189,16 @@ func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
 	modifyRequest.Delete("sshPublicKey", []string{publicKey})
 
 	err := c.Conn.Modify(modifyRequest)
+
 	if err != nil {
 		var ldapErr *ldap.Error
-		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
-			return fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+		if errors.As(err, &ldapErr) {
+			switch ldapErr.ResultCode {
+			case ldap.LDAPResultNoSuchObject:
+				return fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+			case ldap.LDAPResultNoSuchAttribute:
+				return fmt.Errorf("%w: %s", ErrPublicKeyNotFound, uid)
+			}
 		}
 		c.Logger.Error("failed to delete SSH public key", zap.String("uid", uid), zap.Error(err))
 		return fmt.Errorf("failed to delete SSH public key: %w", err)

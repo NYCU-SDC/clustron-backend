@@ -85,6 +85,11 @@ func (c *Client) DeleteGroup(groupName string) error {
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 	err := c.Conn.Del(deleteRequest)
 	if err != nil {
+		var ldapErr *ldap.Error
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
+			c.Logger.Warn("Group does not exist", zap.String("group_name", groupName))
+			return fmt.Errorf("%w: %s", ErrGroupNotFound, groupName)
+		}
 		c.Logger.Error("Failed to delete group", zap.String("group_name", groupName), zap.Error(err))
 		return fmt.Errorf("failed to delete group: %v", err)
 	}
@@ -144,10 +149,21 @@ func (c *Client) RemoveUserFromGroup(groupName string, memberUid string) error {
 }
 
 func (c *Client) GetGroupsForUser(uid string) ([]*ldap.Entry, error) {
-	filter := fmt.Sprintf("(memberUid=%s)", ldap.EscapeFilter(uid))
-	attributes := []string{"dn", "cn"}
+	userBase := "ou=People," + c.Config.LDAPBaseDN
+	userFilter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
+	exists, err := c.entryExists(userBase, userFilter)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+	}
 
-	result, err := c.SearchByFilter("ou=Groups,"+c.Config.LDAPBaseDN, filter, attributes)
+	groupBase := "ou=Groups," + c.Config.LDAPBaseDN
+	groupFilter := fmt.Sprintf("(memberUid=%s)", ldap.EscapeFilter(uid))
+	groupAttributes := []string{"dn", "cn"}
+	result, err := c.SearchByFilter(groupBase, groupFilter, groupAttributes)
+
 	if err != nil {
 		c.Logger.Error("failed to search groups for user", zap.String("uid", uid), zap.Error(err))
 		return nil, fmt.Errorf("failed to search groups for user: %w", err)
