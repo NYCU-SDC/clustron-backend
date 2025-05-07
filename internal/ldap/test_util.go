@@ -1,6 +1,8 @@
 package ldap
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
@@ -8,6 +10,7 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,7 +18,7 @@ import (
 func newTestClient(t *testing.T) (*Client, func()) {
 	t.Helper()
 
-	logger := zap.NewNop()
+	logger, err := zap.NewDevelopment()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -33,8 +36,16 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		config.AutoRemove = true
 	})
 	require.NoError(t, err)
+	require.NoError(t, waitForLDAPReady(pool, resource, 30*time.Second))
 
-	cleanup := func() { _ = pool.Purge(resource) }
+	cleanup := func() {
+		logger.Info("cleaning up test resources")
+
+		err = pool.Purge(resource)
+		if err != nil {
+			logger.Error("failed to purge resource", zap.Error(err))
+		}
+	}
 
 	port := resource.GetPort("389/tcp")
 	require.NoError(t, pool.Retry(func() error {
@@ -45,6 +56,7 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		defer func(conn *ldap.Conn) {
 			_ = conn.Close()
 		}(conn)
+
 		return conn.Bind("cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club", "admin")
 	}))
 
@@ -62,6 +74,39 @@ func newTestClient(t *testing.T) (*Client, func()) {
 	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
 
 	return client, cleanup
+}
+
+func waitForLDAPReady(pool *dockertest.Pool, resource *dockertest.Resource, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	const readyStr = "slapd starting"
+
+	return pool.Retry(func() error {
+		var logs strings.Builder
+
+		err := pool.Client.Logs(docker.LogsOptions{
+			Context:      ctx,
+			Container:    resource.Container.ID,
+			OutputStream: &logs,
+			ErrorStream:  &logs,
+			Stdout:       true,
+			Stderr:       true,
+			Timestamps:   false,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get logs: %w", err)
+		}
+
+		scanner := bufio.NewScanner(strings.NewReader(logs.String()))
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), readyStr) {
+				return nil
+			}
+		}
+
+		return errors.New("slapd not ready yet")
+	})
 }
 
 func setupBaseDIT(c *ldap.Conn, baseDN string) error {
