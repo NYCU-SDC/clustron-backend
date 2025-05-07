@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/NYCU-SDC/clustron-backend/internal"
 	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	"github.com/NYCU-SDC/clustron-backend/internal/setting"
 	"github.com/NYCU-SDC/clustron-backend/internal/setting/mocks"
@@ -86,7 +87,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, jwt.User{
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
 				Role:     pgtype.Text{String: "user", Valid: true},
@@ -227,7 +228,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, jwt.User{
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
 				Role:     pgtype.Text{String: "user", Valid: true},
