@@ -31,3 +31,16 @@ type Membership struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
+
+type PublicKey struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Title     string
+	PublicKey string
+}
+
+type Setting struct {
+	UserID        uuid.UUID
+	Username      string
+	LinuxUsername pgtype.Text
+}
