@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	setting "github.com/NYCU-SDC/clustron-backend/internal/setting"
+	setting "clustron-backend/internal/setting"
 	mock "github.com/stretchr/testify/mock"
 
 	uuid "github.com/google/uuid"
