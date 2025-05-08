@@ -29,7 +29,7 @@ sql:
               type: "UUID"
   - engine: "postgresql"
     queries: "./internal/setting/queries.sql"
-    schema: "internal/database/full_schema.sql"
+    schema: "./internal/database/full_schema.sql"
     gen:
       go:
         package: "setting"
