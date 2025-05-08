@@ -1,0 +1,4 @@
+database_url: "YOUR_DATABASE_URL"
+debug:
+google_oauth_client_id:
+google_oauth_client_secret:

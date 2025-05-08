@@ -2,13 +2,15 @@ package setting_test
 
 import (
 	"bytes"
+	"clustron-backend/internal"
+	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
+	"clustron-backend/internal/setting/mocks"
 	"context"
 	"encoding/json"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
-	"github.com/NYCU-SDC/clustron-backend/internal/setting"
-	"github.com/NYCU-SDC/clustron-backend/internal/setting/mocks"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -85,10 +87,10 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, jwt.User{
-				ID:       "7942c917-4770-43c1-a56a-952186b9970e",
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
+				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
-				Role:     "user",
+				Role:     pgtype.Text{String: "user"},
 			}))
 
 			w := httptest.NewRecorder()
@@ -117,9 +119,9 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		{
 			name: "Should delete public key",
 			user: jwt.User{
-				ID:       publicKey.UserID.String(),
+				ID:       publicKey.UserID,
 				Username: "testuser",
-				Role:     "user",
+				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
 				Id: publicKey.ID.String(),
@@ -129,9 +131,9 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		{
 			name: "Should return permission denied when user is not the owner of the public key",
 			user: jwt.User{
-				ID:       "8814749c-49db-451d-9c78-5118138a7612",
+				ID:       uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
 				Username: "testuser",
-				Role:     "user",
+				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
 				Id: publicKey.ID.String(),
@@ -158,7 +160,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodDelete, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, tc.user))
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
 			h.DeletePublicKeyHandler(w, r)
@@ -226,10 +228,10 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, jwt.User{
-				ID:       "7942c917-4770-43c1-a56a-952186b9970e",
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
+				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
-				Role:     "user",
+				Role:     pgtype.Text{String: "user"},
 			}))
 			w := httptest.NewRecorder()
 
