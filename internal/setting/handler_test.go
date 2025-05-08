@@ -160,7 +160,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodDelete, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), jwt.UserContextKey, tc.user))
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
 			h.DeletePublicKeyHandler(w, r)
