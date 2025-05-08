@@ -15,15 +15,15 @@ const DefaultSecret = "default-secret"
 var ErrDatabaseURLRequired = errors.New("database_url is required")
 
 type Config struct {
-	Debug             bool   `yaml:"debug"              envconfig:"DEBUG"`
-	Host              string `yaml:"host"               envconfig:"HOST"`
-	Port              string `yaml:"port"               envconfig:"PORT"`
-	Secret            string `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL       string `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource   string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	OtelCollectorUrl  string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	OauthClientID     string `yaml:"oauth_client_id"    envconfig:"OAUTH_CLIENT_ID"`
-	OauthClientSecret string `yaml:"oauth_client_secret" envconfig:"OAUTH_CLIENT_SECRET"`
+	Debug                   bool   `yaml:"debug"              envconfig:"DEBUG"`
+	Host                    string `yaml:"host"               envconfig:"HOST"`
+	Port                    string `yaml:"port"               envconfig:"PORT"`
+	Secret                  string `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL             string `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource         string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	OtelCollectorUrl        string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	GoogleOauthClientID     string `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOauthClientSecret string `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
 }
 type LogBuffer struct {
 	buffer []logEntry
@@ -69,15 +69,15 @@ func Load() (Config, *LogBuffer) {
 	logger := NewConfigLogger()
 
 	config := &Config{
-		Debug:             false,
-		Host:              "localhost",
-		Port:              "8080",
-		Secret:            DefaultSecret,
-		DatabaseURL:       "",
-		MigrationSource:   "file://internal/database/migrations",
-		OtelCollectorUrl:  "",
-		OauthClientID:     "",
-		OauthClientSecret: "",
+		Debug:                   false,
+		Host:                    "localhost",
+		Port:                    "8080",
+		Secret:                  DefaultSecret,
+		DatabaseURL:             "",
+		MigrationSource:         "file://internal/database/migrations",
+		OtelCollectorUrl:        "",
+		GoogleOauthClientID:     "",
+		GoogleOauthClientSecret: "",
 	}
 
 	var err error
@@ -130,15 +130,15 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 	}
 
 	envConfig := &Config{
-		Debug:             os.Getenv("DEBUG") == "true",
-		Host:              os.Getenv("HOST"),
-		Port:              os.Getenv("PORT"),
-		Secret:            os.Getenv("SECRET"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		MigrationSource:   os.Getenv("MIGRATION_SOURCE"),
-		OtelCollectorUrl:  os.Getenv("OTEL_COLLECTOR_URL"),
-		OauthClientID:     os.Getenv("OAUTH_CLIENT_ID"),
-		OauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
+		Debug:                   os.Getenv("DEBUG") == "true",
+		Host:                    os.Getenv("HOST"),
+		Port:                    os.Getenv("PORT"),
+		Secret:                  os.Getenv("SECRET"),
+		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
+		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
+		GoogleOauthClientID:     os.Getenv("OAUTH_CLIENT_ID"),
+		GoogleOauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -154,8 +154,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
-	flag.StringVar(&flagConfig.OauthClientID, "oauth_client_id", "", "OAuth client ID")
-	flag.StringVar(&flagConfig.OauthClientSecret, "oauth_client_secret", "", "OAuth client secret")
+	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "OAuth client ID")
+	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")
 
 	flag.Parse()
 

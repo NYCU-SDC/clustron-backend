@@ -56,12 +56,12 @@ type UserStore interface {
 }
 
 type Handler struct {
-	validator   *validator.Validate
-	logger      *zap.Logger
-	tracer      trace.Tracer
-	oauthConfig *oauth2.Config
-	userStore   UserStore
-	jwtIssuer   JWTIssuer
+	validator         *validator.Validate
+	logger            *zap.Logger
+	tracer            trace.Tracer
+	googleOauthConfig *oauth2.Config
+	userStore         UserStore
+	jwtIssuer         JWTIssuer
 }
 
 func NewHandler(validator *validator.Validate, logger *zap.Logger, config config.Config, userStore UserStore, jwtIssuer JWTIssuer) *Handler {
@@ -71,9 +71,9 @@ func NewHandler(validator *validator.Validate, logger *zap.Logger, config config
 		tracer:    otel.Tracer("auth/handler"),
 		userStore: userStore,
 		jwtIssuer: jwtIssuer,
-		oauthConfig: &oauth2.Config{
-			ClientID:     config.OauthClientID,
-			ClientSecret: config.OauthClientSecret,
+		googleOauthConfig: &oauth2.Config{
+			ClientID:     config.GoogleOauthClientID,
+			ClientSecret: config.GoogleOauthClientSecret,
 			RedirectURL:  fmt.Sprintf("http://%s:%s/api/oauth2/google/callback", config.Host, config.Port),
 			Scopes: []string{
 				"https://www.googleapis.com/auth/userinfo.email",
@@ -99,7 +99,7 @@ func (h *Handler) Oauth2WithGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.StdEncoding.EncodeToString([]byte(callback))
 
-	authURL := h.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURL := h.googleOauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 
 	logger.Info("Redirecting to Google OAuth2", zap.String("url", authURL))
@@ -126,13 +126,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
 
-	token, err := h.oauthConfig.Exchange(traceCtx, code)
+	token, err := h.googleOauthConfig.Exchange(traceCtx, code)
 	if err != nil {
 		problem.WriteError(traceCtx, w, errors.New("failed to exchange token"), logger)
 		return
 	}
 
-	client := h.oauthConfig.Client(traceCtx, token)
+	client := h.googleOauthConfig.Client(traceCtx, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
 	if err != nil {
 		problem.WriteError(traceCtx, w, errors.New("failed to get user info"), logger)
