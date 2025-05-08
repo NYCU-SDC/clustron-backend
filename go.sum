@@ -8,6 +8,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NYCU-SDC/summer v0.0.0-20250426095534-3d51b8e442e1 h1:0c8TaKrW7U4cuWtflUUvhU6fjBUaBtMkHEDMypeYkfU=
 github.com/NYCU-SDC/summer v0.0.0-20250426095534-3d51b8e442e1/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
+github.com/NYCU-SDC/summer v0.0.0-20250502102047-bd5dd8e11774 h1:R0ZM7Yv9UwM2aaonAEeJ4HnOyxW8Mo545CgetpzfXZM=
+github.com/NYCU-SDC/summer v0.0.0-20250502102047-bd5dd8e11774/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa/go.mod h1:cEWa1LVoE5KvSD9ONXsZrj0z6KqySlCCNKHlLzbqAt4=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=

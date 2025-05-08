@@ -3,7 +3,7 @@ module clustron-backend
 go 1.24.2
 
 require (
-	github.com/NYCU-SDC/summer v0.0.0-20250426095534-3d51b8e442e1
+	github.com/NYCU-SDC/summer v0.0.0-20250502102047-bd5dd8e11774
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/golang-jwt/jwt/v5 v5.2.2

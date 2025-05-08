@@ -62,15 +62,17 @@ type Handler struct {
 	googleOauthConfig *oauth2.Config
 	userStore         UserStore
 	jwtIssuer         JWTIssuer
+	problemWriter     *problem.HttpWriter
 }
 
 func NewHandler(validator *validator.Validate, logger *zap.Logger, config config.Config, userStore UserStore, jwtIssuer JWTIssuer) *Handler {
 	return &Handler{
-		validator: validator,
-		logger:    logger,
-		tracer:    otel.Tracer("auth/handler"),
-		userStore: userStore,
-		jwtIssuer: jwtIssuer,
+		validator:     validator,
+		logger:        logger,
+		tracer:        otel.Tracer("auth/handler"),
+		userStore:     userStore,
+		jwtIssuer:     jwtIssuer,
+		problemWriter: problem.New(),
 		googleOauthConfig: &oauth2.Config{
 			ClientID:     config.GoogleOauthClientID,
 			ClientSecret: config.GoogleOauthClientSecret,
@@ -112,7 +114,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		problem.WriteError(traceCtx, w, errors.New("missing code"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("missing code"), logger)
 		return
 	}
 
@@ -120,7 +122,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	callbackURL, _ := base64.StdEncoding.DecodeString(state)
 	callback, err := url.Parse(string(callbackURL))
 	if err != nil {
-		problem.WriteError(traceCtx, w, errors.New("invalid state"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("invalid state"), logger)
 		return
 	}
 	redirectTo := callback.Query().Get("r")
@@ -128,33 +130,33 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.googleOauthConfig.Exchange(traceCtx, code)
 	if err != nil {
-		problem.WriteError(traceCtx, w, errors.New("failed to exchange token"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to exchange token"), logger)
 		return
 	}
 
 	client := h.googleOauthConfig.Client(traceCtx, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
 	if err != nil {
-		problem.WriteError(traceCtx, w, errors.New("failed to get user info"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to get user info"), logger)
 		return
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			problem.WriteError(traceCtx, w, errors.New("failed to close response body"), logger)
+			h.problemWriter.WriteError(traceCtx, w, errors.New("failed to close response body"), logger)
 		}
 	}(resp.Body)
 
 	var userInfo googleUserInfo
 	err = json.NewDecoder(resp.Body).Decode(&userInfo)
 	if err != nil {
-		problem.WriteError(traceCtx, w, errors.New("failed to decode user info"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to decode user info"), logger)
 		return
 	}
 
 	exists, err := h.userStore.ExistsByEmail(traceCtx, userInfo.Email)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -162,13 +164,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		jwtUser, err = h.userStore.Create(traceCtx, userInfo.Name, userInfo.Email)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	} else {
 		jwtUser, err = h.userStore.GetByEmail(traceCtx, userInfo.Email)
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	}
@@ -176,13 +178,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT token
 	jwtToken, err := h.jwtIssuer.New(traceCtx, jwt.User(jwtUser))
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	refreshToken, err := h.jwtIssuer.GenerateRefreshToken(traceCtx, jwt.User(jwtUser))
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -204,39 +206,39 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Validate the request and extract the refresh token
 	pathRefreshToken := r.PathValue("refreshToken")
 	if pathRefreshToken == "" {
-		problem.WriteError(traceCtx, w, errors.New("missing refresh token"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("missing refresh token"), logger)
 		return
 	}
 	refreshTokenID, err := handlerutil.ParseUUID(pathRefreshToken)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Get the user associated with the refresh token
 	jwtUser, err := h.jwtIssuer.GetUserByRefreshToken(traceCtx, refreshTokenID)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Generate a new JWT and refresh token
 	jwtToken, err := h.jwtIssuer.New(traceCtx, jwtUser)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	newRefreshToken, err := h.jwtIssuer.GenerateRefreshToken(traceCtx, jwtUser)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Inactivate the old refresh token
 	err = h.jwtIssuer.InactivateRefreshToken(traceCtx, refreshTokenID)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -255,13 +257,13 @@ func (h *Handler) DebugToken(w http.ResponseWriter, r *http.Request) {
 
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		problem.WriteError(traceCtx, w, errors.New("missing token"), logger)
+		h.problemWriter.WriteError(traceCtx, w, errors.New("missing token"), logger)
 		return
 	}
 
 	jwtUser, err := h.jwtIssuer.Parse(traceCtx, token)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
