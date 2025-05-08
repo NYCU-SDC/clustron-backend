@@ -14,4 +14,6 @@ var (
 	ErrUidNumberInUse           = errors.New("uidNumber already in use")
 	ErrUserNotFound             = errors.New("user not found")
 	ErrUserConstraintViolation  = errors.New("user constraint violation (uid or uidNumber conflict)")
+	ErrPublicKeyNotFound        = errors.New("public key not found")
+	ErrPublicKeyExists          = errors.New("public key already exists")
 )

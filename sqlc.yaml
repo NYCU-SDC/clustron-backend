@@ -27,3 +27,16 @@ sql:
             go_type:
               import: "github.com/google/uuid"
               type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/setting/queries.sql"
+    schema: "internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "setting"
+        out: "./internal/setting"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
