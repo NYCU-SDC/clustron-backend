@@ -24,7 +24,7 @@ func (q *Queries) AccessLevelFromRole(ctx context.Context, id uuid.UUID) (string
 }
 
 const archive = `-- name: Archive :one
-UPDATE groups SET is_archived = TRUE WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
 `
 
 func (q *Queries) Archive(ctx context.Context, id uuid.UUID) (Group, error) {
@@ -310,7 +310,7 @@ func (q *Queries) GetWithPageDESC(ctx context.Context, arg GetWithPageDESCParams
 }
 
 const unarchive = `-- name: Unarchive :one
-UPDATE groups SET is_archived = FALSE WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
 `
 
 func (q *Queries) Unarchive(ctx context.Context, id uuid.UUID) (Group, error) {
@@ -328,7 +328,7 @@ func (q *Queries) Unarchive(ctx context.Context, id uuid.UUID) (Group, error) {
 }
 
 const update = `-- name: Update :one
-UPDATE groups SET title = $2, description = $3 WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
 `
 
 type UpdateParams struct {

@@ -26,13 +26,13 @@ SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.u
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
 
 -- name: Update :one
-UPDATE groups SET title = $2, description = $3 WHERE id = $1 RETURNING *;
+UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
 -- name: Archive :one
-UPDATE groups SET is_archived = TRUE WHERE id = $1 RETURNING *;
+UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
 -- name: Unarchive :one
-UPDATE groups SET is_archived = FALSE WHERE id = $1 RETURNING *;
+UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
 -- name: GetUserGroupMembership :one
 SELECT * FROM memberships WHERE user_id = $1 AND group_id = $2;
