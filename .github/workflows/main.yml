@@ -37,21 +37,12 @@ jobs:
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.25.0'
+          sqlc-version: '1.28.0'
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
           mockery-version: '2.53.3'
-
-      - name: Set up PostgreSQL
-        uses: harmon758/postgresql-action@v1
-        with:
-          postgresql version: '14'
-
-      - name: Create pgcrypto extension
-        run: |
-          psql -U postgres -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
 
       - name: Test
         run: make test
