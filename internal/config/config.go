@@ -24,6 +24,8 @@ type Config struct {
 	OtelCollectorUrl        string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	GoogleOauthClientID     string `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
 	GoogleOauthClientSecret string `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	NYCUOauthClientID       string `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
+	NYCUOauthClientSecret   string `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
 }
 type LogBuffer struct {
 	buffer []logEntry
@@ -139,6 +141,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
 		GoogleOauthClientID:     os.Getenv("OAUTH_CLIENT_ID"),
 		GoogleOauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
+		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
+		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -156,6 +160,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")
+	flag.StringVar(&flagConfig.NYCUOauthClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
+	flag.StringVar(&flagConfig.NYCUOauthClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
 
 	flag.Parse()
 

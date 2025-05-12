@@ -1,10 +1,12 @@
 package jwt
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -146,7 +148,8 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 
 	jwtUser, err := s.userStore.GetByEmail(ctx, claims.Email)
 	if err != nil {
-		logger.Error("Failed to get user by email", zap.String("email", claims.Email), zap.Error(err))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "user", "email", claims.Email, logger, "get user by email")
+		span.RecordError(err)
 		return User{}, err
 	}
 
@@ -160,25 +163,29 @@ func (s Service) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User,
 
 	refreshToken, err := s.queries.GetByID(traceCtx, id)
 	if err != nil {
-		logger.Error("Failed to get user by refresh token", zap.String("id", id.String()), zap.Error(err))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "id", id.String(), logger, "get refresh token by id")
+		span.RecordError(err)
 		return User{}, err
 	}
 
 	// Check if the refresh token is expired
 	if refreshToken.ExpirationDate.Time.Before(time.Now()) {
-		logger.Error("Refresh token expired", zap.String("id", id.String()), zap.Time("expiration_date", refreshToken.ExpirationDate.Time))
-		return User{}, fmt.Errorf("refresh token expired")
+		err = fmt.Errorf("%w: refresh token expired", internal.ErrInvalidRefreshToken)
+		span.RecordError(err)
+		return User{}, err
 	}
 
 	// Check if the refresh token is active
 	if !refreshToken.IsActive.Bool {
-		logger.Error("Refresh token is inactive", zap.String("id", id.String()))
-		return User{}, fmt.Errorf("refresh token is inactive")
+		err = fmt.Errorf("%w: refresh token is inactive", internal.ErrInvalidRefreshToken)
+		span.RecordError(err)
+		return User{}, err
 	}
 
 	jwtUser, err := s.queries.GetUserByRefreshToken(traceCtx, id)
 	if err != nil {
-		logger.Error("Failed to get user by refresh token", zap.String("id", id.String()), zap.Error(err))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "id", id.String(), logger, "get user by refresh token")
+		span.RecordError(err)
 		return User{}, err
 	}
 	return jwtUser, nil
@@ -193,7 +200,6 @@ func (s Service) GenerateRefreshToken(ctx context.Context, user User) (RefreshTo
 	// Remove expired and inactive refresh tokens
 	_, err := s.DeleteExpiredRefreshTokens(traceCtx)
 	if err != nil {
-		logger.Error("Failed to delete expired refresh tokens", zap.Error(err))
 		return RefreshToken{}, err
 	}
 
@@ -206,7 +212,8 @@ func (s Service) GenerateRefreshToken(ctx context.Context, user User) (RefreshTo
 	})
 
 	if err != nil {
-		logger.Error("Failed to create refresh token", zap.String("user_id", user.ID.String()), zap.Error(err))
+		err = databaseutil.WrapDBError(err, logger, "generate refresh token")
+		span.RecordError(err)
 		return RefreshToken{}, err
 	}
 
@@ -221,7 +228,8 @@ func (s Service) InactivateRefreshToken(ctx context.Context, id uuid.UUID) error
 
 	_, err := s.queries.Inactivate(traceCtx, id)
 	if err != nil {
-		logger.Error("Failed to update refresh token", zap.String("id", id.String()), zap.Error(err))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "id", id.String(), logger, "inactivate refresh token")
+		span.RecordError(err)
 		return err
 	}
 	return nil
@@ -235,7 +243,8 @@ func (s Service) DeleteExpiredRefreshTokens(ctx context.Context) (int64, error) 
 
 	rowsAffected, err := s.queries.Delete(traceCtx)
 	if err != nil {
-		logger.Error("Failed to delete expired refresh tokens", zap.Error(err))
+		err = databaseutil.WrapDBError(err, logger, "delete expired refresh tokens")
+		span.RecordError(err)
 		return 0, err
 	}
 

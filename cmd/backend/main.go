@@ -105,13 +105,15 @@ func main() {
 	}
 
 	validator := internal.NewValidator()
+	problemWriter := internal.NewProblemWriter()
 
 	// Service
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 
 	// Handler
-	authHandler := auth.NewHandler(validator, logger, cfg, userService, jwtService)
+	authHandler := auth.NewHandler(validator, logger, cfg, problemWriter, userService, jwtService)
+	jwtHandler := jwt.NewHandler(validator, logger, problemWriter, jwtService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -124,10 +126,10 @@ func main() {
 
 	// HTTP Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/oauth2/google", traced.HandlerFunc(authHandler.Oauth2WithGoogle))
-	mux.HandleFunc("GET /api/oauth2/google/callback", traced.HandlerFunc(authHandler.Callback))
-	mux.HandleFunc("GET /api/oauth2/debug/token", traced.HandlerFunc(authHandler.DebugToken))
-	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(authHandler.RefreshToken))
+	mux.HandleFunc("GET /api/oauth/{provider}", traced.HandlerFunc(authHandler.Oauth2Start))
+	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
+	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
+	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
