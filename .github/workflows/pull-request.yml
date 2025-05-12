@@ -43,6 +43,15 @@ jobs:
         with:
           mockery-version: '2.53.3'
 
+      - name: Set up PostgreSQL
+        uses: harmon758/postgresql-action@v1
+        with:
+          postgresql version: '14'
+
+      - name: Create pgcrypto extension
+        run: |
+          psql -U postgres -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+
       - name: Test
         run: make test
 
