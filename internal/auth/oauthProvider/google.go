@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"io"
 )
 
 type GoogleConfig struct {
@@ -55,7 +56,12 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 	if err != nil {
 		return UserInfo{}, err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	var userInfo googleUserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {

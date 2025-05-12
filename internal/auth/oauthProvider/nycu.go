@@ -74,7 +74,12 @@ func (n *NYCUConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -98,7 +103,12 @@ func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (User
 	if err != nil {
 		return UserInfo{}, err
 	}
-	defer profileResp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(profileResp.Body)
 
 	var profile NYCUProfile
 	err = json.NewDecoder(profileResp.Body).Decode(&profile)
