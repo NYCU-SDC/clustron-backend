@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/auth/oauthProvider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
@@ -100,7 +101,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	providerName := r.PathValue("provider")
 	provider := h.provider[providerName]
 	if provider == nil {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unsupported provider"), logger)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: provider not found: %s", internal.ErrProviderNotFound, providerName), logger)
 		return
 	}
 
@@ -128,7 +129,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	providerName := r.PathValue("provider")
 	provider := h.provider[providerName]
 	if provider == nil {
-		http.Error(w, "Unsupported provider", http.StatusBadRequest)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: provider not found: %s", internal.ErrProviderNotFound, providerName), logger)
 		return
 	}
 
@@ -142,27 +143,27 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := provider.Exchange(traceCtx, code)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to exchange token"), logger)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
 		return
 	}
 
 	userInfo, err := provider.GetUserInfo(traceCtx, token)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to get user info"), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Check if the user exists in the database, if not, create a new user
 	jwtUser, err := h.findOrCreateUser(traceCtx, userInfo)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to create user"), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Generate JWT token
 	jwtToken, refreshTokenID, err := h.generateJWT(traceCtx, jwtUser)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("failed to generate JWT"), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 

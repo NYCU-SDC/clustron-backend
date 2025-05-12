@@ -6,7 +6,9 @@ import (
 )
 
 var (
-	ErrInvalidRefreshToken = errors.New("invalid refresh token")
+	ErrInvalidRefreshToken  = errors.New("invalid refresh token")
+	ErrProviderNotFound     = errors.New("provider not found")
+	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -17,6 +19,10 @@ func ErrorHandler(err error) problem.Problem {
 	switch {
 	case errors.Is(err, ErrInvalidRefreshToken):
 		return problem.NewNotFoundProblem("refresh token not found")
+	case errors.Is(err, ErrProviderNotFound):
+		return problem.NewNotFoundProblem("provider not found")
+	case errors.Is(err, ErrInvalidExchangeToken):
+		return problem.NewValidateProblem("invalid exchange token")
 	}
 	return problem.Problem{}
 }

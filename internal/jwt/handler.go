@@ -2,7 +2,6 @@ package jwt
 
 import (
 	"context"
-	"errors"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -57,7 +56,7 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Validate the request and extract the refresh token
 	pathRefreshToken := r.PathValue("refreshToken")
 	if pathRefreshToken == "" {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("missing refresh token"), logger)
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.NewNotFoundError("refresh_token", "refreshToken", pathRefreshToken, "missing refresh token"), logger)
 		return
 	}
 	refreshTokenID, err := handlerutil.ParseUUID(pathRefreshToken)
