@@ -77,7 +77,7 @@ func (n *NYCUConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, 
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			return
 		}
 	}(resp.Body)
 
@@ -106,7 +106,7 @@ func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (User
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			return
 		}
 	}(profileResp.Body)
 

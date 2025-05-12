@@ -59,7 +59,7 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			return
 		}
 	}(resp.Body)
 

@@ -3,9 +3,9 @@
 package mocks
 
 import (
+	setting "clustron-backend/internal/setting"
 	context "context"
 
-	setting "clustron-backend/internal/setting"
 	mock "github.com/stretchr/testify/mock"
 
 	uuid "github.com/google/uuid"

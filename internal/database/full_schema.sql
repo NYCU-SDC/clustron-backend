@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users
     student_id      VARCHAR(255) UNIQUE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
-);CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     user_id         UUID REFERENCES users(id) NOT NULL,
     is_active       BOOLEAN DEFAULT TRUE,
     expiration_date TIMESTAMPTZ NOT NULL
-);CREATE EXTENSION IF NOT EXISTS pgcrypto;
+);
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS settings (
     user_id UUID REFERENCES users(id) NOT NULL,
