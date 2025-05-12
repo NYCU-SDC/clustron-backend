@@ -98,7 +98,7 @@ func (n *NYCUConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, 
 func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (UserInfo, error) {
 	client := n.config.Client(ctx, token)
 
-	// Fetch user info from NYCU API
+	// Fetch user info from NYCU OAuth Service
 	profileResp, err := client.Get("https://id.nycu.edu.tw/api/profile")
 	if err != nil {
 		return UserInfo{}, err
