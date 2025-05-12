@@ -5,6 +5,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -39,14 +40,15 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return user, nil
 }
 
-func (s *Service) Create(ctx context.Context, username, email string) (User, error) {
+func (s *Service) Create(ctx context.Context, username, email, studentID string) (User, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	param := CreateParams{
-		Username: username,
-		Email:    email,
+		Username:  username,
+		Email:     email,
+		StudentID: pgtype.Text{String: studentID, Valid: true},
 	}
 
 	user, err := s.queries.Create(traceCtx, param)

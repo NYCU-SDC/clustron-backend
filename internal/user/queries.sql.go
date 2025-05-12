@@ -9,19 +9,21 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (username, email, updated_at) VALUES ($1, $2, now()) RETURNING id, username, email, role, department, student_id, created_at, updated_at
+INSERT INTO users (username, email, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, username, email, role, department, student_id, created_at, updated_at
 `
 
 type CreateParams struct {
-	Username string
-	Email    string
+	Username  string
+	Email     string
+	StudentID pgtype.Text
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
-	row := q.db.QueryRow(ctx, create, arg.Username, arg.Email)
+	row := q.db.QueryRow(ctx, create, arg.Username, arg.Email, arg.StudentID)
 	var i User
 	err := row.Scan(
 		&i.ID,
