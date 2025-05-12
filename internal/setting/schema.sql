@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS public_keys (
     user_id UUID REFERENCES users(id) NOT NULL,
     title VARCHAR(255) NOT NULL,
     public_key TEXT NOT NULL
-)
+);

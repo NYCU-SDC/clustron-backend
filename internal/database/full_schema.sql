@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     is_active       BOOLEAN DEFAULT TRUE,
     expiration_date TIMESTAMPTZ NOT NULL
 );
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS settings (
     user_id UUID REFERENCES users(id) NOT NULL,
@@ -33,4 +35,4 @@ CREATE TABLE IF NOT EXISTS public_keys (
     user_id UUID REFERENCES users(id) NOT NULL,
     title VARCHAR(255) NOT NULL,
     public_key TEXT NOT NULL
-)
+);
