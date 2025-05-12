@@ -9,11 +9,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PublicKey struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Title     string
+	PublicKey string
+}
+
 type RefreshToken struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
 	IsActive       pgtype.Bool
 	ExpirationDate pgtype.Timestamptz
+}
+
+type Setting struct {
+	UserID        uuid.UUID
+	Username      string
+	LinuxUsername pgtype.Text
 }
 
 type User struct {

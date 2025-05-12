@@ -16,8 +16,26 @@ type PublicKey struct {
 	PublicKey string
 }
 
+type RefreshToken struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	IsActive       pgtype.Bool
+	ExpirationDate pgtype.Timestamptz
+}
+
 type Setting struct {
 	UserID        uuid.UUID
 	Username      string
 	LinuxUsername pgtype.Text
+}
+
+type User struct {
+	ID         uuid.UUID
+	Username   string
+	Email      string
+	Role       pgtype.Text
+	Department pgtype.Text
+	StudentID  pgtype.Text
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }
