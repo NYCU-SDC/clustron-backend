@@ -202,6 +202,97 @@ func (q *Queries) GetAllGroupsCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getAllWithPageASC = `-- name: GetAllWithPageASC :many
+SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text ASC LIMIT $3 OFFSET $2
+`
+
+type GetAllWithPageASCParams struct {
+	Sortby string
+	Page   int32
+	Size   int32
+}
+
+func (q *Queries) GetAllWithPageASC(ctx context.Context, arg GetAllWithPageASCParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, getAllWithPageASC, arg.Sortby, arg.Page, arg.Size)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllWithPageDESC = `-- name: GetAllWithPageDESC :many
+SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text DESC LIMIT $3 OFFSET $2
+`
+
+type GetAllWithPageDESCParams struct {
+	Sortby string
+	Page   int32
+	Size   int32
+}
+
+func (q *Queries) GetAllWithPageDESC(ctx context.Context, arg GetAllWithPageDESCParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, getAllWithPageDESC, arg.Sortby, arg.Page, arg.Size)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserAllMembership = `-- name: GetUserAllMembership :one
+SELECT user_id, group_id, role_id, created_at, updated_at FROM memberships WHERE user_id = $1
+`
+
+func (q *Queries) GetUserAllMembership(ctx context.Context, userID uuid.UUID) (Membership, error) {
+	row := q.db.QueryRow(ctx, getUserAllMembership, userID)
+	var i Membership
+	err := row.Scan(
+		&i.UserID,
+		&i.GroupID,
+		&i.RoleID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserGroupMembership = `-- name: GetUserGroupMembership :one
 SELECT user_id, group_id, role_id, created_at, updated_at FROM memberships WHERE user_id = $1 AND group_id = $2
 `
@@ -224,6 +315,22 @@ func (q *Queries) GetUserGroupMembership(ctx context.Context, arg GetUserGroupMe
 	return i, err
 }
 
+const getUserGroupRole = `-- name: GetUserGroupRole :one
+SELECT gr.id, gr.role, gr.access_level FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHERE m.user_id = $1 AND m.group_id = $2
+`
+
+type GetUserGroupRoleParams struct {
+	UserID  uuid.UUID
+	GroupID uuid.UUID
+}
+
+func (q *Queries) GetUserGroupRole(ctx context.Context, arg GetUserGroupRoleParams) (GroupRole, error) {
+	row := q.db.QueryRow(ctx, getUserGroupRole, arg.UserID, arg.GroupID)
+	var i GroupRole
+	err := row.Scan(&i.ID, &i.Role, &i.AccessLevel)
+	return i, err
+}
+
 const getUserGroupsCount = `-- name: GetUserGroupsCount :one
 SELECT COUNT(*) FROM memberships WHERE user_id = $1
 `
@@ -233,80 +340,6 @@ func (q *Queries) GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const getWithPageASC = `-- name: GetWithPageASC :many
-SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text ASC LIMIT $3 OFFSET $2
-`
-
-type GetWithPageASCParams struct {
-	Sortby string
-	Page   int32
-	Size   int32
-}
-
-func (q *Queries) GetWithPageASC(ctx context.Context, arg GetWithPageASCParams) ([]Group, error) {
-	rows, err := q.db.Query(ctx, getWithPageASC, arg.Sortby, arg.Page, arg.Size)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Group
-	for rows.Next() {
-		var i Group
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.IsArchived,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getWithPageDESC = `-- name: GetWithPageDESC :many
-SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text DESC LIMIT $3 OFFSET $2
-`
-
-type GetWithPageDESCParams struct {
-	Sortby string
-	Page   int32
-	Size   int32
-}
-
-func (q *Queries) GetWithPageDESC(ctx context.Context, arg GetWithPageDESCParams) ([]Group, error) {
-	rows, err := q.db.Query(ctx, getWithPageDESC, arg.Sortby, arg.Page, arg.Size)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Group
-	for rows.Next() {
-		var i Group
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.IsArchived,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const unarchive = `-- name: Unarchive :one

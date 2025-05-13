@@ -18,6 +18,7 @@ import (
 //go:generate mockery --name=Auth
 type Auth interface {
 	GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error)
+	GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error)
 }
 
 //go:generate mockery --name=Store
@@ -33,6 +34,11 @@ type Store interface {
 	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
 }
 
+type RoleResponse struct {
+	Id          string `json:"id"`
+	Role        string `json:"role"`
+	AccessLevel string `json:"accessLevel"`
+}
 type Response struct {
 	Id          string `json:"id"`
 	Title       string `json:"title"`
@@ -40,6 +46,9 @@ type Response struct {
 	IsArchived  bool   `json:"isArchived"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
+	Me          struct {
+		Role RoleResponse `json:"role"`
+	} `json:"me"`
 }
 
 type AddMemberRequest struct {

@@ -63,19 +63,19 @@ func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, s
 	var groups []Group
 	var err error
 	if sort == "desc" {
-		params := GetWithPageDESCParams{
+		params := GetAllWithPageDESCParams{
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.GetWithPageDESC(ctx, params)
+		groups, err = s.queries.GetAllWithPageDESC(ctx, params)
 	} else {
-		params := GetWithPageASCParams{
+		params := GetAllWithPageASCParams{
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.GetWithPageASC(ctx, params)
+		groups, err = s.queries.GetAllWithPageASC(ctx, params)
 	}
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get groups")
@@ -197,6 +197,24 @@ func (s *Service) FindUserGroupById(ctx context.Context, userId uuid.UUID, group
 	return group, nil
 }
 
+func (s *Service) GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetUserGroupRole")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetUserGroupRole(ctx, GetUserGroupRoleParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), userId.String()), logger, "get membership")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+
+	return role, nil
+}
+
 func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetUserGroupRelationShip")
 	defer span.End()
@@ -220,4 +238,22 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID,
 	}
 
 	return accessLevel, nil
+}
+
+func (s *Service) GetUserGroupMembership(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Membership, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetUserGroupMembership")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	membership, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", userId.String(), groupId.String()), logger, "get membership")
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	return membership, nil
 }
