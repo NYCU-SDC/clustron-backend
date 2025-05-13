@@ -83,7 +83,19 @@ func (q *Queries) FindById(ctx context.Context, id uuid.UUID) (Group, error) {
 }
 
 const findByUserWithPageASC = `-- name: FindByUserWithPageASC :many
-SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY $2::text ASC LIMIT $4 OFFSET $3
+SELECT
+    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    gr.id, gr.role, gr.access_level
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    $2::text ASC LIMIT $4 OFFSET $3
 `
 
 type FindByUserWithPageASCParams struct {
@@ -93,7 +105,19 @@ type FindByUserWithPageASCParams struct {
 	Size   int32
 }
 
-func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithPageASCParams) ([]Group, error) {
+type FindByUserWithPageASCRow struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ID_2        uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithPageASCParams) ([]FindByUserWithPageASCRow, error) {
 	rows, err := q.db.Query(ctx, findByUserWithPageASC,
 		arg.UserID,
 		arg.Sortby,
@@ -104,9 +128,9 @@ func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithP
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Group
+	var items []FindByUserWithPageASCRow
 	for rows.Next() {
-		var i Group
+		var i FindByUserWithPageASCRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -114,6 +138,9 @@ func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithP
 			&i.IsArchived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ID_2,
+			&i.Role,
+			&i.AccessLevel,
 		); err != nil {
 			return nil, err
 		}
@@ -126,7 +153,19 @@ func (q *Queries) FindByUserWithPageASC(ctx context.Context, arg FindByUserWithP
 }
 
 const findByUserWithPageDESC = `-- name: FindByUserWithPageDESC :many
-SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY $2::text DESC LIMIT $4 OFFSET $3
+SELECT
+    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    gr.id, gr.role, gr.access_level
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    $2::text DESC LIMIT $4 OFFSET $3
 `
 
 type FindByUserWithPageDESCParams struct {
@@ -136,7 +175,19 @@ type FindByUserWithPageDESCParams struct {
 	Size   int32
 }
 
-func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWithPageDESCParams) ([]Group, error) {
+type FindByUserWithPageDESCRow struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ID_2        uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWithPageDESCParams) ([]FindByUserWithPageDESCRow, error) {
 	rows, err := q.db.Query(ctx, findByUserWithPageDESC,
 		arg.UserID,
 		arg.Sortby,
@@ -147,9 +198,9 @@ func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWith
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Group
+	var items []FindByUserWithPageDESCRow
 	for rows.Next() {
-		var i Group
+		var i FindByUserWithPageDESCRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -157,6 +208,9 @@ func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWith
 			&i.IsArchived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ID_2,
+			&i.Role,
+			&i.AccessLevel,
 		); err != nil {
 			return nil, err
 		}
@@ -276,21 +330,50 @@ func (q *Queries) GetAllWithPageDESC(ctx context.Context, arg GetAllWithPageDESC
 	return items, nil
 }
 
-const getUserAllMembership = `-- name: GetUserAllMembership :one
-SELECT user_id, group_id, role_id, created_at, updated_at FROM memberships WHERE user_id = $1
+const getUserAllMembership = `-- name: GetUserAllMembership :many
+SELECT
+    m.group_id,
+    m.role_id,
+    gr.role,
+    gr.access_level
+FROM
+    memberships AS m
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    user_id = $1
 `
 
-func (q *Queries) GetUserAllMembership(ctx context.Context, userID uuid.UUID) (Membership, error) {
-	row := q.db.QueryRow(ctx, getUserAllMembership, userID)
-	var i Membership
-	err := row.Scan(
-		&i.UserID,
-		&i.GroupID,
-		&i.RoleID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+type GetUserAllMembershipRow struct {
+	GroupID     uuid.UUID
+	RoleID      uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+func (q *Queries) GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([]GetUserAllMembershipRow, error) {
+	rows, err := q.db.Query(ctx, getUserAllMembership, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserAllMembershipRow
+	for rows.Next() {
+		var i GetUserAllMembershipRow
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.RoleID,
+			&i.Role,
+			&i.AccessLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserGroupMembership = `-- name: GetUserGroupMembership :one

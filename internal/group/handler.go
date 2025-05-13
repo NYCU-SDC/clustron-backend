@@ -26,12 +26,13 @@ type Store interface {
 	GetAllGroupCount(ctx context.Context) (int, error)
 	GetUserGroupsCount(ctx context.Context, userId uuid.UUID) (int, error)
 	GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error)
-	GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, error)
+	GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
 	GetById(ctx context.Context, groupId uuid.UUID) (Group, error)
 	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
 	ArchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
 	UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
 	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
+	GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]GetUserAllMembershipRow, error)
 }
 
 type RoleResponse struct {
@@ -47,6 +48,7 @@ type Response struct {
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 	Me          struct {
+		Type string       `json:"type"` // will be "mambership" or "adminOverride"
 		Role RoleResponse `json:"role"`
 	} `json:"me"`
 }
@@ -103,10 +105,15 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var groups []Group
+	var groupResponse []Response
 	var totalCount int
 	if user.Role.String == "admin" {
-		groups, err = h.Store.GetAll(traceCtx, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+		groups, err := h.Store.GetAll(traceCtx, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+		if err != nil {
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		roles, err := h.Store.GetUserAllMembership(traceCtx, user.ID)
 		if err != nil {
 			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -116,8 +123,42 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
+
+		// map the roles to group ids
+		groupRoleMap := make(map[uuid.UUID]RoleResponse)
+		for _, role := range roles {
+			groupRoleMap[role.GroupID] = RoleResponse{
+				Id:          role.RoleID.String(),
+				Role:        role.Role.String,
+				AccessLevel: role.AccessLevel,
+			}
+		}
+		// join the groups and roles
+		groupResponse = make([]Response, len(groups))
+		for i, group := range groups {
+			groupResponse[i] = Response{
+				Id:          group.ID.String(),
+				Title:       group.Title,
+				Description: group.Description.String,
+				IsArchived:  group.IsArchived.Bool,
+				CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			}
+			role, ok := groupRoleMap[group.ID]
+			if ok {
+				groupResponse[i].Me.Type = "membership"
+				groupResponse[i].Me.Role = role
+			} else {
+				groupResponse[i].Me.Type = "adminOverride"
+				groupResponse[i].Me.Role = RoleResponse{
+					Id:          "",
+					Role:        "admin",
+					AccessLevel: "admin",
+				}
+			}
+		}
 	} else {
-		groups, err = h.Store.GetByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+		groups, roles, err := h.Store.GetByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
 			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -127,17 +168,25 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-	}
 
-	groupResponse := make([]Response, len(groups))
-	for index, group := range groups {
-		groupResponse[index] = Response{
-			Id:          group.ID.String(),
-			Title:       group.Title,
-			Description: group.Description.String,
-			IsArchived:  group.IsArchived.Bool,
-			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		// join the groups and roles
+		groupResponse = make([]Response, len(groups))
+		for i, group := range groups {
+			groupResponse[i] = Response{
+				Id:          group.ID.String(),
+				Title:       group.Title,
+				Description: group.Description.String,
+				IsArchived:  group.IsArchived.Bool,
+				CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			}
+			role := roles[i]
+			groupResponse[i].Me.Type = "membership"
+			groupResponse[i].Me.Role = RoleResponse{
+				Id:          role.ID.String(),
+				Role:        role.Role.String,
+				AccessLevel: role.AccessLevel,
+			}
 		}
 	}
 

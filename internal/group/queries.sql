@@ -11,10 +11,34 @@ SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 
 -- name: FindByUserWithPageASC :many
-SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
+SELECT
+    g.*,
+    gr.*
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    @SortBy::text ASC LIMIT @Size OFFSET @page;
 
 -- name: FindByUserWithPageDESC :many
-SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
+SELECT
+    g.*,
+    gr.*
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    @SortBy::text DESC LIMIT @Size OFFSET @page;
 
 -- name: FindById :one
 SELECT * FROM groups WHERE id = $1;
@@ -34,8 +58,18 @@ UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = 
 -- name: Unarchive :one
 UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
--- name: GetUserAllMembershipWithPageASC :one
-SELECT * FROM memberships WHERE user_id = $1 ORDER BY ;
+-- name: GetUserAllMembership :many
+SELECT
+    m.group_id,
+    m.role_id,
+    gr.role,
+    gr.access_level
+FROM
+    memberships AS m
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    user_id = $1;
 
 -- name: GetUserGroupMembership :one
 SELECT * FROM memberships WHERE user_id = $1 AND group_id = $2;

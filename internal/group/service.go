@@ -86,13 +86,11 @@ func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, s
 	return groups, nil
 }
 
-func (s *Service) GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, error) {
+func (s *Service) GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByUserId")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var groups []Group
-	var err error
 	if sort == "desc" {
 		params := FindByUserWithPageDESCParams{
 			UserID: userId,
@@ -100,7 +98,30 @@ func (s *Service) GetByUserId(ctx context.Context, userId uuid.UUID, page int, s
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.FindByUserWithPageDESC(ctx, params)
+		res, err := s.queries.FindByUserWithPageDESC(ctx, params)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userId.String(), logger, "failed to get groups by user id")
+			span.RecordError(err)
+			return nil, nil, err
+		}
+		groups := make([]Group, len(res))
+		roles := make([]GroupRole, len(res))
+		for i, r := range res {
+			groups[i] = Group{
+				ID:          r.ID,
+				Title:       r.Title,
+				Description: r.Description,
+				IsArchived:  r.IsArchived,
+				CreatedAt:   r.CreatedAt,
+				UpdatedAt:   r.UpdatedAt,
+			}
+			roles[i] = GroupRole{
+				ID:          r.ID_2,
+				Role:        r.Role,
+				AccessLevel: r.AccessLevel,
+			}
+		}
+		return groups, roles, nil
 	} else {
 		params := FindByUserWithPageASCParams{
 			UserID: userId,
@@ -108,15 +129,31 @@ func (s *Service) GetByUserId(ctx context.Context, userId uuid.UUID, page int, s
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.FindByUserWithPageASC(ctx, params)
+		res, err := s.queries.FindByUserWithPageASC(ctx, params)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userId.String(), logger, "failed to get groups by user id")
+			span.RecordError(err)
+			return nil, nil, err
+		}
+		groups := make([]Group, len(res))
+		roles := make([]GroupRole, len(res))
+		for i, r := range res {
+			groups[i] = Group{
+				ID:          r.ID,
+				Title:       r.Title,
+				Description: r.Description,
+				IsArchived:  r.IsArchived,
+				CreatedAt:   r.CreatedAt,
+				UpdatedAt:   r.UpdatedAt,
+			}
+			roles[i] = GroupRole{
+				ID:          r.ID_2,
+				Role:        r.Role,
+				AccessLevel: r.AccessLevel,
+			}
+		}
+		return groups, roles, nil
 	}
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userId.String(), logger, "failed to get groups by user id")
-		span.RecordError(err)
-		return nil, err
-	}
-
-	return groups, nil
 }
 
 func (s *Service) GetById(ctx context.Context, groupId uuid.UUID) (Group, error) {
@@ -238,6 +275,21 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID,
 	}
 
 	return accessLevel, nil
+}
+
+func (s *Service) GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]GetUserAllMembershipRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetUserAllMembership")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	memberships, err := s.queries.GetUserAllMembership(ctx, userId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", userId.String(), logger, "get membership")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return memberships, nil
 }
 
 func (s *Service) GetUserGroupMembership(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Membership, error) {
