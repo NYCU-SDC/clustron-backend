@@ -28,6 +28,7 @@ type Config struct {
 	NYCUOauthClientID       string `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
 	NYCUOauthClientSecret   string `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
 }
+
 type LogBuffer struct {
 	buffer []logEntry
 }
@@ -92,12 +93,12 @@ func Load() (Config, *LogBuffer) {
 
 	config, err = FromEnv(config, logger)
 	if err != nil {
-		zap.L().Warn("Failed to load config from env", zap.Error(err))
+		logger.Warn("Failed to load config from env", err, map[string]string{"path": ".env"})
 	}
 
 	config, err = FromFlags(config)
 	if err != nil {
-		zap.L().Warn("Failed to load config from flags", zap.Error(err))
+		logger.Warn("Failed to load config from flags", err, map[string]string{"path": "flags"})
 	}
 
 	return *config, logger
