@@ -200,7 +200,7 @@ func (s Service) GenerateRefreshToken(ctx context.Context, user User) (RefreshTo
 	// Remove expired and inactive refresh tokens
 	_, err := s.DeleteExpiredRefreshTokens(traceCtx)
 	if err != nil {
-		return RefreshToken{}, err
+		logger.Warn("Failed to delete expired refresh tokens", zap.Error(err))
 	}
 
 	expirationDate := time.Now()
