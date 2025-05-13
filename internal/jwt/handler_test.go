@@ -80,7 +80,7 @@ func Test_RefreshTokenHandler(t *testing.T) {
 
 	issuer.On("InactivateRefreshToken", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(nil)
 
-	h := jwt.NewHandler(validator.New(), logger, problemWriter, issuer)
+	h := jwt.NewHandler(logger, validator.New(), problemWriter, issuer)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
