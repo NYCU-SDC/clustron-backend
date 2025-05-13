@@ -255,6 +255,34 @@ func (_m *Store) GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]
 	return r0, r1
 }
 
+// GetUserGroupRole provides a mock function with given fields: ctx, userId, groupId
+func (_m *Store) GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (group.GroupRole, error) {
+	ret := _m.Called(ctx, userId, groupId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserGroupRole")
+	}
+
+	var r0 group.GroupRole
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (group.GroupRole, error)); ok {
+		return rf(ctx, userId, groupId)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) group.GroupRole); ok {
+		r0 = rf(ctx, userId, groupId)
+	} else {
+		r0 = ret.Get(0).(group.GroupRole)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r1 = rf(ctx, userId, groupId)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetUserGroupsCount provides a mock function with given fields: ctx, userId
 func (_m *Store) GetUserGroupsCount(ctx context.Context, userId uuid.UUID) (int, error) {
 	ret := _m.Called(ctx, userId)

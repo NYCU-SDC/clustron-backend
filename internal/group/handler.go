@@ -233,7 +233,7 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	roleResponse := RoleResponse{}
 	if err != nil {
 		// if the user is not a member of the group, check if the user is an admin
-		if errors.As(err, &handlerutil.ErrNotFound) {
+		if errors.As(err, &handlerutil.NotFoundError{}) {
 			// if the user is an admin, return the group with admin override
 			if user.Role.String == "admin" {
 				roleType = "adminOverride"

@@ -284,11 +284,17 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
+	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(group.GroupRole{}, databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"))
 
 	// Get group by ID for organizer in this group
 	store.On("FindUserGroupById", mock.Anything, testCases[1].user.ID, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
+	}, nil)
+	store.On("GetUserGroupRole", mock.Anything, testCases[1].user.ID, groupId).Return(group.GroupRole{
+		ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
+		Role:        pgtype.Text{String: "organizer", Valid: true},
+		AccessLevel: "organizer",
 	}, nil)
 
 	// Get group by ID for organizer not in this group
@@ -299,6 +305,11 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 	store.On("FindUserGroupById", mock.Anything, testCases[3].user.ID, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
+	}, nil)
+	store.On("GetUserGroupRole", mock.Anything, testCases[3].user.ID, groupId).Return(group.GroupRole{
+		ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
+		Role:        pgtype.Text{String: "user", Valid: true},
+		AccessLevel: "user",
 	}, nil)
 
 	// Get group by ID for user not in this group
