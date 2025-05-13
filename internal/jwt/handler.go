@@ -46,13 +46,13 @@ func NewHandler(
 		validator:     validator,
 		logger:        logger,
 		problemWriter: problemWriter,
-		tracer:        otel.Tracer("auth/handler"),
+		tracer:        otel.Tracer("jwt/handler"),
 		jwtIssuer:     jwtIssuer,
 	}
 }
 
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "AuthHandler")
+	traceCtx, span := h.tracer.Start(r.Context(), "RefreshToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
