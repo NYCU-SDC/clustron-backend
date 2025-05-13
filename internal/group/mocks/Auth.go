@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 
+	group "github.com/NYCU-SDC/clustron-backend/internal/group"
 	mock "github.com/stretchr/testify/mock"
 
 	uuid "github.com/google/uuid"
@@ -32,6 +33,34 @@ func (_m *Auth) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, g
 		r0 = rf(ctx, userId, groupId)
 	} else {
 		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r1 = rf(ctx, userId, groupId)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetUserGroupRole provides a mock function with given fields: ctx, userId, groupId
+func (_m *Auth) GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (group.GroupRole, error) {
+	ret := _m.Called(ctx, userId, groupId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserGroupRole")
+	}
+
+	var r0 group.GroupRole
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (group.GroupRole, error)); ok {
+		return rf(ctx, userId, groupId)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) group.GroupRole); ok {
+		r0 = rf(ctx, userId, groupId)
+	} else {
+		r0 = ret.Get(0).(group.GroupRole)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {

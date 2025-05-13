@@ -120,6 +120,18 @@ func TestHandler_GetAllHandler(t *testing.T) {
 			Description: pgtype.Text{String: "Test Description 3", Valid: true},
 		},
 	}
+	groupRoles := []group.GroupRole{
+		{
+			ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
+			Role:        pgtype.Text{String: "organizer", Valid: true},
+			AccessLevel: "organizer",
+		},
+		{
+			ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734b"),
+			Role:        pgtype.Text{String: "user", Valid: true},
+			AccessLevel: "user",
+		},
+	}
 
 	testCases := []struct {
 		name       string
@@ -174,13 +186,16 @@ func TestHandler_GetAllHandler(t *testing.T) {
 	// When admin call GetAll
 	store.On("GetAll", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
 	store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
+	store.On("GetUserAllMembership", mock.Anything, testCases[0].user.ID).Return([]group.GetUserAllMembershipRow{}, nil)
 
 	// When organizer call GetAll
-	store.On("GetByUserId", mock.Anything, testCases[1].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2], nil)
+	store.On("GetByUserId", mock.Anything, testCases[1].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
+		[]group.GroupRole{groupRoles[0], groupRoles[0]}, nil)
 	store.On("GetUserGroupsCount", mock.Anything, testCases[1].user.ID).Return(2, nil)
 
 	// When user call GetAll
-	store.On("GetByUserId", mock.Anything, testCases[2].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1], nil)
+	store.On("GetByUserId", mock.Anything, testCases[2].user.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
+		[]group.GroupRole{groupRoles[1]}, nil)
 	store.On("GetUserGroupsCount", mock.Anything, testCases[2].user.ID).Return(1, nil)
 
 	auth := mocks.NewAuth(t)
