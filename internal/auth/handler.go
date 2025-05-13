@@ -32,6 +32,7 @@ type UserStore interface {
 	Create(ctx context.Context, username string, email string, studentID string) (user.User, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
+	FindOrCreate(ctx context.Context, username string, email string, studentID string) (user.User, error)
 }
 
 type OAuthProvider interface {
@@ -168,7 +169,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user exists in the database, if not, create a new user
-	jwtUser, err := h.findOrCreateUser(traceCtx, userInfo)
+	jwtUser, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name, userInfo.Email, userInfo.StudentID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -215,32 +216,6 @@ func (h *Handler) DebugToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, jwtUser)
-}
-
-func (h *Handler) findOrCreateUser(ctx context.Context, userInfo oauthProvider.UserInfo) (user.User, error) {
-	traceCtx, span := h.tracer.Start(ctx, "findOrCreateUser")
-	defer span.End()
-
-	exists, err := h.userStore.ExistsByEmail(traceCtx, userInfo.Email)
-	if err != nil {
-		span.RecordError(err)
-		return user.User{}, err
-	}
-	var jwtUser user.User
-	if !exists {
-		jwtUser, err = h.userStore.Create(traceCtx, userInfo.Name, userInfo.Email, userInfo.StudentID)
-		if err != nil {
-			span.RecordError(err)
-			return user.User{}, err
-		}
-	} else {
-		jwtUser, err = h.userStore.GetByEmail(traceCtx, userInfo.Email)
-		if err != nil {
-			return user.User{}, err
-		}
-	}
-
-	return jwtUser, nil
 }
 
 func (h *Handler) generateJWT(ctx context.Context, user user.User) (string, string, error) {

@@ -100,5 +100,4 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		ExpirationTime: newRefreshToken.ExpirationDate.Time.Unix(),
 		RefreshToken:   newRefreshToken.ID.String(),
 	})
-
 }

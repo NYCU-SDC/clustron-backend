@@ -89,3 +89,34 @@ func (s *Service) ExistsByEmail(ctx context.Context, email string) (bool, error)
 
 	return exists, nil
 }
+
+func (s *Service) FindOrCreate(ctx context.Context, username, email, studentID string) (User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "findOrCreateUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.ExistsByEmail(traceCtx, email)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user by email")
+		span.RecordError(err)
+		return User{}, err
+	}
+
+	var jwtUser User
+	if !exists {
+		jwtUser, err = s.Create(traceCtx, username, email, studentID)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create user")
+			span.RecordError(err)
+			return User{}, err
+		}
+	} else {
+		jwtUser, err = s.GetByEmail(traceCtx, email)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "get user by email")
+			return User{}, err
+		}
+	}
+
+	return jwtUser, nil
+}
