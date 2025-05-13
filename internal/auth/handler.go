@@ -42,19 +42,22 @@ type OAuthProvider interface {
 }
 
 type Handler struct {
+	config config.Config
+	logger *zap.Logger
+	tracer trace.Tracer
+
 	validator     *validator.Validate
-	logger        *zap.Logger
-	config        config.Config
-	tracer        trace.Tracer
-	userStore     UserStore
-	jwtIssuer     JWTIssuer
 	problemWriter *problem.HttpWriter
-	provider      map[string]OAuthProvider
+
+	userStore UserStore
+	jwtIssuer JWTIssuer
+	provider  map[string]OAuthProvider
 }
 
-func NewHandler(validator *validator.Validate,
-	logger *zap.Logger,
+func NewHandler(
 	config config.Config,
+	logger *zap.Logger,
+	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
 	jwtIssuer JWTIssuer) *Handler {
@@ -70,13 +73,15 @@ func NewHandler(validator *validator.Validate,
 		fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
 
 	return &Handler{
+		config: config,
+		logger: logger,
+		tracer: otel.Tracer("auth/handler"),
+
 		validator:     validator,
-		logger:        logger,
-		config:        config,
-		tracer:        otel.Tracer("auth/handler"),
-		userStore:     userStore,
-		jwtIssuer:     jwtIssuer,
 		problemWriter: problemWriter,
+
+		userStore: userStore,
+		jwtIssuer: jwtIssuer,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
@@ -84,6 +89,7 @@ func NewHandler(validator *validator.Validate,
 	}
 }
 
+// Oauth2Start initiates the OAuth2 flow by redirecting the user to the provider's authorization URL
 func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Oauth2Start")
 	defer span.End()
@@ -112,6 +118,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	logger.Info("Redirecting to Google OAuth2", zap.String("url", authURL))
 }
 
+// Callback handles the OAuth2 callback from the provider
 func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Callback")
 	defer span.End()

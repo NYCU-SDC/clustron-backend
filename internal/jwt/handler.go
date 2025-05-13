@@ -28,15 +28,18 @@ type Response struct {
 }
 
 type Handler struct {
+	logger *zap.Logger
+	tracer trace.Tracer
+
 	validator     *validator.Validate
-	logger        *zap.Logger
-	tracer        trace.Tracer
-	jwtIssuer     JWTIssuer
 	problemWriter *problem.HttpWriter
+
+	jwtIssuer JWTIssuer
 }
 
-func NewHandler(validator *validator.Validate,
+func NewHandler(
 	logger *zap.Logger,
+	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	jwtIssuer JWTIssuer) *Handler {
 	return &Handler{
