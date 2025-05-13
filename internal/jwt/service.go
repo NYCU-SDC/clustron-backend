@@ -241,7 +241,7 @@ func (s Service) DeleteExpiredRefreshTokens(ctx context.Context) (int64, error) 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	rowsAffected, err := s.queries.Delete(traceCtx)
+	rowsAffected, err := s.queries.DeleteExpired(traceCtx)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete expired refresh tokens")
 		span.RecordError(err)

@@ -33,12 +33,12 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (RefreshToken, e
 	return i, err
 }
 
-const delete = `-- name: Delete :execrows
+const deleteExpired = `-- name: DeleteExpired :execrows
 DELETE FROM refresh_tokens WHERE expiration_date < now() OR is_active = FALSE
 `
 
-func (q *Queries) Delete(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, delete)
+func (q *Queries) DeleteExpired(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpired)
 	if err != nil {
 		return 0, err
 	}
