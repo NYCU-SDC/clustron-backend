@@ -247,10 +247,11 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 				h.ProblemWriter.WriteError(traceCtx, w, err, logger)
 				return
 			}
+		} else {
+			// other errors
+			h.ProblemWriter.WriteError(traceCtx, w, err, logger)
+			return
 		}
-		// other errors
-		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
-		return
 	}
 	// if roleResponse hasn't been set, it means the user is a member of the group
 	if roleResponse == (RoleResponse{}) {
