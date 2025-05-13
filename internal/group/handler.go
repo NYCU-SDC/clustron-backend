@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
@@ -33,6 +34,7 @@ type Store interface {
 	UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
 	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
 	GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]GetUserAllMembershipRow, error)
+	GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error)
 }
 
 type RoleResponse struct {
@@ -153,7 +155,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 				groupResponse[i].Me.Role = RoleResponse{
 					Id:          "",
 					Role:        "admin",
-					AccessLevel: "admin",
+					AccessLevel: "groupOwner",
 				}
 			}
 		}
@@ -226,6 +228,39 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role, err := h.Store.GetUserGroupRole(traceCtx, user.ID, groupUUID)
+	roleType := "membership"
+	roleResponse := RoleResponse{}
+	if err != nil {
+		// if the user is not a member of the group, check if the user is an admin
+		if errors.As(err, &handlerutil.ErrNotFound) {
+			// if the user is an admin, return the group with admin override
+			if user.Role.String == "admin" {
+				roleType = "adminOverride"
+				roleResponse = RoleResponse{
+					Id:          "",
+					Role:        "admin",
+					AccessLevel: "groupOwner",
+				}
+			} else {
+				// if the user is not a member of the group and not an admin, return 404
+				h.ProblemWriter.WriteError(traceCtx, w, err, logger)
+				return
+			}
+		}
+		// other errors
+		h.ProblemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	// if roleResponse hasn't been set, it means the user is a member of the group
+	if roleResponse == (RoleResponse{}) {
+		roleResponse = RoleResponse{
+			Id:          role.ID.String(),
+			Role:        role.Role.String,
+			AccessLevel: role.AccessLevel,
+		}
+	}
+
 	groupResponse := Response{
 		Id:          group.ID.String(),
 		Title:       group.Title,
@@ -234,6 +269,8 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
+	groupResponse.Me.Type = roleType
+	groupResponse.Me.Role = roleResponse
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
