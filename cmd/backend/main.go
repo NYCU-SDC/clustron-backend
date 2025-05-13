@@ -112,8 +112,8 @@ func main() {
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 
 	// Handler
-	authHandler := auth.NewHandler(validator, logger, cfg, problemWriter, userService, jwtService)
-	jwtHandler := jwt.NewHandler(validator, logger, problemWriter, jwtService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
+	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
