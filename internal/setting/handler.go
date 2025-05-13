@@ -1,9 +1,9 @@
 package setting
 
 import (
+	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -54,10 +54,11 @@ type Store interface {
 }
 
 type Handler struct {
-	validator    *validator.Validate
-	logger       *zap.Logger
-	tracer       trace.Tracer
-	settingStore Store
+	validator     *validator.Validate
+	logger        *zap.Logger
+	tracer        trace.Tracer
+	settingStore  Store
+	problemWriter *problem.HttpWriter
 }
 
 func validatePublicKey(key string) error {
@@ -70,10 +71,11 @@ func validatePublicKey(key string) error {
 
 func NewHandler(v *validator.Validate, logger *zap.Logger, store Store) Handler {
 	return Handler{
-		validator:    v,
-		logger:       logger,
-		tracer:       otel.Tracer("setting/handler"),
-		settingStore: store,
+		validator:     v,
+		logger:        logger,
+		tracer:        otel.Tracer("setting/handler"),
+		settingStore:  store,
+		problemWriter: problem.New(),
 	}
 }
 
@@ -85,19 +87,15 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	setting, err := h.settingStore.GetSettingByUserId(traceCtx, userId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -116,20 +114,16 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -141,7 +135,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 
 	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, userId, setting)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -160,19 +154,15 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	publicKeys, err := h.settingStore.GetPublicKeysByUserId(traceCtx, userId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -181,7 +171,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	if q.Has("short") {
 		short, err = strconv.ParseBool(q.Get("short"))
 		if err != nil {
-			problem.WriteError(traceCtx, w, err, logger)
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	}
@@ -216,20 +206,16 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request AddPublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	err = validatePublicKey(request.PublicKey)
@@ -246,7 +232,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 
 	addedPublicKey, err := h.settingStore.AddPublicKey(traceCtx, publicKey)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -265,32 +251,28 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID)
-	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request DeletePublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	publicKeyId, err := uuid.Parse(request.Id)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Check if the public key belongs to the user
 	publicKey, err := h.settingStore.GetPublicKeyById(traceCtx, publicKeyId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	if publicKey.UserID != userId {
@@ -301,7 +283,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 
 	err = h.settingStore.DeletePublicKey(traceCtx, publicKeyId)
 	if err != nil {
-		problem.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 

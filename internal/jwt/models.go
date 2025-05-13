@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.28.0
 
-package setting
+package jwt
 
 import (
 	"github.com/google/uuid"

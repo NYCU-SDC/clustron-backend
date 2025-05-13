@@ -1,2 +1,5 @@
 .idea
 bin
+
+.env
+config.yaml
