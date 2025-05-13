@@ -126,7 +126,7 @@ func main() {
 
 	// HTTP Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/oauth/{provider}", traced.HandlerFunc(authHandler.Oauth2Start))
+	mux.HandleFunc("GET /api/login/oauth/{provider}", traced.HandlerFunc(authHandler.Oauth2Start))
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
