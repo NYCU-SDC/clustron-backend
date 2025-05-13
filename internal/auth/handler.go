@@ -136,10 +136,16 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Get the OAuth2 code and state from the request
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
+	oauthError := r.URL.Query().Get("error") // Check if there was an error during the OAuth2 process
 	callbackURL, _ := base64.StdEncoding.DecodeString(state)
 	callback, _ := url.Parse(string(callbackURL))
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
+
+	if oauthError != "" {
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, oauthError), http.StatusTemporaryRedirect)
+		return
+	}
 
 	token, err := provider.Exchange(traceCtx, code)
 	if err != nil {
@@ -181,6 +187,12 @@ func (h *Handler) DebugToken(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "DebugToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
+
+	e := r.URL.Query().Get("error")
+	if e != "" {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrForbidden, logger)
+		return
+	}
 
 	token := r.URL.Query().Get("token")
 	if token == "" {
