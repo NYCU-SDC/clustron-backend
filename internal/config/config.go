@@ -136,6 +136,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		Debug:                   os.Getenv("DEBUG") == "true",
 		Host:                    os.Getenv("HOST"),
 		Port:                    os.Getenv("PORT"),
+		BaseURL:                 os.Getenv("BASE_URL"),
 		Secret:                  os.Getenv("SECRET"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
