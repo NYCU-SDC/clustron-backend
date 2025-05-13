@@ -41,6 +41,13 @@ type OAuthProvider interface {
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthProvider.UserInfo, error)
 }
 
+type callBackInfo struct {
+	code       string
+	oauthError string
+	callback   url.URL
+	redirectTo string
+}
+
 type Handler struct {
 	config config.Config
 	logger *zap.Logger
@@ -132,13 +139,16 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the OAuth2 code and state from the request
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-	oauthError := r.URL.Query().Get("error") // Check if there was an error during the OAuth2 process
-	callbackURL, _ := base64.StdEncoding.DecodeString(state)
-	callback, _ := url.Parse(string(callbackURL))
-	redirectTo := callback.Query().Get("r")
-	callback.RawQuery = ""
+	callbackInfo, err := h.getCallBackInfo(r.URL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackURL, err), logger)
+		return
+	}
+
+	callback := callbackInfo.callback.String()
+	code := callbackInfo.code
+	redirectTo := callbackInfo.redirectTo
+	oauthError := callbackInfo.oauthError
 
 	if oauthError != "" {
 		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, oauthError), http.StatusTemporaryRedirect)
@@ -248,4 +258,32 @@ func (h *Handler) generateJWT(ctx context.Context, user user.User) (string, stri
 	}
 
 	return jwtToken, refreshToken.ID.String(), nil
+}
+
+func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
+
+	code := url.Query().Get("code")
+	state := url.Query().Get("state")
+	oauthError := url.Query().Get("error") // Check if there was an error during the OAuth2 process
+
+	callbackURL, err := base64.StdEncoding.DecodeString(state)
+	if err != nil {
+		return callBackInfo{}, err
+	}
+
+	callback, err := url.Parse(string(callbackURL))
+	if err != nil {
+		return callBackInfo{}, err
+	}
+
+	redirectTo := callback.Query().Get("r")
+	callback.RawQuery = ""
+
+	return callBackInfo{
+		code:       code,
+		oauthError: oauthError,
+		callback:   *callback,
+		redirectTo: redirectTo,
+	}, nil
+
 }
