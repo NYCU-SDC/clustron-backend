@@ -22,17 +22,6 @@ import (
 	"net/url"
 )
 
-type OAuthUserInfo struct {
-	Sub           string `json:"sub"`
-	Name          string `json:"name"`
-	GivenName     string `json:"given_name"`
-	FamilyName    string `json:"family_name"`
-	Picture       string `json:"picture"`
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	Locale        string `json:"locale"`
-}
-
 type JWTIssuer interface {
 	New(ctx context.Context, user jwt.User) (string, error)
 	Parse(ctx context.Context, tokenString string) (jwt.User, error)
