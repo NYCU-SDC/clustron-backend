@@ -1,11 +1,9 @@
 FROM golang:1.24
 
-WORKDIR ./app
+WORKDIR /app
 
-COPY . .
-
-RUN go mod tidy && go build -o bin/backend ./cmd/backend/main.go
+COPY bin/backend /app/backend
 
 EXPOSE 8080
 
-CMD ["./bin/backend"]
+CMD ["/app/backend"]
