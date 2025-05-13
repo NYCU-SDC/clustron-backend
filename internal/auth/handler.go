@@ -141,7 +141,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Get the OAuth2 code and state from the request
 	callbackInfo, err := h.getCallBackInfo(r.URL)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackURL, err), logger)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackInfo, err), logger)
 		return
 	}
 
