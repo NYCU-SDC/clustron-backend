@@ -309,6 +309,8 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: Add members to the group
+
 	groupResponse := Response{
 		Id:          group.ID.String(),
 		Title:       group.Title,
