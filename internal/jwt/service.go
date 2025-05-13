@@ -210,7 +210,6 @@ func (s Service) GenerateRefreshToken(ctx context.Context, user User) (RefreshTo
 		UserID:         user.ID,
 		ExpirationDate: pgtype.Timestamptz{Time: newDate, Valid: true},
 	})
-
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "generate refresh token")
 		span.RecordError(err)
@@ -232,6 +231,7 @@ func (s Service) InactivateRefreshToken(ctx context.Context, id uuid.UUID) error
 		span.RecordError(err)
 		return err
 	}
+
 	return nil
 }
 
