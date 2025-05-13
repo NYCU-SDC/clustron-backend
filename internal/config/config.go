@@ -18,6 +18,7 @@ type Config struct {
 	Debug                   bool   `yaml:"debug"              envconfig:"DEBUG"`
 	Host                    string `yaml:"host"               envconfig:"HOST"`
 	Port                    string `yaml:"port"               envconfig:"PORT"`
+	BaseURL                 string `yaml:"base_url"          envconfig:"BASE_URL"`
 	Secret                  string `yaml:"secret"             envconfig:"SECRET"`
 	DatabaseURL             string `yaml:"database_url"       envconfig:"DATABASE_URL"`
 	MigrationSource         string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
@@ -154,6 +155,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.BoolVar(&flagConfig.Debug, "debug", false, "debug mode")
 	flag.StringVar(&flagConfig.Host, "host", "", "host")
 	flag.StringVar(&flagConfig.Port, "port", "", "port")
+	flag.StringVar(&flagConfig.BaseURL, "base_url", "", "base url")
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")

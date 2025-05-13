@@ -55,6 +55,7 @@ type OAuthProvider interface {
 type Handler struct {
 	validator     *validator.Validate
 	logger        *zap.Logger
+	config        config.Config
 	tracer        trace.Tracer
 	userStore     UserStore
 	jwtIssuer     JWTIssuer
@@ -72,16 +73,17 @@ func NewHandler(validator *validator.Validate,
 	googleProvider := oauthProvider.NewGoogleConfig(
 		config.GoogleOauthClientID,
 		config.GoogleOauthClientSecret,
-		fmt.Sprintf("http://%s:%s/api/oauth/google/callback", config.Host, config.Port))
+		fmt.Sprintf("%s/api/oauth/google/callback", config.BaseURL))
 
 	nycuProvider := oauthProvider.NewNYCUConfig(
 		config.NYCUOauthClientID,
 		config.NYCUOauthClientSecret,
-		fmt.Sprintf("http://%s:%s/api/oauth/nycu/callback", config.Host, config.Port))
+		fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
 
 	return &Handler{
 		validator:     validator,
 		logger:        logger,
+		config:        config,
 		tracer:        otel.Tracer("auth/handler"),
 		userStore:     userStore,
 		jwtIssuer:     jwtIssuer,
@@ -108,7 +110,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	callback := r.URL.Query().Get("c")
 	redirectTo := r.URL.Query().Get("r")
 	if callback == "" {
-		callback = "http://localhost:8080/api/oauth/debug/token"
+		callback = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	}
 	if redirectTo != "" {
 		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
