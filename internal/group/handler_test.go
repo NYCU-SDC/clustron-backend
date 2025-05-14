@@ -11,6 +11,7 @@ import (
 	"fmt"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -81,7 +82,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 	}, nil)
 	auth := mocks.NewAuth(t)
 
-	h := group.NewHandler(validator.New(), logger, store, auth)
+	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,7 +201,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 
 	auth := mocks.NewAuth(t)
 
-	h := group.NewHandler(validator.New(), logger, store, auth)
+	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -318,7 +319,7 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 
 	auth := mocks.NewAuth(t)
 
-	h := group.NewHandler(validator.New(), logger, store, auth)
+	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -411,7 +412,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
 		"user", nil)
 
-	h := group.NewHandler(validator.New(), logger, store, auth)
+	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -505,7 +506,7 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
 		"user", nil)
 
-	h := group.NewHandler(validator.New(), logger, store, auth)
+	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
