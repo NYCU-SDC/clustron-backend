@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
@@ -110,10 +111,12 @@ func main() {
 	// Service
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	settingService := setting.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
+	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -130,6 +133,12 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
+
+	mux.HandleFunc("GET /api/settings", traced.HandlerFunc(settingHandler.GetUserSettingHandler))
+	mux.HandleFunc("PUT /api/settings", traced.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+	mux.HandleFunc("GET /api/publickey", traced.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
+	mux.HandleFunc("POST /api/publickey", traced.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
+	mux.HandleFunc("DELETE /api/publickey", traced.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
