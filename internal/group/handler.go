@@ -152,11 +152,6 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 				groupResponse[i].Me.Role = role
 			} else {
 				groupResponse[i].Me.Type = "adminOverride"
-				groupResponse[i].Me.Role = RoleResponse{
-					Id:          "",
-					Role:        "admin",
-					AccessLevel: "groupOwner",
-				}
 			}
 		}
 	} else {
@@ -237,11 +232,6 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 			// if the user is an admin, return the group with admin override
 			if user.Role.String == "admin" {
 				roleType = "adminOverride"
-				roleResponse = RoleResponse{
-					Id:          "",
-					Role:        "admin",
-					AccessLevel: "groupOwner",
-				}
 			} else {
 				// if the user is not a member of the group and not an admin, return 404
 				h.ProblemWriter.WriteError(traceCtx, w, err, logger)
@@ -254,7 +244,7 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// if roleResponse hasn't been set, it means the user is a member of the group
-	if roleResponse == (RoleResponse{}) {
+	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
 		roleResponse = RoleResponse{
 			Id:          role.ID.String(),
 			Role:        role.Role.String,
@@ -271,7 +261,9 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = roleType
-	groupResponse.Me.Role = roleResponse
+	if roleType == "membership" {
+		groupResponse.Me.Role = roleResponse
+	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
