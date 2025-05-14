@@ -8,6 +8,7 @@ import (
 	"clustron-backend/internal/setting/mocks"
 	"context"
 	"encoding/json"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -78,7 +79,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 		PublicKey: exampleValidKey,
 	}, nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,7 +152,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 	store.On("GetPublicKeyById", mock.Anything, publicKey.ID).Return(publicKey, nil)
 	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -219,7 +220,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		Username: "testuser",
 	}, nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
