@@ -3,9 +3,9 @@
 package mocks
 
 import (
+	group "clustron-backend/internal/group"
 	context "context"
 
-	group "github.com/NYCU-SDC/clustron-backend/internal/group"
 	mock "github.com/stretchr/testify/mock"
 
 	uuid "github.com/google/uuid"

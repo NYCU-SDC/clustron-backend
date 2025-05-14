@@ -1,9 +1,9 @@
 package group
 
 import (
+	"clustron-backend/internal/jwt"
 	"context"
 	"errors"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"

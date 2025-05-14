@@ -2,13 +2,13 @@ package group_test
 
 import (
 	"bytes"
+	"clustron-backend/internal"
+	"clustron-backend/internal/group"
+	"clustron-backend/internal/group/mocks"
+	"clustron-backend/internal/jwt"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/NYCU-SDC/clustron-backend/internal"
-	"github.com/NYCU-SDC/clustron-backend/internal/group"
-	"github.com/NYCU-SDC/clustron-backend/internal/group/mocks"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/go-playground/validator/v10"
