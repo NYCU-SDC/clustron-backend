@@ -1,9 +1,9 @@
 package setting
 
 import (
+	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -57,8 +57,8 @@ type Handler struct {
 	validator     *validator.Validate
 	logger        *zap.Logger
 	tracer        trace.Tracer
-	problemWriter *problem.HttpWriter
 	settingStore  Store
+	problemWriter *problem.HttpWriter
 }
 
 func validatePublicKey(key string) error {
@@ -74,8 +74,8 @@ func NewHandler(v *validator.Validate, logger *zap.Logger, store Store) Handler 
 		validator:     v,
 		logger:        logger,
 		tracer:        otel.Tracer("setting/handler"),
-		problemWriter: problem.New(),
 		settingStore:  store,
+		problemWriter: problem.New(),
 	}
 }
 
@@ -91,11 +91,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID.String())
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	setting, err := h.settingStore.GetSettingByUserId(traceCtx, userId)
 	if err != nil {
@@ -122,11 +118,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID.String())
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -166,11 +158,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID.String())
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	publicKeys, err := h.settingStore.GetPublicKeysByUserId(traceCtx, userId)
 	if err != nil {
@@ -222,11 +210,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID.String())
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request AddPublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -271,11 +255,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userId, err := uuid.Parse(user.ID.String())
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	userId := user.ID
 
 	var request DeletePublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)

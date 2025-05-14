@@ -36,7 +36,7 @@ jobs:
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.25.0'
+          sqlc-version: '1.28.0'
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
@@ -71,7 +71,8 @@ jobs:
       - name: Build
         run: |
           go mod download
-          make build
+          make gen
+          env GOOS=linux GOARCH=arm64 go build -o bin/backend cmd/backend/main.go
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -87,6 +88,7 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/arm64
           push: true
           tags: |
             nycusdc/clustron-backend:pr-${{ github.event.number }}

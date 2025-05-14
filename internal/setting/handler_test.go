@@ -2,12 +2,12 @@ package setting_test
 
 import (
 	"bytes"
+	"clustron-backend/internal"
+	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
+	"clustron-backend/internal/setting/mocks"
 	"context"
 	"encoding/json"
-	"github.com/NYCU-SDC/clustron-backend/internal"
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
-	"github.com/NYCU-SDC/clustron-backend/internal/setting"
-	"github.com/NYCU-SDC/clustron-backend/internal/setting/mocks"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -90,7 +90,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
-				Role:     pgtype.Text{String: "user", Valid: true},
+				Role:     pgtype.Text{String: "user"},
 			}))
 
 			w := httptest.NewRecorder()
@@ -121,7 +121,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			user: jwt.User{
 				ID:       publicKey.UserID,
 				Username: "testuser",
-				Role:     pgtype.Text{String: "user", Valid: true},
+				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
 				Id: publicKey.ID.String(),
@@ -133,7 +133,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			user: jwt.User{
 				ID:       uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
 				Username: "testuser",
-				Role:     pgtype.Text{String: "user", Valid: true},
+				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
 				Id: publicKey.ID.String(),
@@ -231,7 +231,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 				Username: "testuser",
-				Role:     pgtype.Text{String: "user", Valid: true},
+				Role:     pgtype.Text{String: "user"},
 			}))
 			w := httptest.NewRecorder()
 
