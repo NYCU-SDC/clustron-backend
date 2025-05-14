@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/group"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
@@ -110,10 +111,12 @@ func main() {
 	// Service
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	groupService := group.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -130,6 +133,12 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
+
+	mux.HandleFunc("GET /api/groups", traced.HandlerFunc(groupHandler.GetAllHandler))
+	mux.HandleFunc("POST /api/groups", traced.HandlerFunc(groupHandler.CreateHandler))
+	mux.HandleFunc("GET /api/groups/{group_id}", traced.HandlerFunc(groupHandler.GetByIdHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/archive", traced.HandlerFunc(groupHandler.ArchiveHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", traced.HandlerFunc(groupHandler.UnarchiveHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
