@@ -302,7 +302,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Add members to the group
+	// TODO: Add members to the group and set the creator as the group-owner
 
 	groupResponse := Response{
 		Id:          group.ID.String(),
@@ -341,7 +341,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != "organizer" {
+		if accessLevel != "groupOwner" {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
@@ -390,7 +390,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != "organizer" {
+		if accessLevel != "groupOwner" {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
