@@ -80,6 +80,11 @@ func TestHandler_CreateHandler(t *testing.T) {
 		CreatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 		UpdatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, nil)
+	store.On("GetGroupRoleById", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
+		ID:          uuid.MustParse(string(group.RoleOwner)),
+		Role:        pgtype.Text{String: "group_owner", Valid: true},
+		AccessLevel: "GROUP_OWNER",
+	}, nil)
 	auth := mocks.NewAuth(t)
 
 	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
@@ -287,15 +292,15 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 	}, nil)
 	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(group.GroupRole{}, databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"))
 
-	// Get group by ID for organizer in this group
+	// Get group by ID for group owner in this group
 	store.On("FindUserGroupById", mock.Anything, testCases[1].user.ID, groupId).Return(group.Group{
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 	store.On("GetUserGroupRole", mock.Anything, testCases[1].user.ID, groupId).Return(group.GroupRole{
-		ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
+		ID:          uuid.MustParse(string(group.RoleOwner)),
 		Role:        pgtype.Text{String: "organizer", Valid: true},
-		AccessLevel: "organizer",
+		AccessLevel: string(group.AccessLevelOwner),
 	}, nil)
 
 	// Get group by ID for organizer not in this group
@@ -308,9 +313,9 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
 	store.On("GetUserGroupRole", mock.Anything, testCases[3].user.ID, groupId).Return(group.GroupRole{
-		ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
+		ID:          uuid.MustParse(string(group.RoleStudent)),
 		Role:        pgtype.Text{String: "user", Valid: true},
-		AccessLevel: "user",
+		AccessLevel: string(group.AccessLevelUser),
 	}, nil)
 
 	// Get group by ID for user not in this group
@@ -396,21 +401,21 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 	}, nil)
 
 	auth := mocks.NewAuth(t)
-	// Organizer in this group
+	// Group owner in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
-		"organizer", nil)
+		string(group.AccessLevelOwner), nil)
 
-	// Organizer not in this group
+	// Group owner not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
 
 	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
-		"group-admin", nil)
+		string(group.AccessLevelAdmin), nil)
 
 	// User in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
-		"user", nil)
+		string(group.AccessLevelUser), nil)
 
 	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 
@@ -490,21 +495,21 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 
 	auth := mocks.NewAuth(t)
 
-	// Organizer in this group
+	// Group owner in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
-		"organizer", nil)
+		string(group.AccessLevelOwner), nil)
 
-	// Organizer not in this group
+	// Group owner not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
 
 	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
-		"group-admin", nil)
+		string(group.AccessLevelAdmin), nil)
 
 	// User in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[4].user.ID, groupId).Return(
-		"user", nil)
+		string(group.AccessLevelUser), nil)
 
 	h := group.NewHandler(logger, validator.New(), problem.New(), store, auth)
 

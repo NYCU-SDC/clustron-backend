@@ -225,6 +225,34 @@ func (_m *Store) GetByUserId(ctx context.Context, userId uuid.UUID, page int, si
 	return r0, r1, r2
 }
 
+// GetGroupRoleById provides a mock function with given fields: ctx, roleId
+func (_m *Store) GetGroupRoleById(ctx context.Context, roleId uuid.UUID) (group.GroupRole, error) {
+	ret := _m.Called(ctx, roleId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetGroupRoleById")
+	}
+
+	var r0 group.GroupRole
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (group.GroupRole, error)); ok {
+		return rf(ctx, roleId)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) group.GroupRole); ok {
+		r0 = rf(ctx, roleId)
+	} else {
+		r0 = ret.Get(0).(group.GroupRole)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
+		r1 = rf(ctx, roleId)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetUserAllMembership provides a mock function with given fields: ctx, userId
 func (_m *Store) GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]group.GetUserAllMembershipRow, error) {
 	ret := _m.Called(ctx, userId)

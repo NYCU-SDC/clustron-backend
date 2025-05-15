@@ -354,7 +354,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != "groupOwner" {
+		if accessLevel != string(AccessLevelOwner) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
@@ -403,7 +403,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != "groupOwner" {
+		if accessLevel != string(AccessLevelOwner) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
