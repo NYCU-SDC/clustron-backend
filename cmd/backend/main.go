@@ -124,8 +124,8 @@ func main() {
 	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
 
 	// Auth Middleware
-	//jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
-	//authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
+	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
@@ -134,11 +134,11 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
 
-	mux.HandleFunc("GET /api/groups", traced.HandlerFunc(groupHandler.GetAllHandler))
-	mux.HandleFunc("POST /api/groups", traced.HandlerFunc(groupHandler.CreateHandler))
-	mux.HandleFunc("GET /api/groups/{group_id}", traced.HandlerFunc(groupHandler.GetByIdHandler))
-	mux.HandleFunc("POST /api/groups/{group_id}/archive", traced.HandlerFunc(groupHandler.ArchiveHandler))
-	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", traced.HandlerFunc(groupHandler.UnarchiveHandler))
+	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
+	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
+	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIdHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
