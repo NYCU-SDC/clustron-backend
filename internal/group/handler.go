@@ -35,6 +35,7 @@ type Store interface {
 	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
 	GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]GetUserAllMembershipRow, error)
 	GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error)
+	GetGroupRoleById(ctx context.Context, roleId uuid.UUID) (GroupRole, error)
 }
 
 type RoleResponse struct {
@@ -304,6 +305,12 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Add members to the group and set the creator as the group-owner
 
+	roleOwner, err := h.store.GetGroupRoleById(traceCtx, uuid.MustParse(string(RoleOwner)))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupResponse := Response{
 		Id:          group.ID.String(),
 		Title:       group.Title,
@@ -311,6 +318,12 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		IsArchived:  group.IsArchived.Bool,
 		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	groupResponse.Me.Type = "membership"
+	groupResponse.Me.Role = RoleResponse{
+		Id:          roleOwner.ID.String(),
+		Role:        roleOwner.Role.String,
+		AccessLevel: roleOwner.AccessLevel,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)

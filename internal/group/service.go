@@ -309,3 +309,18 @@ func (s *Service) GetUserGroupMembership(ctx context.Context, userId uuid.UUID, 
 
 	return membership, nil
 }
+
+func (s *Service) GetGroupRoleById(ctx context.Context, roleId uuid.UUID) (GroupRole, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetGroupRoleById")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetGroupRoleById(ctx, roleId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleId.String(), logger, "get group role by id")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+
+	return role, nil
+}

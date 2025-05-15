@@ -79,3 +79,6 @@ SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHE
 
 -- name: AccessLevelFromRole :one
 SELECT access_level FROM group_role WHERE id = $1;
+
+-- name: GetGroupRoleById :one
+SELECT * FROM group_role WHERE id = $1;

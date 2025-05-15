@@ -330,6 +330,17 @@ func (q *Queries) GetAllWithPageDESC(ctx context.Context, arg GetAllWithPageDESC
 	return items, nil
 }
 
+const getGroupRoleById = `-- name: GetGroupRoleById :one
+SELECT id, role, access_level FROM group_role WHERE id = $1
+`
+
+func (q *Queries) GetGroupRoleById(ctx context.Context, id uuid.UUID) (GroupRole, error) {
+	row := q.db.QueryRow(ctx, getGroupRoleById, id)
+	var i GroupRole
+	err := row.Scan(&i.ID, &i.Role, &i.AccessLevel)
+	return i, err
+}
+
 const getUserAllMembership = `-- name: GetUserAllMembership :many
 SELECT
     m.group_id,
