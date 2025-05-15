@@ -48,7 +48,7 @@ func (s *Service) Create(ctx context.Context, username, email, studentID string)
 	param := CreateParams{
 		Username:  username,
 		Email:     email,
-		StudentID: pgtype.Text{String: studentID, Valid: true},
+		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
 	}
 
 	user, err := s.queries.Create(traceCtx, param)
