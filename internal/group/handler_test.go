@@ -290,7 +290,9 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 		Title:       "Test Group",
 		Description: pgtype.Text{String: "Test Description", Valid: true},
 	}, nil)
-	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(group.GroupRole{}, databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"))
+	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(group.GroupRole{},
+		databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"),
+	)
 
 	// Get group by ID for group owner in this group
 	store.On("FindUserGroupById", mock.Anything, testCases[1].user.ID, groupId).Return(group.Group{
@@ -401,13 +403,30 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 	}, nil)
 
 	auth := mocks.NewAuth(t)
+	// Admin
+	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(
+		group.GroupRole{},
+		databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"),
+	)
+
 	// Group owner in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
 		string(group.AccessLevelOwner), nil)
+	store.On("GetUserGroupRole", mock.Anything, testCases[1].user.ID, groupId).Return(
+		group.GroupRole{
+			ID:          uuid.MustParse(string(group.RoleOwner)),
+			Role:        pgtype.Text{String: "group_owner", Valid: true},
+			AccessLevel: string(group.AccessLevelOwner),
+		}, nil,
+	)
 
 	// Group owner not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
+	store.On("GetUserGroupRole", mock.Anything, testCases[1].user.ID, groupId).Return(
+		group.GroupRole{},
+		databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"),
+	)
 
 	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
@@ -495,6 +514,12 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 
 	auth := mocks.NewAuth(t)
 
+	// Admin
+	store.On("GetUserGroupRole", mock.Anything, testCases[0].user.ID, groupId).Return(
+		group.GroupRole{},
+		databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), testCases[0].user.ID.String()), logger, "get membership"),
+	)
+
 	// Group owner in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[1].user.ID, groupId).Return(
 		string(group.AccessLevelOwner), nil)
@@ -502,6 +527,13 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 	// Group owner not in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[2].user.ID, groupId).Return(
 		"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", testCases[2].user.ID.String(), groupId.String()), logger, "get membership"))
+	store.On("GetUserGroupRole", mock.Anything, testCases[1].user.ID, groupId).Return(
+		group.GroupRole{
+			ID:          uuid.MustParse(string(group.RoleOwner)),
+			Role:        pgtype.Text{String: "group_owner", Valid: true},
+			AccessLevel: string(group.AccessLevelOwner),
+		}, nil,
+	)
 
 	// Group-admin in this group
 	auth.On("GetUserGroupAccessLevel", mock.Anything, testCases[3].user.ID, groupId).Return(
