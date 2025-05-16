@@ -225,33 +225,14 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, err := h.store.GetUserGroupRole(traceCtx, user.ID, groupUUID)
-	roleType := "membership"
-	roleResponse := RoleResponse{}
+	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
 	if err != nil {
-		// if the user is not a member of the group, check if the user is an admin
 		if errors.As(err, &handlerutil.NotFoundError{}) {
-			// if the user is an admin, return the group with admin override
-			if user.Role.String == "admin" {
-				roleType = "adminOverride"
-			} else {
-				// if the user is not a member of the group and not an admin, return 404
-				h.problemWriter.WriteError(traceCtx, w, err, logger)
-				return
-			}
-		} else {
-			// other errors
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
 			return
 		}
-	}
-	// if roleResponse hasn't been set, it means the user is a member of the group
-	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
-		roleResponse = RoleResponse{
-			Id:          role.ID.String(),
-			Role:        role.Role.String,
-			AccessLevel: role.AccessLevel,
-		}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	groupResponse := Response{
@@ -366,6 +347,12 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupResponse := Response{
 		Id:          group.ID.String(),
 		Title:       group.Title,
@@ -373,6 +360,10 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		IsArchived:  group.IsArchived.Bool,
 		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	groupResponse.Me.Type = roleType
+	if roleType == "membership" {
+		groupResponse.Me.Role = roleResponse
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
@@ -415,6 +406,12 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupResponse := Response{
 		Id:          group.ID.String(),
 		Title:       group.Title,
@@ -423,6 +420,41 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
+	groupResponse.Me.Type = roleType
+	if roleType == "membership" {
+		groupResponse.Me.Role = roleResponse
+	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, userId uuid.UUID, groupId uuid.UUID) (RoleResponse, string, error) {
+	role, err := h.store.GetUserGroupRole(ctx, userId, groupId)
+	roleType := "membership"
+	roleResponse := RoleResponse{}
+	if err != nil {
+		// if the user is not a member of the group, check if the user is an admin
+		if errors.As(err, &handlerutil.NotFoundError{}) {
+			// if the user is an admin, return the group with admin override
+			if userRole == "admin" {
+				roleType = "adminOverride"
+			} else {
+				// if the user is not a member of the group and not an admin, return 404
+				return RoleResponse{}, "", err
+			}
+		} else {
+			// other errors
+			return RoleResponse{}, "", err
+		}
+	}
+	// if roleResponse hasn't been set, it means the user is a member of the group
+	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
+		roleResponse = RoleResponse{
+			Id:          role.ID.String(),
+			Role:        role.Role.String,
+			AccessLevel: role.AccessLevel,
+		}
+	}
+
+	return roleResponse, roleType, nil
 }
