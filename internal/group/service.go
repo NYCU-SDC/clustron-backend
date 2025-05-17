@@ -41,7 +41,7 @@ func (s *Service) GetAllGroupCount(ctx context.Context) (int, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	count, err := s.queries.GetAllGroupsCount(ctx)
+	count, err := s.queries.CountAll(ctx)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get all groups count")
 		span.RecordError(err)
@@ -56,7 +56,7 @@ func (s *Service) GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	count, err := s.queries.GetUserGroupsCount(traceCtx, userID)
+	count, err := s.queries.CountByUser(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get user groups count")
 		span.RecordError(err)
@@ -102,6 +102,7 @@ func (s *Service) GetAllWithUserScope(ctx context.Context, user jwt.User, page i
 				AccessLevel: role.AccessLevel,
 			}
 		}
+
 		// join the groups and roles
 		response = make([]UserScope, len(groups))
 		for i, group := range groups {
@@ -171,19 +172,19 @@ func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, s
 	var groups []Group
 	var err error
 	if sort == "desc" {
-		params := GetAllWithPageDESCParams{
+		params := ListDescPagedParams{
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.GetAllWithPageDESC(ctx, params)
+		groups, err = s.queries.ListDescPaged(ctx, params)
 	} else {
-		params := GetAllWithPageASCParams{
+		params := ListAscPagedParams{
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		groups, err = s.queries.GetAllWithPageASC(ctx, params)
+		groups, err = s.queries.ListAscPaged(ctx, params)
 	}
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get groups")
@@ -241,13 +242,13 @@ func (s *Service) GetAllByUserID(ctx context.Context, userID uuid.UUID, page int
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if sort == "desc" {
-		params := FindByUserWithPageDESCParams{
+		params := ListByUserDescPagedParams{
 			UserID: userID,
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		res, err := s.queries.FindByUserWithPageDESC(ctx, params)
+		res, err := s.queries.ListByUserDescPaged(ctx, params)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
 			span.RecordError(err)
@@ -272,13 +273,13 @@ func (s *Service) GetAllByUserID(ctx context.Context, userID uuid.UUID, page int
 		}
 		return groups, roles, nil
 	} else {
-		params := FindByUserWithPageASCParams{
+		params := ListByUserAscPagedParams{
 			UserID: userID,
 			Sortby: sortBy,
 			Size:   int32(size),
 			Page:   int32(page),
 		}
-		res, err := s.queries.FindByUserWithPageASC(ctx, params)
+		res, err := s.queries.ListByUserAscPaged(ctx, params)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
 			span.RecordError(err)
@@ -310,7 +311,7 @@ func (s *Service) GetByID(ctx context.Context, groupID uuid.UUID) (Group, error)
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.FindByID(ctx, groupID)
+	group, err := s.queries.Get(ctx, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get group by id")
 		span.RecordError(err)
@@ -370,7 +371,7 @@ func (s *Service) FindUserGroupByID(ctx context.Context, userID uuid.UUID, group
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.FindUserGroupByID(ctx, FindUserGroupByIDParams{
+	group, err := s.queries.GetIfMember(ctx, GetIfMemberParams{
 		UserID:  userID,
 		GroupID: groupID,
 	})
@@ -406,7 +407,7 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	membership, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
+	membership, err := s.queries.GetMembershipsByUser(ctx, GetMembershipsByUserParams{
 		UserID:  userID,
 		GroupID: groupID,
 	})
@@ -416,22 +417,15 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID,
 		return "", err
 	}
 
-	accessLevel, err := s.queries.AccessLevelFromRole(ctx, membership.RoleID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_access_level", "role", membership.RoleID.String(), logger, "get access level")
-		span.RecordError(err)
-		return "", err
-	}
-
-	return accessLevel, nil
+	return membership.AccessLevel, nil
 }
 
-func (s *Service) GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([]GetUserAllMembershipRow, error) {
+func (s *Service) GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([]ListMembershipsByUserRow, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetUserAllMembership")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	memberships, err := s.queries.GetUserAllMembership(ctx, userID)
+	memberships, err := s.queries.ListMembershipsByUser(ctx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", userID.String(), logger, "get membership")
 		span.RecordError(err)
@@ -439,24 +433,6 @@ func (s *Service) GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([
 	}
 
 	return memberships, nil
-}
-
-func (s *Service) GetUserGroupMembership(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (Membership, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetUserGroupMembership")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	membership, err := s.queries.GetUserGroupMembership(ctx, GetUserGroupMembershipParams{
-		UserID:  userID,
-		GroupID: groupID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", userID.String(), groupID.String()), logger, "get membership")
-		span.RecordError(err)
-		return Membership{}, err
-	}
-
-	return membership, nil
 }
 
 func (s *Service) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error) {
