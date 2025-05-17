@@ -112,7 +112,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	var groupResponse []Response
 	var totalCount int
-	if user.Role.String == "admin" {
+	if user.Role.String == "admin" { // TODO: the string comparison should be replaced with a enum.
 		groups, err := h.store.GetAll(traceCtx, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -216,7 +216,7 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var group Group
-	if user.Role.String != "admin" {
+	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
 		group, err = h.store.FindUserGroupById(traceCtx, user.ID, groupUUID)
 	} else {
 		group, err = h.store.GetById(traceCtx, groupUUID)
@@ -264,7 +264,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" && user.Role.String != "organizer" {
+	if user.Role.String != "admin" && user.Role.String != "organizer" { // TODO: the string comparison should be replaced with a enum.
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
@@ -330,7 +330,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" {
+	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
 		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -389,7 +389,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" {
+	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
 		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -437,7 +437,7 @@ func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, use
 		// if the user is not a member of the group, check if the user is an admin
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			// if the user is an admin, return the group with admin override
-			if userRole == "admin" {
+			if userRole == "admin" { // TODO: the string comparison should be replaced with a enum.
 				roleType = "adminOverride"
 			} else {
 				// if the user is not a member of the group and not an admin, return 404
