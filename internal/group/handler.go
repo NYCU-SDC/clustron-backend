@@ -43,6 +43,7 @@ type RoleResponse struct {
 	Role        string `json:"role"`
 	AccessLevel string `json:"accessLevel"`
 }
+
 type Response struct {
 	Id          string `json:"id"`
 	Title       string `json:"title"`
