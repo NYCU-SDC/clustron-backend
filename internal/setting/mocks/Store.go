@@ -62,12 +62,12 @@ func (_m *Store) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	return r0
 }
 
-// GetPublicKeyById provides a mock function with given fields: ctx, id
-func (_m *Store) GetPublicKeyById(ctx context.Context, id uuid.UUID) (setting.PublicKey, error) {
+// GetPublicKeyByID provides a mock function with given fields: ctx, id
+func (_m *Store) GetPublicKeyByID(ctx context.Context, id uuid.UUID) (setting.PublicKey, error) {
 	ret := _m.Called(ctx, id)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetPublicKeyById")
+		panic("no return value specified for GetPublicKeyByID")
 	}
 
 	var r0 setting.PublicKey
@@ -90,21 +90,21 @@ func (_m *Store) GetPublicKeyById(ctx context.Context, id uuid.UUID) (setting.Pu
 	return r0, r1
 }
 
-// GetPublicKeysByUserId provides a mock function with given fields: ctx, userId
-func (_m *Store) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([]setting.PublicKey, error) {
-	ret := _m.Called(ctx, userId)
+// GetPublicKeysByUserID provides a mock function with given fields: ctx, userID
+func (_m *Store) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error) {
+	ret := _m.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetPublicKeysByUserId")
+		panic("no return value specified for GetPublicKeysByUserID")
 	}
 
 	var r0 []setting.PublicKey
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) ([]setting.PublicKey, error)); ok {
-		return rf(ctx, userId)
+		return rf(ctx, userID)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) []setting.PublicKey); ok {
-		r0 = rf(ctx, userId)
+		r0 = rf(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]setting.PublicKey)
@@ -112,7 +112,7 @@ func (_m *Store) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
-		r1 = rf(ctx, userId)
+		r1 = rf(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -120,27 +120,27 @@ func (_m *Store) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([
 	return r0, r1
 }
 
-// GetSettingByUserId provides a mock function with given fields: ctx, userId
-func (_m *Store) GetSettingByUserId(ctx context.Context, userId uuid.UUID) (setting.Setting, error) {
-	ret := _m.Called(ctx, userId)
+// GetSettingByUserID provides a mock function with given fields: ctx, userID
+func (_m *Store) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error) {
+	ret := _m.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetSettingByUserId")
+		panic("no return value specified for GetSettingByUserID")
 	}
 
 	var r0 setting.Setting
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (setting.Setting, error)); ok {
-		return rf(ctx, userId)
+		return rf(ctx, userID)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) setting.Setting); ok {
-		r0 = rf(ctx, userId)
+		r0 = rf(ctx, userID)
 	} else {
 		r0 = ret.Get(0).(setting.Setting)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
-		r1 = rf(ctx, userId)
+		r1 = rf(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -148,9 +148,9 @@ func (_m *Store) GetSettingByUserId(ctx context.Context, userId uuid.UUID) (sett
 	return r0, r1
 }
 
-// UpdateSetting provides a mock function with given fields: ctx, userId, _a2
-func (_m *Store) UpdateSetting(ctx context.Context, userId uuid.UUID, _a2 setting.Setting) (setting.Setting, error) {
-	ret := _m.Called(ctx, userId, _a2)
+// UpdateSetting provides a mock function with given fields: ctx, userID, _a2
+func (_m *Store) UpdateSetting(ctx context.Context, userID uuid.UUID, _a2 setting.Setting) (setting.Setting, error) {
+	ret := _m.Called(ctx, userID, _a2)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateSetting")
@@ -159,16 +159,16 @@ func (_m *Store) UpdateSetting(ctx context.Context, userId uuid.UUID, _a2 settin
 	var r0 setting.Setting
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, setting.Setting) (setting.Setting, error)); ok {
-		return rf(ctx, userId, _a2)
+		return rf(ctx, userID, _a2)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, setting.Setting) setting.Setting); ok {
-		r0 = rf(ctx, userId, _a2)
+		r0 = rf(ctx, userID, _a2)
 	} else {
 		r0 = ret.Get(0).(setting.Setting)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, setting.Setting) error); ok {
-		r1 = rf(ctx, userId, _a2)
+		r1 = rf(ctx, userID, _a2)
 	} else {
 		r1 = ret.Error(1)
 	}
