@@ -24,17 +24,12 @@ type Auth interface {
 
 //go:generate mockery --name=Store
 type Store interface {
-	GetAllGroupCount(ctx context.Context) (int, error)
-	GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int, error)
-	GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error)
-	GetAllByUserID(ctx context.Context, userID uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
-	GetByID(ctx context.Context, groupID uuid.UUID) (Group, error)
+	GetAllWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]UserScope, int /* totalCount */, error)
+	GetByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (UserScope, error)
+	GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (RoleResponse, string, error)
 	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
 	ArchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
 	UnarchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
-	FindUserGroupByID(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (Group, error)
-	GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([]GetUserAllMembershipRow, error)
-	GetUserGroupRole(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (GroupRole, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
 }
 
@@ -52,7 +47,7 @@ type Response struct {
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 	Me          struct {
-		Type string       `json:"type"` // will be "mambership" or "adminOverride"
+		Type string       `json:"type"` // will be "membership" or "adminOverride"
 		Role RoleResponse `json:"role"`
 	} `json:"me"`
 }
@@ -110,84 +105,20 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var groupResponse []Response
-	var totalCount int
-	if user.Role.String == "admin" { // TODO: the string comparison should be replaced with a enum.
-		groups, err := h.store.GetAll(traceCtx, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		roles, err := h.store.GetUserAllMembership(traceCtx, user.ID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		totalCount, err = h.store.GetAllGroupCount(traceCtx)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
+	userScopeResponse, totalCount, err := h.store.GetAllWithUserScope(traceCtx, user, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 
-		// map the roles to group ids
-		groupRoleMap := make(map[uuid.UUID]RoleResponse)
-		for _, role := range roles {
-			groupRoleMap[role.GroupID] = RoleResponse{
-				ID:          role.RoleID.String(),
-				Role:        role.Role.String,
-				AccessLevel: role.AccessLevel,
-			}
+	groupResponse := make([]Response, len(userScopeResponse))
+	for i, group := range userScopeResponse {
+		groupResponse[i] = Response{
+			ID:          group.ID.String(),
+			Title:       group.Title,
+			Description: group.Description.String,
+			IsArchived:  group.IsArchived.Bool,
+			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
-		// join the groups and roles
-		groupResponse = make([]Response, len(groups))
-		for i, group := range groups {
-			groupResponse[i] = Response{
-				ID:          group.ID.String(),
-				Title:       group.Title,
-				Description: group.Description.String,
-				IsArchived:  group.IsArchived.Bool,
-				CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-				UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			}
-			role, ok := groupRoleMap[group.ID]
-			if ok {
-				groupResponse[i].Me.Type = "membership"
-				groupResponse[i].Me.Role = role
-			} else {
-				groupResponse[i].Me.Type = "adminOverride"
-			}
-		}
-	} else {
-		groups, roles, err := h.store.GetAllByUserID(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		totalCount, err = h.store.GetUserGroupsCount(traceCtx, user.ID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-
-		// join the groups and roles
-		groupResponse = make([]Response, len(groups))
-		for i, group := range groups {
-			groupResponse[i] = Response{
-				ID:          group.ID.String(),
-				Title:       group.Title,
-				Description: group.Description.String,
-				IsArchived:  group.IsArchived.Bool,
-				CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-				UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			}
-			role := roles[i]
-			groupResponse[i].Me.Type = "membership"
-			groupResponse[i].Me.Role = RoleResponse{
-				ID:          role.ID.String(),
-				Role:        role.Role.String,
-				AccessLevel: role.AccessLevel,
-			}
-		}
+		groupResponse[i].Me.Type = group.Me.Type
+		groupResponse[i].Me.Role = group.Me.Role
 	}
 
 	pageResponse := h.paginationFactory.NewResponse(groupResponse, totalCount, pageRequest.Page, pageRequest.Size)
@@ -215,18 +146,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var group Group
-	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
-		group, err = h.store.FindUserGroupByID(traceCtx, user.ID, groupUUID)
-	} else {
-		group, err = h.store.GetByID(traceCtx, groupUUID)
-	}
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	userScopeResponse, err := h.store.GetByIDWithUserScope(traceCtx, user, groupUUID)
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
@@ -237,17 +157,15 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	groupResponse := Response{
-		ID:          group.ID.String(),
-		Title:       group.Title,
-		Description: group.Description.String,
-		IsArchived:  group.IsArchived.Bool,
-		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		ID:          userScopeResponse.ID.String(),
+		Title:       userScopeResponse.Title,
+		Description: userScopeResponse.Description.String,
+		IsArchived:  userScopeResponse.IsArchived.Bool,
+		CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
-	groupResponse.Me.Type = roleType
-	if roleType == "membership" {
-		groupResponse.Me.Role = roleResponse
-	}
+	groupResponse.Me.Type = userScopeResponse.Me.Type
+	groupResponse.Me.Role = userScopeResponse.Me.Role
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
@@ -348,7 +266,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	roleResponse, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -407,7 +325,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roleResponse, roleType, err := h.getUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	roleResponse, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -427,35 +345,4 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
-}
-
-func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (RoleResponse, string, error) {
-	role, err := h.store.GetUserGroupRole(ctx, userID, groupID)
-	roleType := "membership"
-	roleResponse := RoleResponse{}
-	if err != nil {
-		// if the user is not a member of the group, check if the user is an admin
-		if errors.As(err, &handlerutil.NotFoundError{}) {
-			// if the user is an admin, return the group with admin override
-			if userRole == "admin" { // TODO: the string comparison should be replaced with a enum.
-				roleType = "adminOverride"
-			} else {
-				// if the user is not a member of the group and not an admin, return 404
-				return RoleResponse{}, "", err
-			}
-		} else {
-			// other errors
-			return RoleResponse{}, "", err
-		}
-	}
-	// if roleResponse hasn't been set, it means the user is a member of the group
-	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
-		roleResponse = RoleResponse{
-			ID:          role.ID.String(),
-			Role:        role.Role.String,
-			AccessLevel: role.AccessLevel,
-		}
-	}
-
-	return roleResponse, roleType, nil
 }

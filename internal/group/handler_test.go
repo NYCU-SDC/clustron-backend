@@ -132,23 +132,29 @@ func TestHandler_CreateHandler(t *testing.T) {
 }
 
 func TestHandler_GetAllHandler(t *testing.T) {
-	groups := []group.Group{
+	groups := []group.UserScope{
 		// organizer, and user in this group
 		{
-			ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-			Title:       "Test Group 1",
-			Description: pgtype.Text{String: "Test Description 1", Valid: true},
+			Group: group.Group{
+				ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Title:       "Test Group 1",
+				Description: pgtype.Text{String: "Test Description 1", Valid: true},
+			},
 		},
 		// organizer in this group
 		{
-			ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970f"),
-			Title:       "Test Group 2",
-			Description: pgtype.Text{String: "Test Description 2", Valid: true},
+			Group: group.Group{
+				ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970f"),
+				Title:       "Test Group 2",
+				Description: pgtype.Text{String: "Test Description 2", Valid: true},
+			},
 		},
 		{
-			ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970a"),
-			Title:       "Test Group 3",
-			Description: pgtype.Text{String: "Test Description 3", Valid: true},
+			Group: group.Group{
+				ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970a"),
+				Title:       "Test Group 3",
+				Description: pgtype.Text{String: "Test Description 3", Valid: true},
+			},
 		},
 	}
 	groupRoles := []group.GroupRole{
@@ -178,9 +184,13 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAll", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
-				store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
-				store.On("GetUserAllMembership", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9")).Return([]group.GetUserAllMembershipRow{}, nil)
+				store.On("GetAllWithUserScope", mock.Anything, jwt.User{
+					ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+					Role: pgtype.Text{String: "admin", Valid: true},
+				}, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
+				//store.On("GetAll", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
+				//store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
+				//store.On("GetUserAllMembership", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9")).Return([]group.GetUserAllMembershipRow{}, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantResult: []string{

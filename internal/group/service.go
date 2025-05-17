@@ -1,15 +1,26 @@
 package group
 
 import (
+	"clustron-backend/internal/jwt"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+type UserScope struct {
+	Group
+	Me struct {
+		Type string // will be "membership" or "adminOverride"
+		Role RoleResponse
+	}
+}
 
 type Service struct {
 	logger  *zap.Logger
@@ -55,6 +66,103 @@ func (s *Service) GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int
 	return int(count), nil
 }
 
+func (s *Service) GetAllWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]UserScope, int /* totalCount */, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAllWithUserScope")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var response []UserScope
+	var totalCount int
+	if user.Role.String == "admin" { // TODO: the string comparison should be replaced with a enum.
+		groups, err := s.GetAll(traceCtx, page, size, sort, sortBy)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "Get all groups")
+			span.RecordError(err)
+			return nil, 0, err
+		}
+		roles, err := s.GetUserAllMembership(traceCtx, user.ID)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "Get all groups membership")
+			span.RecordError(err)
+			return nil, 0, err
+		}
+		totalCount, err = s.GetAllGroupCount(traceCtx)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "Get all groups count")
+			span.RecordError(err)
+			return nil, 0, err
+		}
+
+		// map the roles to group ids
+		groupRoleMap := make(map[uuid.UUID]RoleResponse)
+		for _, role := range roles {
+			groupRoleMap[role.GroupID] = RoleResponse{
+				ID:          role.RoleID.String(),
+				Role:        role.Role.String,
+				AccessLevel: role.AccessLevel,
+			}
+		}
+		// join the groups and roles
+		response = make([]UserScope, len(groups))
+		for i, group := range groups {
+			response[i] = UserScope{
+				Group: Group{
+					ID:          group.ID,
+					Title:       group.Title,
+					Description: group.Description,
+					IsArchived:  group.IsArchived,
+					CreatedAt:   group.CreatedAt,
+					UpdatedAt:   group.UpdatedAt,
+				},
+			}
+			role, ok := groupRoleMap[group.ID]
+			if ok {
+				response[i].Me.Type = "membership"
+				response[i].Me.Role = role
+			} else {
+				response[i].Me.Type = "adminOverride"
+			}
+		}
+	} else {
+		groups, roles, err := s.GetAllByUserID(traceCtx, user.ID, page, size, sort, sortBy)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "Get all groups by user id")
+			span.RecordError(err)
+			return nil, 0, err
+		}
+		totalCount, err = s.GetUserGroupsCount(traceCtx, user.ID)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "Get all groups count")
+			span.RecordError(err)
+			return nil, 0, err
+		}
+
+		// join the groups and roles
+		response = make([]UserScope, len(groups))
+		for i, group := range groups {
+			response[i] = UserScope{
+				Group: Group{
+					ID:          group.ID,
+					Title:       group.Title,
+					Description: group.Description,
+					IsArchived:  group.IsArchived,
+					CreatedAt:   group.CreatedAt,
+					UpdatedAt:   group.UpdatedAt,
+				},
+			}
+			role := roles[i]
+			response[i].Me.Type = "membership"
+			response[i].Me.Role = RoleResponse{
+				ID:          role.ID.String(),
+				Role:        role.Role.String,
+				AccessLevel: role.AccessLevel,
+			}
+		}
+	}
+
+	return response, totalCount, nil
+}
+
 func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAll")
 	defer span.End()
@@ -84,6 +192,47 @@ func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, s
 	}
 
 	return groups, nil
+}
+
+func (s *Service) GetByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (UserScope, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetByIDWithUserScope")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var group Group
+	var err error
+	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
+		group, err = s.FindUserGroupByID(traceCtx, user.ID, groupID)
+	} else {
+		group, err = s.GetByID(traceCtx, groupID)
+	}
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
+		span.RecordError(err)
+		return UserScope{}, err
+	}
+
+	roleResponse, roleType, err := s.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
+		span.RecordError(err)
+		return UserScope{}, err
+	}
+
+	response := UserScope{
+		Group: Group{
+			ID:          group.ID,
+			Title:       group.Title,
+			Description: group.Description,
+			IsArchived:  group.IsArchived,
+			CreatedAt:   group.CreatedAt,
+			UpdatedAt:   group.UpdatedAt,
+		},
+	}
+	response.Me.Type = roleType
+	response.Me.Role = roleResponse
+
+	return response, nil
 }
 
 func (s *Service) GetAllByUserID(ctx context.Context, userID uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error) {
@@ -323,4 +472,35 @@ func (s *Service) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (Group
 	}
 
 	return role, nil
+}
+
+func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (RoleResponse, string, error) {
+	role, err := s.GetUserGroupRole(ctx, userID, groupID)
+	roleType := "membership"
+	roleResponse := RoleResponse{}
+	if err != nil {
+		// if the user is not a member of the group, check if the user is an admin
+		if errors.As(err, &handlerutil.NotFoundError{}) {
+			// if the user is an admin, return the group with admin override
+			if userRole == "admin" { // TODO: the string comparison should be replaced with a enum.
+				roleType = "adminOverride"
+			} else {
+				// if the user is not a member of the group and not an admin, return 404
+				return RoleResponse{}, "", err
+			}
+		} else {
+			// other errors
+			return RoleResponse{}, "", err
+		}
+	}
+	// if roleResponse hasn't been set, it means the user is a member of the group
+	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
+		roleResponse = RoleResponse{
+			ID:          role.ID.String(),
+			Role:        role.Role.String,
+			AccessLevel: role.AccessLevel,
+		}
+	}
+
+	return roleResponse, roleType, nil
 }
