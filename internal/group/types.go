@@ -1,6 +1,7 @@
 package group
 
 type DefaultRole string
+
 type AccessLevel string
 
 const (
