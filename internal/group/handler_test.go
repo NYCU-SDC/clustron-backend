@@ -196,7 +196,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
+				store.On("GetAllByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
 					[]group.GroupRole{groupRoles[0], groupRoles[0]}, nil)
 				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3")).Return(2, nil)
 			},
@@ -213,7 +213,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
+				store.On("GetAllByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
 					[]group.GroupRole{groupRoles[1]}, nil)
 				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2")).Return(1, nil)
 			},

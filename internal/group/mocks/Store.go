@@ -130,6 +130,45 @@ func (_m *Store) GetAll(ctx context.Context, page int, size int, sort string, so
 	return r0, r1
 }
 
+// GetAllByUserId provides a mock function with given fields: ctx, userId, page, size, sort, sortBy
+func (_m *Store) GetAllByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]group.Group, []group.GroupRole, error) {
+	ret := _m.Called(ctx, userId, page, size, sort, sortBy)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAllByUserId")
+	}
+
+	var r0 []group.Group
+	var r1 []group.GroupRole
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, int, int, string, string) ([]group.Group, []group.GroupRole, error)); ok {
+		return rf(ctx, userId, page, size, sort, sortBy)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, int, int, string, string) []group.Group); ok {
+		r0 = rf(ctx, userId, page, size, sort, sortBy)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]group.Group)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, int, int, string, string) []group.GroupRole); ok {
+		r1 = rf(ctx, userId, page, size, sort, sortBy)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]group.GroupRole)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, uuid.UUID, int, int, string, string) error); ok {
+		r2 = rf(ctx, userId, page, size, sort, sortBy)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
 // GetAllGroupCount provides a mock function with given fields: ctx
 func (_m *Store) GetAllGroupCount(ctx context.Context) (int, error) {
 	ret := _m.Called(ctx)
@@ -184,45 +223,6 @@ func (_m *Store) GetById(ctx context.Context, groupId uuid.UUID) (group.Group, e
 	}
 
 	return r0, r1
-}
-
-// GetByUserId provides a mock function with given fields: ctx, userId, page, size, sort, sortBy
-func (_m *Store) GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]group.Group, []group.GroupRole, error) {
-	ret := _m.Called(ctx, userId, page, size, sort, sortBy)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetByUserId")
-	}
-
-	var r0 []group.Group
-	var r1 []group.GroupRole
-	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, int, int, string, string) ([]group.Group, []group.GroupRole, error)); ok {
-		return rf(ctx, userId, page, size, sort, sortBy)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, int, int, string, string) []group.Group); ok {
-		r0 = rf(ctx, userId, page, size, sort, sortBy)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]group.Group)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, int, int, string, string) []group.GroupRole); ok {
-		r1 = rf(ctx, userId, page, size, sort, sortBy)
-	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).([]group.GroupRole)
-		}
-	}
-
-	if rf, ok := ret.Get(2).(func(context.Context, uuid.UUID, int, int, string, string) error); ok {
-		r2 = rf(ctx, userId, page, size, sort, sortBy)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
 }
 
 // GetGroupRoleById provides a mock function with given fields: ctx, roleId

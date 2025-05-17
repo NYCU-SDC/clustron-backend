@@ -86,8 +86,8 @@ func (s *Service) GetAll(ctx context.Context, page int, size int, sort string, s
 	return groups, nil
 }
 
-func (s *Service) GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByUserId")
+func (s *Service) GetAllByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAllByUserId")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 

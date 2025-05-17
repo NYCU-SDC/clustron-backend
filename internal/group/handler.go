@@ -27,7 +27,7 @@ type Store interface {
 	GetAllGroupCount(ctx context.Context) (int, error)
 	GetUserGroupsCount(ctx context.Context, userId uuid.UUID) (int, error)
 	GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error)
-	GetByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
+	GetAllByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
 	GetById(ctx context.Context, groupId uuid.UUID) (Group, error)
 	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
 	ArchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
@@ -158,7 +158,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		groups, roles, err := h.store.GetByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+		groups, roles, err := h.store.GetAllByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
