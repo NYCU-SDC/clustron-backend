@@ -106,6 +106,14 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userScopeResponse, totalCount, err := h.store.GetAllWithUserScope(traceCtx, user, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+	if err != nil {
+		if errors.As(err, &handlerutil.NotFoundError{}) {
+			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
+			return
+		}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
 	groupResponse := make([]Response, len(userScopeResponse))
 	for i, group := range userScopeResponse {
