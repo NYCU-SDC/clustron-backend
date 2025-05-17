@@ -64,12 +64,12 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Group, error) {
 	return i, err
 }
 
-const findById = `-- name: FindById :one
+const findByID = `-- name: FindByID :one
 SELECT id, title, description, is_archived, created_at, updated_at FROM groups WHERE id = $1
 `
 
-func (q *Queries) FindById(ctx context.Context, id uuid.UUID) (Group, error) {
-	row := q.db.QueryRow(ctx, findById, id)
+func (q *Queries) FindByID(ctx context.Context, id uuid.UUID) (Group, error) {
+	row := q.db.QueryRow(ctx, findByID, id)
 	var i Group
 	err := row.Scan(
 		&i.ID,
@@ -222,17 +222,17 @@ func (q *Queries) FindByUserWithPageDESC(ctx context.Context, arg FindByUserWith
 	return items, nil
 }
 
-const findUserGroupById = `-- name: FindUserGroupById :one
+const findUserGroupByID = `-- name: FindUserGroupByID :one
 SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2
 `
 
-type FindUserGroupByIdParams struct {
+type FindUserGroupByIDParams struct {
 	UserID  uuid.UUID
 	GroupID uuid.UUID
 }
 
-func (q *Queries) FindUserGroupById(ctx context.Context, arg FindUserGroupByIdParams) (Group, error) {
-	row := q.db.QueryRow(ctx, findUserGroupById, arg.UserID, arg.GroupID)
+func (q *Queries) FindUserGroupByID(ctx context.Context, arg FindUserGroupByIDParams) (Group, error) {
+	row := q.db.QueryRow(ctx, findUserGroupByID, arg.UserID, arg.GroupID)
 	var i Group
 	err := row.Scan(
 		&i.ID,
@@ -330,12 +330,12 @@ func (q *Queries) GetAllWithPageDESC(ctx context.Context, arg GetAllWithPageDESC
 	return items, nil
 }
 
-const getGroupRoleById = `-- name: GetGroupRoleById :one
+const getGroupRoleByID = `-- name: GetGroupRoleByID :one
 SELECT id, role, access_level FROM group_role WHERE id = $1
 `
 
-func (q *Queries) GetGroupRoleById(ctx context.Context, id uuid.UUID) (GroupRole, error) {
-	row := q.db.QueryRow(ctx, getGroupRoleById, id)
+func (q *Queries) GetGroupRoleByID(ctx context.Context, id uuid.UUID) (GroupRole, error) {
+	row := q.db.QueryRow(ctx, getGroupRoleByID, id)
 	var i GroupRole
 	err := row.Scan(&i.ID, &i.Role, &i.AccessLevel)
 	return i, err

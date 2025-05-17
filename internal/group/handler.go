@@ -18,34 +18,34 @@ import (
 
 //go:generate mockery --name=Auth
 type Auth interface {
-	GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error)
-	GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error)
+	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
+	GetUserGroupRole(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (GroupRole, error)
 }
 
 //go:generate mockery --name=Store
 type Store interface {
 	GetAllGroupCount(ctx context.Context) (int, error)
-	GetUserGroupsCount(ctx context.Context, userId uuid.UUID) (int, error)
+	GetUserGroupsCount(ctx context.Context, userID uuid.UUID) (int, error)
 	GetAll(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error)
-	GetAllByUserId(ctx context.Context, userId uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
-	GetById(ctx context.Context, groupId uuid.UUID) (Group, error)
+	GetAllByUserID(ctx context.Context, userID uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error)
+	GetByID(ctx context.Context, groupID uuid.UUID) (Group, error)
 	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
-	ArchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
-	UnarchiveGroup(ctx context.Context, groupId uuid.UUID) (Group, error)
-	FindUserGroupById(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (Group, error)
-	GetUserAllMembership(ctx context.Context, userId uuid.UUID) ([]GetUserAllMembershipRow, error)
-	GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (GroupRole, error)
-	GetGroupRoleById(ctx context.Context, roleId uuid.UUID) (GroupRole, error)
+	ArchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
+	UnarchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
+	FindUserGroupByID(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (Group, error)
+	GetUserAllMembership(ctx context.Context, userID uuid.UUID) ([]GetUserAllMembershipRow, error)
+	GetUserGroupRole(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (GroupRole, error)
+	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
 }
 
 type RoleResponse struct {
-	Id          string `json:"id"`
+	ID          string `json:"id"`
 	Role        string `json:"role"`
 	AccessLevel string `json:"accessLevel"`
 }
 
 type Response struct {
-	Id          string `json:"id"`
+	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	IsArchived  bool   `json:"isArchived"`
@@ -133,7 +133,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		groupRoleMap := make(map[uuid.UUID]RoleResponse)
 		for _, role := range roles {
 			groupRoleMap[role.GroupID] = RoleResponse{
-				Id:          role.RoleID.String(),
+				ID:          role.RoleID.String(),
 				Role:        role.Role.String,
 				AccessLevel: role.AccessLevel,
 			}
@@ -142,7 +142,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		groupResponse = make([]Response, len(groups))
 		for i, group := range groups {
 			groupResponse[i] = Response{
-				Id:          group.ID.String(),
+				ID:          group.ID.String(),
 				Title:       group.Title,
 				Description: group.Description.String,
 				IsArchived:  group.IsArchived.Bool,
@@ -158,7 +158,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		groups, roles, err := h.store.GetAllByUserId(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+		groups, roles, err := h.store.GetAllByUserID(traceCtx, user.ID, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -173,7 +173,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		groupResponse = make([]Response, len(groups))
 		for i, group := range groups {
 			groupResponse[i] = Response{
-				Id:          group.ID.String(),
+				ID:          group.ID.String(),
 				Title:       group.Title,
 				Description: group.Description.String,
 				IsArchived:  group.IsArchived.Bool,
@@ -183,7 +183,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			role := roles[i]
 			groupResponse[i].Me.Type = "membership"
 			groupResponse[i].Me.Role = RoleResponse{
-				Id:          role.ID.String(),
+				ID:          role.ID.String(),
 				Role:        role.Role.String,
 				AccessLevel: role.AccessLevel,
 			}
@@ -194,15 +194,15 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
 }
 
-// GetByIdHandler handles the request to get a group by ID
-func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetByIdHandler")
+// GetByIDHandler handles the request to get a group by ID
+func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetByIDHandler")
 	defer span.End()
-	logger := h.logger.With(zap.String("handler", "GetByIdHandler"))
+	logger := h.logger.With(zap.String("handler", "GetByIDHandler"))
 
 	// get group id from url
-	groupId := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupId)
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -217,9 +217,9 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 
 	var group Group
 	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
-		group, err = h.store.FindUserGroupById(traceCtx, user.ID, groupUUID)
+		group, err = h.store.FindUserGroupByID(traceCtx, user.ID, groupUUID)
 	} else {
-		group, err = h.store.GetById(traceCtx, groupUUID)
+		group, err = h.store.GetByID(traceCtx, groupUUID)
 	}
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -237,7 +237,7 @@ func (h *Handler) GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	groupResponse := Response{
-		Id:          group.ID.String(),
+		ID:          group.ID.String(),
 		Title:       group.Title,
 		Description: group.Description.String,
 		IsArchived:  group.IsArchived.Bool,
@@ -287,14 +287,14 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Add members to the group and set the creator as the group-owner
 
-	roleOwner, err := h.store.GetGroupRoleById(traceCtx, uuid.MustParse(string(RoleOwner)))
+	roleOwner, err := h.store.GetGroupRoleByID(traceCtx, uuid.MustParse(string(RoleOwner)))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	groupResponse := Response{
-		Id:          group.ID.String(),
+		ID:          group.ID.String(),
 		Title:       group.Title,
 		Description: group.Description.String,
 		IsArchived:  group.IsArchived.Bool,
@@ -303,7 +303,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = "membership"
 	groupResponse.Me.Role = RoleResponse{
-		Id:          roleOwner.ID.String(),
+		ID:          roleOwner.ID.String(),
 		Role:        roleOwner.Role.String,
 		AccessLevel: roleOwner.AccessLevel,
 	}
@@ -316,8 +316,8 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "ArchiveHandler"))
 
-	groupId := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupId)
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -355,7 +355,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	groupResponse := Response{
-		Id:          group.ID.String(),
+		ID:          group.ID.String(),
 		Title:       group.Title,
 		Description: group.Description.String,
 		IsArchived:  group.IsArchived.Bool,
@@ -375,8 +375,8 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "ArchiveHandler"))
 
-	groupId := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupId)
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -414,7 +414,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	groupResponse := Response{
-		Id:          group.ID.String(),
+		ID:          group.ID.String(),
 		Title:       group.Title,
 		Description: group.Description.String,
 		IsArchived:  group.IsArchived.Bool,
@@ -429,8 +429,8 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
 
-func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, userId uuid.UUID, groupId uuid.UUID) (RoleResponse, string, error) {
-	role, err := h.store.GetUserGroupRole(ctx, userId, groupId)
+func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (RoleResponse, string, error) {
+	role, err := h.store.GetUserGroupRole(ctx, userID, groupID)
 	roleType := "membership"
 	roleResponse := RoleResponse{}
 	if err != nil {
@@ -451,7 +451,7 @@ func (h *Handler) getUserGroupRoleType(ctx context.Context, userRole string, use
 	// if roleResponse hasn't been set, it means the user is a member of the group
 	if roleResponse == (RoleResponse{}) && roleType != "adminOverride" {
 		roleResponse = RoleResponse{
-			Id:          role.ID.String(),
+			ID:          role.ID.String(),
 			Role:        role.Role.String,
 			AccessLevel: role.AccessLevel,
 		}

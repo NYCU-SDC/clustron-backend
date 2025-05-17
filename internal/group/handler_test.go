@@ -51,7 +51,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 					CreatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 					UpdatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 				}, nil)
-				store.On("GetGroupRoleById", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
+				store.On("GetGroupRoleByID", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
 					ID:          uuid.MustParse(string(group.RoleOwner)),
 					Role:        pgtype.Text{String: "group_owner", Valid: true},
 					AccessLevel: "GROUP_OWNER",
@@ -77,7 +77,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 					CreatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 					UpdatedAt:   pgtype.Timestamptz{Time: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)},
 				}, nil)
-				store.On("GetGroupRoleById", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
+				store.On("GetGroupRoleByID", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
 					ID:          uuid.MustParse(string(group.RoleOwner)),
 					Role:        pgtype.Text{String: "group_owner", Valid: true},
 					AccessLevel: "GROUP_OWNER",
@@ -196,7 +196,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAllByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
+				store.On("GetAllByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
 					[]group.GroupRole{groupRoles[0], groupRoles[0]}, nil)
 				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3")).Return(2, nil)
 			},
@@ -213,7 +213,7 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAllByUserId", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
+				store.On("GetAllByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
 					[]group.GroupRole{groupRoles[1]}, nil)
 				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2")).Return(1, nil)
 			},
@@ -259,8 +259,8 @@ func TestHandler_GetAllHandler(t *testing.T) {
 	}
 }
 
-func TestHandler_GetByIdHandler(t *testing.T) {
-	groupId := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
+func TestHandler_GetByIDHandler(t *testing.T) {
+	groupID := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
 	testCases := []struct {
 		name       string
 		user       jwt.User
@@ -274,12 +274,12 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetById", mock.Anything, groupId).Return(group.Group{
+				store.On("GetByID", mock.Anything, groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupId).Return(group.GroupRole{},
-					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupID).Return(group.GroupRole{},
+					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
 				)
 			},
 			wantStatus: http.StatusOK,
@@ -291,11 +291,11 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupId).Return(group.Group{
+				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupId).Return(group.GroupRole{
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.GroupRole{
 					ID:          uuid.MustParse(string(group.RoleOwner)),
 					Role:        pgtype.Text{String: "organizer", Valid: true},
 					AccessLevel: string(group.AccessLevelOwner),
@@ -310,8 +310,8 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"), groupId).Return(group.Group{},
-					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e8", groupId), zap.NewExample(), "get membership"))
+				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"), groupID).Return(group.Group{},
+					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e8", groupID), zap.NewExample(), "get membership"))
 			},
 
 			wantStatus: http.StatusNotFound,
@@ -323,11 +323,11 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupId).Return(group.Group{
+				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupId).Return(group.GroupRole{
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.GroupRole{
 					ID:          uuid.MustParse(string(group.RoleStudent)),
 					Role:        pgtype.Text{String: "user", Valid: true},
 					AccessLevel: string(group.AccessLevelUser),
@@ -342,8 +342,8 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupById", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupId).Return(group.Group{},
-					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupId), zap.NewExample(), "get membership"))
+				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(group.Group{},
+					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupID), zap.NewExample(), "get membership"))
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -363,12 +363,12 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 				tc.setupMocks(store)
 			}
 
-			r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/groups/%s", groupId.String()), nil)
-			r.SetPathValue("group_id", groupId.String())
+			r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/groups/%s", groupID.String()), nil)
+			r.SetPathValue("group_id", groupID.String())
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
-			h.GetByIdHandler(w, r)
+			h.GetByIDHandler(w, r)
 
 			assert.Equal(t, tc.wantStatus, w.Code)
 		})
@@ -376,7 +376,7 @@ func TestHandler_GetByIdHandler(t *testing.T) {
 }
 
 func TestHandler_ArchiveHandler(t *testing.T) {
-	groupId := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
+	groupID := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
 
 	testCases := []struct {
 		name       string
@@ -391,9 +391,9 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupId).Return(
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupID).Return(
 					group.GroupRole{},
-					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
+					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
 				)
 				store.On("ArchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
@@ -409,9 +409,9 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 					string(group.AccessLevelOwner), nil)
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupId).Return(
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 					group.GroupRole{
 						ID:          uuid.MustParse(string(group.RoleOwner)),
 						Role:        pgtype.Text{String: "group_owner", Valid: true},
@@ -432,8 +432,8 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupId).Return(
-					"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupId.String()), zap.NewExample(), "get membership"))
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(
+					"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupID.String()), zap.NewExample(), "get membership"))
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -444,7 +444,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(
 					string(group.AccessLevelAdmin), nil)
 			},
 			wantStatus: http.StatusForbidden,
@@ -456,7 +456,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(
 					string(group.AccessLevelUser), nil)
 			},
 			wantStatus: http.StatusForbidden,
@@ -477,8 +477,8 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 				tc.setupMocks(store, auth)
 			}
 
-			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/groups/%s/archive", groupId.String()), nil)
-			r.SetPathValue("group_id", groupId.String())
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/groups/%s/archive", groupID.String()), nil)
+			r.SetPathValue("group_id", groupID.String())
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
@@ -490,7 +490,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 }
 
 func TestHandler_UnarchiveHandler(t *testing.T) {
-	groupId := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
+	groupID := uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")
 
 	testCases := []struct {
 		name       string
@@ -505,9 +505,9 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupId).Return(
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupID).Return(
 					group.GroupRole{},
-					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupId.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
+					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
 				)
 				store.On("UnarchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
@@ -523,9 +523,9 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 					string(group.AccessLevelOwner), nil)
-				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupId).Return(
+				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 					group.GroupRole{
 						ID:          uuid.MustParse(string(group.RoleOwner)),
 						Role:        pgtype.Text{String: "group_owner", Valid: true},
@@ -546,8 +546,8 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupId).Return(
-					"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupId.String()), zap.NewExample(), "get membership"))
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(
+					"", databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupID.String()), zap.NewExample(), "get membership"))
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -558,7 +558,7 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(
 					string(group.AccessLevelAdmin), nil)
 			},
 			wantStatus: http.StatusForbidden,
@@ -570,7 +570,7 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
-				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupId).Return(
+				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(
 					string(group.AccessLevelUser), nil)
 			},
 			wantStatus: http.StatusForbidden,
@@ -591,8 +591,8 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 				tc.setupMocks(store, auth)
 			}
 
-			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/groups/%s/unarchive", groupId.String()), nil)
-			r.SetPathValue("group_id", groupId.String())
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/groups/%s/unarchive", groupID.String()), nil)
+			r.SetPathValue("group_id", groupID.String())
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 

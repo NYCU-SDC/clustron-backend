@@ -16,9 +16,9 @@ type Auth struct {
 	mock.Mock
 }
 
-// GetUserGroupAccessLevel provides a mock function with given fields: ctx, userId, groupId
-func (_m *Auth) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (string, error) {
-	ret := _m.Called(ctx, userId, groupId)
+// GetUserGroupAccessLevel provides a mock function with given fields: ctx, userID, groupID
+func (_m *Auth) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error) {
+	ret := _m.Called(ctx, userID, groupID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetUserGroupAccessLevel")
@@ -27,16 +27,16 @@ func (_m *Auth) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, g
 	var r0 string
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (string, error)); ok {
-		return rf(ctx, userId, groupId)
+		return rf(ctx, userID, groupID)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) string); ok {
-		r0 = rf(ctx, userId, groupId)
+		r0 = rf(ctx, userID, groupID)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
-		r1 = rf(ctx, userId, groupId)
+		r1 = rf(ctx, userID, groupID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -44,9 +44,9 @@ func (_m *Auth) GetUserGroupAccessLevel(ctx context.Context, userId uuid.UUID, g
 	return r0, r1
 }
 
-// GetUserGroupRole provides a mock function with given fields: ctx, userId, groupId
-func (_m *Auth) GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (group.GroupRole, error) {
-	ret := _m.Called(ctx, userId, groupId)
+// GetUserGroupRole provides a mock function with given fields: ctx, userID, groupID
+func (_m *Auth) GetUserGroupRole(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (group.GroupRole, error) {
+	ret := _m.Called(ctx, userID, groupID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetUserGroupRole")
@@ -55,16 +55,16 @@ func (_m *Auth) GetUserGroupRole(ctx context.Context, userId uuid.UUID, groupId 
 	var r0 group.GroupRole
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (group.GroupRole, error)); ok {
-		return rf(ctx, userId, groupId)
+		return rf(ctx, userID, groupID)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) group.GroupRole); ok {
-		r0 = rf(ctx, userId, groupId)
+		r0 = rf(ctx, userID, groupID)
 	} else {
 		r0 = ret.Get(0).(group.GroupRole)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
-		r1 = rf(ctx, userId, groupId)
+		r1 = rf(ctx, userID, groupID)
 	} else {
 		r1 = ret.Error(1)
 	}

@@ -24,14 +24,14 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-func (s *Service) GetSettingByUserId(ctx context.Context, userId uuid.UUID) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetSettingByUserId")
+func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetSettingByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	setting, err := s.query.GetSetting(ctx, userId)
+	setting, err := s.query.GetSetting(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userId.String(), logger, "get setting by user id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
 		return Setting{}, err
 	}
@@ -39,14 +39,14 @@ func (s *Service) GetSettingByUserId(ctx context.Context, userId uuid.UUID) (Set
 	return setting, nil
 }
 
-func (s *Service) UpdateSetting(ctx context.Context, userId uuid.UUID, setting Setting) (Setting, error) {
+func (s *Service) UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userId.String(), logger, "update setting")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "update setting")
 		span.RecordError(err)
 		return Setting{}, err
 	}
@@ -54,14 +54,14 @@ func (s *Service) UpdateSetting(ctx context.Context, userId uuid.UUID, setting S
 	return updatedSetting, nil
 }
 
-func (s *Service) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([]PublicKey, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeysByUserId")
+func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeysByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	publicKeys, err := s.query.GetPublicKeys(ctx, userId)
+	publicKeys, err := s.query.GetPublicKeys(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", userId.String(), logger, "get public keys by user id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", userID.String(), logger, "get public keys by user id")
 		span.RecordError(err)
 		return nil, err
 	}
@@ -69,8 +69,8 @@ func (s *Service) GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) (
 	return publicKeys, err
 }
 
-func (s *Service) GetPublicKeyById(ctx context.Context, id uuid.UUID) (PublicKey, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeyById")
+func (s *Service) GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeyByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
