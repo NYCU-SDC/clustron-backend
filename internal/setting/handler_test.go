@@ -124,7 +124,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
-				Id: publicKey.ID.String(),
+				ID: publicKey.ID.String(),
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -136,7 +136,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				Role:     pgtype.Text{String: "user"},
 			},
 			body: setting.DeletePublicKeyRequest{
-				Id: publicKey.ID.String(),
+				ID: publicKey.ID.String(),
 			},
 			expectedStatus: http.StatusNotFound,
 		},
@@ -148,7 +148,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 	store := mocks.NewStore(t)
-	store.On("GetPublicKeyById", mock.Anything, publicKey.ID).Return(publicKey, nil)
+	store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
 	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
 
 	h := setting.NewHandler(validator.New(), logger, store)
