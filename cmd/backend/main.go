@@ -3,6 +3,7 @@ package main
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
+	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/trace"
@@ -110,10 +111,12 @@ func main() {
 	// Service
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	//settingService := setting.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
+	//settingHandler := setting.NewHandler(validator, logger, settingService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -121,8 +124,11 @@ func main() {
 	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
 
 	// Auth Middleware
-	//jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
-	//authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	enforcer := casbin.NewEnforcer(logger, userService)
+	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
+	roleMiddleware := auth.NewMiddleware(logger, enforcer)
+	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	authMiddleware = authMiddleware.Append(roleMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()

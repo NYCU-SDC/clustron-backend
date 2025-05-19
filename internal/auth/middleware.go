@@ -1,9 +1,10 @@
 package auth
 
 import (
+	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/jwt"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
-	"github.com/casbin/casbin/v2"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"net/http"
@@ -15,16 +16,16 @@ type Middleware struct {
 	enforcer *casbin.Enforcer
 }
 
-func NewMiddleware(logger *zap.Logger, tracer trace.Tracer, enforcer *casbin.Enforcer) *Middleware {
+func NewMiddleware(logger *zap.Logger, enforcer *casbin.Enforcer) *Middleware {
 	return &Middleware{
 		logger:   logger,
-		tracer:   tracer,
+		tracer:   otel.Tracer("auth/middleware"),
 		enforcer: enforcer,
 	}
 }
 
-func (m *Middleware) HandlerFunc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) HandlerFunc(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		traceCtx, span := m.tracer.Start(r.Context(), "AuthMiddleware")
 		defer span.End()
 		logger := logutil.WithContext(traceCtx, m.logger)
@@ -54,5 +55,5 @@ func (m *Middleware) HandlerFunc(next http.Handler) http.Handler {
 
 		// Call the next handler
 		next.ServeHTTP(w, r)
-	})
+	}
 }

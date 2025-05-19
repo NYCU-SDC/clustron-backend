@@ -49,3 +49,7 @@ func NewEnforcer(logger *zap.Logger, userStore UserStore) *Enforcer {
 		enforcer: e,
 	}
 }
+
+func (e *Enforcer) Enforce(userID string, obj string, act string) (bool, error) {
+	return e.enforcer.Enforce(userID, obj, act)
+}
