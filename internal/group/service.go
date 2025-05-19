@@ -561,3 +561,20 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 
 	return member, nil
 }
+
+func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "RemoveGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.RemoveGroupMember(ctx, RemoveGroupMemberParams{
+		GroupID: groupId,
+		UserID:  userId,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to remove group member")
+	}
+
+	return nil
+}
