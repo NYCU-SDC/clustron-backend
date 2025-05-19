@@ -9,6 +9,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Group struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type GroupRole struct {
+	ID          uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+type Membership struct {
+	UserID    uuid.UUID
+	GroupID   uuid.UUID
+	RoleID    uuid.UUID
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type PublicKey struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -30,12 +53,10 @@ type Setting struct {
 }
 
 type User struct {
-	ID         uuid.UUID
-	Username   string
-	Email      string
-	Role       pgtype.Text
-	Department pgtype.Text
-	StudentID  pgtype.Text
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID        uuid.UUID
+	Email     string
+	Role      string
+	StudentID pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
