@@ -30,11 +30,12 @@ type Setting struct {
 }
 
 type User struct {
-	ID        uuid.UUID
-	Username  string
-	Email     string
-	Role      string
-	StudentID pgtype.Text
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID         uuid.UUID
+	Username   string
+	Email      string
+	Role       pgtype.Text
+	Department pgtype.Text
+	StudentID  pgtype.Text
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }

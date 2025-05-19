@@ -66,15 +66,13 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 	jwtID := uuid.New()
 
 	id := user.ID
-	username := user.Username
 	email := user.Email
 	role := "user"
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		ID:       id,
-		Username: username,
-		Email:    email,
-		Role:     role,
+		ID:    id,
+		Email: email,
+		Role:  role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "Clustron",
 			Subject:   id.String(),
@@ -87,11 +85,11 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 
 	tokenString, err := token.SignedString([]byte(s.secret))
 	if err != nil {
-		logger.Error("Failed to sign token", zap.Error(err), zap.String("id", id.String()), zap.String("username", username), zap.String("role", role))
+		logger.Error("Failed to sign token", zap.Error(err), zap.String("id", id.String()), zap.String("role", role))
 		return "", err
 	}
 
-	logger.Debug("Generated new JWT token", zap.String("id", id.String()), zap.String("username", username), zap.String("role", role))
+	logger.Debug("Generated new JWT token", zap.String("id", id.String()), zap.String("role", role))
 
 	return tokenString, nil
 }

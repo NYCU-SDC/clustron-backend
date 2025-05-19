@@ -13,7 +13,7 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (username, email, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, username, email, role, student_id, created_at, updated_at
+INSERT INTO users (username, email, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, username, email, role, department, student_id, created_at, updated_at
 `
 
 type CreateParams struct {
@@ -30,6 +30,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 		&i.Username,
 		&i.Email,
 		&i.Role,
+		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -63,7 +64,7 @@ func (q *Queries) ExistsByEmail(ctx context.Context, email string) (bool, error)
 }
 
 const getByEmail = `-- name: GetByEmail :one
-SELECT id, username, email, role, student_id, created_at, updated_at FROM users WHERE email = $1
+SELECT id, username, email, role, department, student_id, created_at, updated_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
@@ -74,6 +75,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 		&i.Username,
 		&i.Email,
 		&i.Role,
+		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -82,7 +84,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, username, email, role, student_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, username, email, role, department, student_id, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -93,6 +95,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Username,
 		&i.Email,
 		&i.Role,
+		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -100,19 +103,8 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getRoleByID = `-- name: GetRoleByID :one
-SELECT role FROM users WHERE id = $1
-`
-
-func (q *Queries) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getRoleByID, id)
-	var role string
-	err := row.Scan(&role)
-	return role, err
-}
-
 const updateName = `-- name: UpdateName :one
-UPDATE users SET username = $2, updated_at = now() WHERE id = $1 RETURNING id, username, email, role, student_id, created_at, updated_at
+UPDATE users SET username = $2, updated_at = now() WHERE id = $1 RETURNING id, username, email, role, department, student_id, created_at, updated_at
 `
 
 type UpdateNameParams struct {
@@ -128,6 +120,7 @@ func (q *Queries) UpdateName(ctx context.Context, arg UpdateNameParams) (User, e
 		&i.Username,
 		&i.Email,
 		&i.Role,
+		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
