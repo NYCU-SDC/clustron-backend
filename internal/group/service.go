@@ -538,28 +538,38 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var userId uuid.UUID
-	var err error
+	// map role to access level
+	accessLevel, ok := DefaultRoleToAccessLevel[DefaultRole(role)]
+	if !ok {
+		span.RecordError(fmt.Errorf("invalid role: %s", role))
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
+			fmt.Errorf("invalid role: %s", role), "group_role", "role", role, logger, "invalid role")
+	}
 
+	// create group_role
+	groupRole, err := s.queries.CreateRole(ctx, CreateRoleParams{
+		Role:        pgtype.Text{String: role, Valid: true},
+		AccessLevel: string(accessLevel),
+	})
+	if err != nil {
+		span.RecordError(err)
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role, logger, "invalid role")
+	}
+
+	// get user id by email or student id
+	var userId uuid.UUID
 	if strings.Contains(userIdentifier, "@") {
 		userId, err = s.userStore.GetIdByEmail(ctx, userIdentifier)
 	} else {
 		userId, err = s.userStore.GetIdByStudentId(ctx, userIdentifier)
 	}
 
-	// user does not exist, adding to the pending_group_members table
+	// user not registered, adding to the pending_group_members table
 	if err != nil {
-		roleID, err := uuid.Parse(role)
-		if err != nil {
-			span.RecordError(fmt.Errorf("invalid role id: %s", role))
-			return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
-				fmt.Errorf("invalid role id: %s", role), "pending_group_members", "role_id", role, logger, "invalid role id")
-		}
-
 		_, err = s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
 			UserIdentifier: userIdentifier,
 			GroupID:        groupId,
-			RoleID:         roleID,
+			RoleID:         groupRole.ID,
 		})
 		if err != nil {
 			span.RecordError(err)
@@ -570,23 +580,6 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 			)
 		}
 		return Membership{}, nil
-	}
-
-	// map role to access level
-	accessLevel, ok := DefaultRoleToAccessLevel[DefaultRole(role)]
-	if !ok {
-		span.RecordError(fmt.Errorf("invalid role: %s", role))
-		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
-			fmt.Errorf("invalid role: %s", role), "group_role", "role", role, logger, "invalid role")
-	}
-
-	groupRole, err := s.queries.CreateRole(ctx, CreateRoleParams{
-		Role:        pgtype.Text{String: role, Valid: true},
-		AccessLevel: string(accessLevel),
-	})
-	if err != nil {
-		span.RecordError(err)
-		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role, logger, "invalid role")
 	}
 
 	// add member to group
