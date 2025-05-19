@@ -498,3 +498,66 @@ func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, use
 
 	return roleResponse, roleType, nil
 }
+
+func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role string) (Membership, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var userId uuid.UUID
+	var err error
+
+	if strings.Contains(userIdentifier, "@") {
+		userId, err = s.userStore.GetIdByEmail(ctx, userIdentifier)
+	} else {
+		userId, err = s.userStore.GetIdByStudentId(ctx, userIdentifier)
+	}
+
+	// user does not exist, adding to pending_group_members table
+	if err != nil {
+		_, err := s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
+			UserIdentifier: userIdentifier,
+			GroupID:        groupId,
+			Role:           role,
+		})
+		if err != nil {
+			span.RecordError(err)
+			return Membership{}, databaseutil.WrapDBError(
+				err,
+				logger,
+				"failed to add pending member",
+			)
+		}
+		return Membership{}, nil
+	}
+
+	// map role to access level
+	accessLevel, ok := DefaultRoleToAccessLevel[DefaultRole(role)]
+	if !ok {
+		span.RecordError(fmt.Errorf("invalid role: %s", role))
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
+			fmt.Errorf("invalid role: %s", role), "group_role", "role", role, logger, "invalid role")
+	}
+
+	groupRole, err := s.queries.CreateRole(ctx, CreateRoleParams{
+		Role:        pgtype.Text{String: role, Valid: true},
+		AccessLevel: string(accessLevel),
+	})
+	if err != nil {
+		span.RecordError(err)
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role, logger, "invalid role")
+	}
+
+	// add member to group
+	member, err := s.queries.AddGroupMember(ctx, AddGroupMemberParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  groupRole.ID,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return Membership{}, databaseutil.WrapDBError(err, logger, "failed to add member")
+	}
+
+	return member, nil
+}
