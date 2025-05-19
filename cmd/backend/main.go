@@ -130,7 +130,7 @@ func main() {
 	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
 
 	// Auth Middleware
-	enforcer := casbin.NewEnforcer(logger, userService)
+	enforcer := casbin.NewEnforcer(logger, cfg)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
 	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
 	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)

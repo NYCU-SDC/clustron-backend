@@ -5,3 +5,5 @@ google_oauth_client_id:
 google_oauth_client_secret:
 nycu_oauth_client_id:
 nycu_oauth_client_secret:
+casbin_model_source:
+casbin_policy_source:

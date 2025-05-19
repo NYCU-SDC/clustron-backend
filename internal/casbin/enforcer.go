@@ -1,6 +1,7 @@
 package casbin
 
 import (
+	"clustron-backend/internal/config"
 	"context"
 	"github.com/casbin/casbin/v2"
 	"github.com/google/uuid"
@@ -12,20 +13,18 @@ type UserStore interface {
 }
 
 type Enforcer struct {
-	logger   *zap.Logger
 	enforcer *casbin.Enforcer
 }
 
-func NewEnforcer(logger *zap.Logger, userStore UserStore) *Enforcer {
+func NewEnforcer(logger *zap.Logger, config config.Config) *Enforcer {
 	// Create a new enforcer with the model and adapter
-	e, err := casbin.NewEnforcer("internal/casbin/model.conf", "internal/casbin/full_policy.csv")
+	e, err := casbin.NewEnforcer(config.CasbinModelSource, config.CasbinPolicySource)
 	if err != nil {
 		logger.Fatal("Failed to create enforcer", zap.Error(err))
 		return nil
 	}
 
 	return &Enforcer{
-		logger:   logger,
 		enforcer: e,
 	}
 }
