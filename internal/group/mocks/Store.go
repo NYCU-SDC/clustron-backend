@@ -17,8 +17,8 @@ type Store struct {
 	mock.Mock
 }
 
-// ArchiveGroup provides a mock function with given fields: ctx, groupID
-func (_m *Store) ArchiveGroup(ctx context.Context, groupID uuid.UUID) (group.Group, error) {
+// Archive provides a mock function with given fields: ctx, groupID
+func (_m *Store) Archive(ctx context.Context, groupID uuid.UUID) (group.Group, error) {
 	ret := _m.Called(ctx, groupID)
 
 	if len(ret) == 0 {
@@ -45,8 +45,8 @@ func (_m *Store) ArchiveGroup(ctx context.Context, groupID uuid.UUID) (group.Gro
 	return r0, r1
 }
 
-// CreateGroup provides a mock function with given fields: ctx, _a1
-func (_m *Store) CreateGroup(ctx context.Context, _a1 group.CreateParams) (group.Group, error) {
+// Create provides a mock function with given fields: ctx, _a1
+func (_m *Store) Create(ctx context.Context, _a1 group.CreateParams) (group.Group, error) {
 	ret := _m.Called(ctx, _a1)
 
 	if len(ret) == 0 {
@@ -66,71 +66,6 @@ func (_m *Store) CreateGroup(ctx context.Context, _a1 group.CreateParams) (group
 
 	if rf, ok := ret.Get(1).(func(context.Context, group.CreateParams) error); ok {
 		r1 = rf(ctx, _a1)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// GetAllWithUserScope provides a mock function with given fields: ctx, user, page, size, sort, sortBy
-func (_m *Store) ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]group.UserScope, int, error) {
-	ret := _m.Called(ctx, user, page, size, sort, sortBy)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetAllWithUserScope")
-	}
-
-	var r0 []group.UserScope
-	var r1 int
-	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) ([]group.UserScope, int, error)); ok {
-		return rf(ctx, user, page, size, sort, sortBy)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) []group.UserScope); ok {
-		r0 = rf(ctx, user, page, size, sort, sortBy)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]group.UserScope)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, jwt.User, int, int, string, string) int); ok {
-		r1 = rf(ctx, user, page, size, sort, sortBy)
-	} else {
-		r1 = ret.Get(1).(int)
-	}
-
-	if rf, ok := ret.Get(2).(func(context.Context, jwt.User, int, int, string, string) error); ok {
-		r2 = rf(ctx, user, page, size, sort, sortBy)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
-}
-
-// GetByIDWithUserScope provides a mock function with given fields: ctx, user, groupID
-func (_m *Store) GetByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (group.UserScope, error) {
-	ret := _m.Called(ctx, user, groupID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListByIDWithUserScope")
-	}
-
-	var r0 group.UserScope
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) (group.UserScope, error)); ok {
-		return rf(ctx, user, groupID)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) group.UserScope); ok {
-		r0 = rf(ctx, user, groupID)
-	} else {
-		r0 = ret.Get(0).(group.UserScope)
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, jwt.User, uuid.UUID) error); ok {
-		r1 = rf(ctx, user, groupID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -167,23 +102,23 @@ func (_m *Store) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (group.
 }
 
 // GetUserGroupRoleType provides a mock function with given fields: ctx, userRole, userID, groupID
-func (_m *Store) GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (group.RoleResponse, string, error) {
+func (_m *Store) GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (group.Role, string, error) {
 	ret := _m.Called(ctx, userRole, userID, groupID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetUserGroupRoleType")
 	}
 
-	var r0 group.RoleResponse
+	var r0 group.Role
 	var r1 string
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) (group.RoleResponse, string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) (group.Role, string, error)); ok {
 		return rf(ctx, userRole, userID, groupID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) group.RoleResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) group.Role); ok {
 		r0 = rf(ctx, userRole, userID, groupID)
 	} else {
-		r0 = ret.Get(0).(group.RoleResponse)
+		r0 = ret.Get(0).(group.Role)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string, uuid.UUID, uuid.UUID) string); ok {
@@ -201,8 +136,73 @@ func (_m *Store) GetUserGroupRoleType(ctx context.Context, userRole string, user
 	return r0, r1, r2
 }
 
-// UnarchiveGroup provides a mock function with given fields: ctx, groupID
-func (_m *Store) UnarchiveGroup(ctx context.Context, groupID uuid.UUID) (group.Group, error) {
+// ListByIDWithUserScope provides a mock function with given fields: ctx, user, groupID
+func (_m *Store) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (group.UserScope, error) {
+	ret := _m.Called(ctx, user, groupID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByIDWithUserScope")
+	}
+
+	var r0 group.UserScope
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) (group.UserScope, error)); ok {
+		return rf(ctx, user, groupID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) group.UserScope); ok {
+		r0 = rf(ctx, user, groupID)
+	} else {
+		r0 = ret.Get(0).(group.UserScope)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, jwt.User, uuid.UUID) error); ok {
+		r1 = rf(ctx, user, groupID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListWithUserScope provides a mock function with given fields: ctx, user, page, size, sort, sortBy
+func (_m *Store) ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]group.UserScope, int, error) {
+	ret := _m.Called(ctx, user, page, size, sort, sortBy)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWithUserScope")
+	}
+
+	var r0 []group.UserScope
+	var r1 int
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) ([]group.UserScope, int, error)); ok {
+		return rf(ctx, user, page, size, sort, sortBy)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) []group.UserScope); ok {
+		r0 = rf(ctx, user, page, size, sort, sortBy)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]group.UserScope)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, jwt.User, int, int, string, string) int); ok {
+		r1 = rf(ctx, user, page, size, sort, sortBy)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, jwt.User, int, int, string, string) error); ok {
+		r2 = rf(ctx, user, page, size, sort, sortBy)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Unarchive provides a mock function with given fields: ctx, groupID
+func (_m *Store) Unarchive(ctx context.Context, groupID uuid.UUID) (group.Group, error) {
 	ret := _m.Called(ctx, groupID)
 
 	if len(ret) == 0 {
