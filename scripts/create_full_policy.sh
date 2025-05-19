@@ -49,6 +49,7 @@ head -n 1 "${CSV_FILES[0]}" > "$OUTPUT_FILE"
 
 # Append all CSV data (excluding header from each file)
 for CSV in "${CSV_FILES[@]}"; do
+    echo >> "$OUTPUT_FILE"
     tail -n +2 "$CSV" >> "$OUTPUT_FILE"
 done
 
