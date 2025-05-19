@@ -62,7 +62,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (RefreshToken, erro
 }
 
 const getUserByRefreshToken = `-- name: GetUserByRefreshToken :one
-SELECT u.id, u.username, u.email, u.role, u.department, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1
+SELECT u.id, u.username, u.email, u.role, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1
 `
 
 func (q *Queries) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {
@@ -73,7 +73,6 @@ func (q *Queries) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User
 		&i.Username,
 		&i.Email,
 		&i.Role,
-		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,

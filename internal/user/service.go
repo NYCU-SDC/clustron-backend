@@ -120,3 +120,18 @@ func (s *Service) FindOrCreate(ctx context.Context, username, email, studentID s
 
 	return jwtUser, nil
 }
+
+func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetRoleByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get role by id")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return role, nil
+}

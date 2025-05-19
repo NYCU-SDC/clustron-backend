@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/NYCU-SDC/clustron-backend/internal/jwt"
+	"clustron-backend/internal/jwt"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/casbin/casbin/v2"
 	"go.opentelemetry.io/otel/trace"
@@ -45,12 +45,12 @@ func (m *Middleware) HandlerFunc(next http.Handler) http.Handler {
 			return
 		}
 		if !ok {
-			logger.Warn("User does not have permission", zap.String("user_id", user.ID), zap.String("role", user.Role))
+			logger.Warn("User does not have permission", zap.String("user_id", user.ID.String()), zap.String("role", user.Role))
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 
-		m.logger.Info("Authenticated user", zap.String("user_id", user.ID), zap.String("role", user.Role))
+		m.logger.Info("Authenticated user", zap.String("user_id", user.ID.String()), zap.String("role", user.Role))
 
 		// Call the next handler
 		next.ServeHTTP(w, r)

@@ -55,7 +55,7 @@ type claims struct {
 }
 
 func (u User) HasRole(role string) bool {
-	return u.Role.String == role
+	return u.Role == role
 }
 
 func (s Service) New(ctx context.Context, user User) (string, error) {
@@ -68,7 +68,7 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 	id := user.ID
 	username := user.Username
 	email := user.Email
-	role := user.Role.String
+	role := "user"
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		ID:       id,
@@ -146,14 +146,14 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 
 	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.Username), zap.String("role", claims.Role))
 
-	jwtUser, err := s.userStore.GetByEmail(ctx, claims.Email)
+	user, err := s.userStore.GetByEmail(ctx, claims.Email)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "user", "email", claims.Email, logger, "get user by email")
 		span.RecordError(err)
 		return User{}, err
 	}
 
-	return User(jwtUser), nil
+	return User(user), nil
 }
 
 func (s Service) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {
