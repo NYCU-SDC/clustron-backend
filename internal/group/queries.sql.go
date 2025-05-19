@@ -93,17 +93,6 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (Group, error) {
 	return i, err
 }
 
-const getAccessLevelByRoleID = `-- name: GetAccessLevelByRoleID :one
-SELECT access_level FROM group_role WHERE id = $1
-`
-
-func (q *Queries) GetAccessLevelByRoleID(ctx context.Context, id uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getAccessLevelByRoleID, id)
-	var access_level string
-	err := row.Scan(&access_level)
-	return access_level, err
-}
-
 const getGroupRoleByID = `-- name: GetGroupRoleByID :one
 SELECT id, role, access_level FROM group_role WHERE id = $1
 `
@@ -229,146 +218,6 @@ func (q *Queries) ListAscPaged(ctx context.Context, arg ListAscPagedParams) ([]G
 	return items, nil
 }
 
-const listByUserAscPaged = `-- name: ListByUserAscPaged :many
-SELECT
-    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
-    gr.id, gr.role, gr.access_level
-FROM
-    groups AS g
-JOIN
-    memberships AS m ON m.group_id = g.id
-JOIN
-    group_role AS gr ON gr.id = m.role_id
-WHERE
-    m.user_id = $1
-ORDER BY
-    $2::text ASC LIMIT $4 OFFSET $3
-`
-
-type ListByUserAscPagedParams struct {
-	UserID uuid.UUID
-	Sortby string
-	Page   int32
-	Size   int32
-}
-
-type ListByUserAscPagedRow struct {
-	ID          uuid.UUID
-	Title       string
-	Description pgtype.Text
-	IsArchived  pgtype.Bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	ID_2        uuid.UUID
-	Role        pgtype.Text
-	AccessLevel string
-}
-
-func (q *Queries) ListByUserAscPaged(ctx context.Context, arg ListByUserAscPagedParams) ([]ListByUserAscPagedRow, error) {
-	rows, err := q.db.Query(ctx, listByUserAscPaged,
-		arg.UserID,
-		arg.Sortby,
-		arg.Page,
-		arg.Size,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListByUserAscPagedRow
-	for rows.Next() {
-		var i ListByUserAscPagedRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.IsArchived,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.ID_2,
-			&i.Role,
-			&i.AccessLevel,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listByUserDescPaged = `-- name: ListByUserDescPaged :many
-SELECT
-    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
-    gr.id, gr.role, gr.access_level
-FROM
-    groups AS g
-JOIN
-    memberships AS m ON m.group_id = g.id
-JOIN
-    group_role AS gr ON gr.id = m.role_id
-WHERE
-    m.user_id = $1
-ORDER BY
-    $2::text DESC LIMIT $4 OFFSET $3
-`
-
-type ListByUserDescPagedParams struct {
-	UserID uuid.UUID
-	Sortby string
-	Page   int32
-	Size   int32
-}
-
-type ListByUserDescPagedRow struct {
-	ID          uuid.UUID
-	Title       string
-	Description pgtype.Text
-	IsArchived  pgtype.Bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	ID_2        uuid.UUID
-	Role        pgtype.Text
-	AccessLevel string
-}
-
-func (q *Queries) ListByUserDescPaged(ctx context.Context, arg ListByUserDescPagedParams) ([]ListByUserDescPagedRow, error) {
-	rows, err := q.db.Query(ctx, listByUserDescPaged,
-		arg.UserID,
-		arg.Sortby,
-		arg.Page,
-		arg.Size,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListByUserDescPagedRow
-	for rows.Next() {
-		var i ListByUserDescPagedRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.IsArchived,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.ID_2,
-			&i.Role,
-			&i.AccessLevel,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listDescPaged = `-- name: ListDescPaged :many
 SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text DESC LIMIT $3 OFFSET $2
 `
@@ -395,6 +244,146 @@ func (q *Queries) ListDescPaged(ctx context.Context, arg ListDescPagedParams) ([
 			&i.IsArchived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIfMemberAscPaged = `-- name: ListIfMemberAscPaged :many
+SELECT
+    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    gr.id, gr.role, gr.access_level
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    $2::text ASC LIMIT $4 OFFSET $3
+`
+
+type ListIfMemberAscPagedParams struct {
+	UserID uuid.UUID
+	Sortby string
+	Page   int32
+	Size   int32
+}
+
+type ListIfMemberAscPagedRow struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ID_2        uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+func (q *Queries) ListIfMemberAscPaged(ctx context.Context, arg ListIfMemberAscPagedParams) ([]ListIfMemberAscPagedRow, error) {
+	rows, err := q.db.Query(ctx, listIfMemberAscPaged,
+		arg.UserID,
+		arg.Sortby,
+		arg.Page,
+		arg.Size,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIfMemberAscPagedRow
+	for rows.Next() {
+		var i ListIfMemberAscPagedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ID_2,
+			&i.Role,
+			&i.AccessLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIfMemberDescPaged = `-- name: ListIfMemberDescPaged :many
+SELECT
+    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    gr.id, gr.role, gr.access_level
+FROM
+    groups AS g
+JOIN
+    memberships AS m ON m.group_id = g.id
+JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.user_id = $1
+ORDER BY
+    $2::text DESC LIMIT $4 OFFSET $3
+`
+
+type ListIfMemberDescPagedParams struct {
+	UserID uuid.UUID
+	Sortby string
+	Page   int32
+	Size   int32
+}
+
+type ListIfMemberDescPagedRow struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ID_2        uuid.UUID
+	Role        pgtype.Text
+	AccessLevel string
+}
+
+func (q *Queries) ListIfMemberDescPaged(ctx context.Context, arg ListIfMemberDescPagedParams) ([]ListIfMemberDescPagedRow, error) {
+	rows, err := q.db.Query(ctx, listIfMemberDescPaged,
+		arg.UserID,
+		arg.Sortby,
+		arg.Page,
+		arg.Size,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIfMemberDescPagedRow
+	for rows.Next() {
+		var i ListIfMemberDescPagedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ID_2,
+			&i.Role,
+			&i.AccessLevel,
 		); err != nil {
 			return nil, err
 		}

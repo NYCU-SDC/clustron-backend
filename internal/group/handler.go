@@ -126,7 +126,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
 		groupResponse[i].Me.Type = group.Me.Type
-		groupResponse[i].Me.Role = group.Me.Role
+		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
 	}
 
 	pageResponse := h.paginationFactory.NewResponse(groupResponse, totalCount, pageRequest.Page, pageRequest.Size)
@@ -173,7 +173,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = userScopeResponse.Me.Type
-	groupResponse.Me.Role = userScopeResponse.Me.Role
+	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }

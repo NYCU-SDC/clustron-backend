@@ -43,7 +43,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 				Description: "Test Description",
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("CreateGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Create", mock.Anything, mock.Anything).Return(group.Group{
 					ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
@@ -69,7 +69,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 				Description: "Test Description",
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("CreateGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Create", mock.Anything, mock.Anything).Return(group.Group{
 					ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
@@ -184,13 +184,13 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAllWithUserScope", mock.Anything, jwt.User{
+				store.On("ListWithUserScope", mock.Anything, jwt.User{
 					ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
 					Role: pgtype.Text{String: "admin", Valid: true},
 				}, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
-				//store.On("GetAll", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
+				//store.On("ListPaged", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
 				//store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
-				//store.On("GetUserAllMembership", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9")).Return([]group.GetUserAllMembershipRow{}, nil)
+				//store.On("ListUserMemberships", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9")).Return([]group.GetUserAllMembershipRow{}, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantResult: []string{
@@ -206,9 +206,9 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAllByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
+				store.On("listByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
 					[]group.GroupRole{groupRoles[0], groupRoles[0]}, nil)
-				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3")).Return(2, nil)
+				store.On("CountByUser", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3")).Return(2, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantResult: []string{
@@ -223,9 +223,9 @@ func TestHandler_GetAllHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetAllByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
+				store.On("listByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
 					[]group.GroupRole{groupRoles[1]}, nil)
-				store.On("GetUserGroupsCount", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2")).Return(1, nil)
+				store.On("CountByUser", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2")).Return(1, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantResult: []string{
@@ -284,7 +284,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 				Role: pgtype.Text{String: "admin", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("GetByID", mock.Anything, groupID).Return(group.Group{
+				store.On("Get", mock.Anything, groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -301,7 +301,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.Group{
+				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -320,7 +320,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 				Role: pgtype.Text{String: "organizer", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"), groupID).Return(group.Group{},
+				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"), groupID).Return(group.Group{},
 					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e8", groupID), zap.NewExample(), "get membership"))
 			},
 
@@ -333,7 +333,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.Group{
+				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -352,7 +352,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			setupMocks: func(store *mocks.Store) {
-				store.On("FindUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(group.Group{},
+				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(group.Group{},
 					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", "(user_id, group_id)", fmt.Sprintf("(%s, %s)", "a9e0fd99-10de-4ad1-b519-e8430ed089e5", groupID), zap.NewExample(), "get membership"))
 			},
 			wantStatus: http.StatusNotFound,
@@ -405,7 +405,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 					group.GroupRole{},
 					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
 				)
-				store.On("ArchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Archive", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -428,7 +428,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 						AccessLevel: string(group.AccessLevelOwner),
 					}, nil,
 				)
-				store.On("ArchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Archive", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -519,7 +519,7 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 					group.GroupRole{},
 					databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), "a9e0fd99-10de-4ad1-b519-e8430ed089e9"), zap.NewExample(), "get membership"),
 				)
-				store.On("UnarchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Unarchive", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)
@@ -542,7 +542,7 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 						AccessLevel: string(group.AccessLevelOwner),
 					},
 					nil)
-				store.On("UnarchiveGroup", mock.Anything, mock.Anything).Return(group.Group{
+				store.On("Unarchive", mock.Anything, mock.Anything).Return(group.Group{
 					Title:       "Test Group",
 					Description: pgtype.Text{String: "Test Description", Valid: true},
 				}, nil)

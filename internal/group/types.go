@@ -1,5 +1,7 @@
 package group
 
+import "github.com/google/uuid"
+
 type DefaultRole string
 
 type AccessLevel string
@@ -16,3 +18,25 @@ const (
 	AccessLevelAdmin AccessLevel = "GROUP_ADMIN"
 	AccessLevelUser  AccessLevel = "USER"
 )
+
+type UserScope struct {
+	Group
+	Me struct {
+		Type string // will be "membership" or "adminOverride"
+		Role Role
+	}
+}
+
+type Role struct {
+	ID          uuid.UUID
+	Role        string
+	AccessLevel string
+}
+
+func (r Role) ToResponse() RoleResponse {
+	return RoleResponse{
+		ID:          r.ID.String(),
+		Role:        r.Role,
+		AccessLevel: r.AccessLevel,
+	}
+}

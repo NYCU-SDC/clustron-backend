@@ -10,7 +10,7 @@ SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
 -- name: ListDescPaged :many
 SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
 
--- name: ListByUserAscPaged :many
+-- name: ListIfMemberAscPaged :many
 SELECT
     g.*,
     gr.*
@@ -25,7 +25,7 @@ WHERE
 ORDER BY
     @SortBy::text ASC LIMIT @Size OFFSET @page;
 
--- name: ListByUserDescPaged :many
+-- name: ListIfMemberDescPaged :many
 SELECT
     g.*,
     gr.*
