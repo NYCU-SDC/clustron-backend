@@ -141,7 +141,7 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	id, err := s.queries.GetIdByStudentId(traceCtx, studentID)
+	id, err := s.queries.GetIdByStudentId(traceCtx, pgtype.Text{String: studentID, Valid: studentID != ""})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user id by student id")
 		span.RecordError(err)

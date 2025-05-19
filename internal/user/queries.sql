@@ -17,3 +17,9 @@ UPDATE users SET username = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;
+
+-- name: GetIdByEmail :one
+SELECT id FROM users WHERE email = $1;
+
+-- name: GetIdByStudentId :one
+SELECT id FROM users WHERE student_id = $1;
