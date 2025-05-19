@@ -88,9 +88,8 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Username: "testuser",
-				Role:     pgtype.Text{String: "user"},
+				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Role: pgtype.Text{String: "user", Valid: true},
 			}))
 
 			w := httptest.NewRecorder()
