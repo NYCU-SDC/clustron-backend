@@ -13,4 +13,19 @@ p, organizer, /api/groups/{groupId}/archive, POST
 p, admin, /api/groups/{groupId}/archive, POST
 
 p, admin, /api/groups/{groupId}/unarchive, POST
-p, organizer, /api/groups/{groupId}/unarchive, POST
+p, organizer, /api/groups/{groupId}/unarchive, POSTp, organizer, /api/settings, GET
+p, admin /api/settings, GET
+
+p, user, /api/settings, PUT
+p, organizer, /api/settings, PUT
+p, admin, /api/settings, PUT
+
+p, user, /api/publickey, GET
+p, organizer, /api/publickey, GET
+p, admin, /api/publickey, GET
+
+p, user, /api/publickey, POST
+p, organizer, /api/publickey, POST
+p, admin, /api/publickey, POST
+
+p, admin, /api/publickey, DELETE
