@@ -120,3 +120,33 @@ func (s *Service) FindOrCreate(ctx context.Context, username, email, studentID s
 
 	return jwtUser, nil
 }
+
+func (s *Service) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetIdByEmail")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id, err := s.queries.GetIdByEmail(traceCtx, email)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user id by email")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return id, nil
+}
+
+func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetIdByStudentId")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id, err := s.queries.GetIdByStudentId(traceCtx, studentID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user id by student id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return id, nil
+}
