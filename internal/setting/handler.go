@@ -181,6 +181,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	if short {
 		for i, publicKey := range publicKeys {
 			response[i] = PublicKeyResponse{
+				ID:        publicKey.ID.String(),
 				Title:     publicKey.Title,
 				PublicKey: publicKey.PublicKey[:10],
 			}

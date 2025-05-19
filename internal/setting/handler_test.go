@@ -217,7 +217,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
 		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		Username: "testuser",
+		Username: pgtype.Text{String: "testuser", Valid: true},
 	}, nil)
 
 	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
