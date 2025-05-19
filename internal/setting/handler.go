@@ -20,7 +20,7 @@ import (
 
 type UpdateSettingRequest struct {
 	Username      string `json:"username" validate:"required"`
-	LinuxUsername string `json:"linux_username" validate:"excludesall= \t\r\n"`
+	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
 }
 
 type BasicSettingResponse struct {
@@ -54,11 +54,12 @@ type Store interface {
 }
 
 type Handler struct {
-	validator     *validator.Validate
 	logger        *zap.Logger
+	validator     *validator.Validate
 	tracer        trace.Tracer
-	settingStore  Store
 	problemWriter *problem.HttpWriter
+
+	settingStore Store
 }
 
 func validatePublicKey(key string) error {
@@ -69,13 +70,13 @@ func validatePublicKey(key string) error {
 	return nil
 }
 
-func NewHandler(v *validator.Validate, logger *zap.Logger, store Store) Handler {
+func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store) Handler {
 	return Handler{
-		validator:     v,
 		logger:        logger,
+		validator:     v,
 		tracer:        otel.Tracer("setting/handler"),
+		problemWriter: problemWriter,
 		settingStore:  store,
-		problemWriter: problem.New(),
 	}
 }
 
@@ -100,7 +101,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := BasicSettingResponse{
-		Username:      setting.Username,
+		Username:      setting.Username.String,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -129,7 +130,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 
 	setting := Setting{
 		UserID:        userID,
-		Username:      request.Username,
+		Username:      pgtype.Text{String: request.Username, Valid: true},
 		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
 	}
 
@@ -140,7 +141,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := BasicSettingResponse{
-		Username:      updatedSetting.Username,
+		Username:      updatedSetting.Username.String,
 		LinuxUsername: updatedSetting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -180,6 +181,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	if short {
 		for i, publicKey := range publicKeys {
 			response[i] = PublicKeyResponse{
+				ID:        publicKey.ID.String(),
 				Title:     publicKey.Title,
 				PublicKey: publicKey.PublicKey[:10],
 			}

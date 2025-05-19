@@ -34,6 +34,22 @@ func (q *Queries) AddPublicKey(ctx context.Context, arg AddPublicKeyParams) (Pub
 	return i, err
 }
 
+const createSetting = `-- name: CreateSetting :one
+INSERT INTO settings (user_id, username, linux_username) VALUES ($1, $2, '') RETURNING user_id, username, linux_username
+`
+
+type CreateSettingParams struct {
+	UserID   uuid.UUID
+	Username pgtype.Text
+}
+
+func (q *Queries) CreateSetting(ctx context.Context, arg CreateSettingParams) (Setting, error) {
+	row := q.db.QueryRow(ctx, createSetting, arg.UserID, arg.Username)
+	var i Setting
+	err := row.Scan(&i.UserID, &i.Username, &i.LinuxUsername)
+	return i, err
+}
+
 const deletePublicKey = `-- name: DeletePublicKey :exec
 DELETE FROM public_keys WHERE id = $1
 `
@@ -99,13 +115,24 @@ func (q *Queries) GetSetting(ctx context.Context, userID uuid.UUID) (Setting, er
 	return i, err
 }
 
+const settingExists = `-- name: SettingExists :one
+SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists
+`
+
+func (q *Queries) SettingExists(ctx context.Context, userID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, settingExists, userID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const updateSetting = `-- name: UpdateSetting :one
 UPDATE settings SET username = $2, linux_username = $3 WHERE user_id = $1 RETURNING user_id, username, linux_username
 `
 
 type UpdateSettingParams struct {
 	UserID        uuid.UUID
-	Username      string
+	Username      pgtype.Text
 	LinuxUsername pgtype.Text
 }
 
