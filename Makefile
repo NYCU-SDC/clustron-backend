@@ -12,21 +12,21 @@ prepare:
 		&& echo -e "==> $(BLUE) Successfully downloaded go dependencies$(NC)" \
 		|| (echo -e "==> $(RED) Failed to download go dependencies$(NC)" && exit 1)
 
-run: gen
+run:
 	@echo -e ":: $(GREEN)Starting backend...$(NC)"
 	@go build -o bin/backend cmd/backend/main.go && \
 		DEBUG=true ./bin/backend \
 		&& echo -e "==> $(BLUE)Successfully shout down backend$(NC)" \
 		|| (echo -e "==> $(RED)Backend failed to start $(NC)" && exit 1)
 
-build: gen
+build:
 	@echo -e ":: $(GREEN)Building backend...$(NC)"
 	@echo -e "  -> Building backend binary..."
 	@go build -o bin/backend cmd/backend/main.go && echo -e "==> $(BLUE)Build completed successfully$(NC)" || (echo -e "==> $(RED)Build failed$(NC)" && exit 1)
 
-test: gen
+test:
 	@echo -e ":: $(GREEN)Running tests...$(NC)"
-	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed&(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
+	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
 
 gen:
 	@echo -e ":: $(GREEN)Generating schema and code...$(NC)"

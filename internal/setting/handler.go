@@ -34,21 +34,21 @@ type AddPublicKeyRequest struct {
 }
 
 type DeletePublicKeyRequest struct {
-	Id string `json:"id" validate:"required,uuid"`
+	ID string `json:"id" validate:"required,uuid"`
 }
 
 type PublicKeyResponse struct {
-	Id        string `json:"id"`
+	ID        string `json:"id"`
 	Title     string `json:"title"`
 	PublicKey string `json:"publicLey"`
 }
 
 //go:generate mockery --name Store
 type Store interface {
-	GetSettingByUserId(ctx context.Context, userId uuid.UUID) (Setting, error)
-	UpdateSetting(ctx context.Context, userId uuid.UUID, setting Setting) (Setting, error)
-	GetPublicKeysByUserId(ctx context.Context, userId uuid.UUID) ([]PublicKey, error)
-	GetPublicKeyById(ctx context.Context, id uuid.UUID) (PublicKey, error)
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error)
+	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
+	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
+	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 }
@@ -92,9 +92,9 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userId := user.ID
+	userID := user.ID
 
-	setting, err := h.settingStore.GetSettingByUserId(traceCtx, userId)
+	setting, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -119,7 +119,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userId := user.ID
+	userID := user.ID
 
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -129,12 +129,12 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	setting := Setting{
-		UserID:        userId,
+		UserID:        userID,
 		Username:      request.Username,
 		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
 	}
 
-	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, userId, setting)
+	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, userID, setting)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -159,9 +159,9 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userId := user.ID
+	userID := user.ID
 
-	publicKeys, err := h.settingStore.GetPublicKeysByUserId(traceCtx, userId)
+	publicKeys, err := h.settingStore.GetPublicKeysByUserID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -211,7 +211,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userId := user.ID
+	userID := user.ID
 
 	var request AddPublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -226,7 +226,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	publicKey := AddPublicKeyParams{
-		UserID:    userId,
+		UserID:    userID,
 		Title:     request.Title,
 		PublicKey: request.PublicKey,
 	}
@@ -256,7 +256,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userId := user.ID
+	userID := user.ID
 
 	var request DeletePublicKeyRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -264,25 +264,25 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	publicKeyId, err := uuid.Parse(request.Id)
+	publicKeyID, err := uuid.Parse(request.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Check if the public key belongs to the user
-	publicKey, err := h.settingStore.GetPublicKeyById(traceCtx, publicKeyId)
+	publicKey, err := h.settingStore.GetPublicKeyByID(traceCtx, publicKeyID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	if publicKey.UserID != userId {
-		logger.Warn("Public key id does not match user id", zap.String("userId", userId.String()), zap.String("publicKeyId", request.Id))
+	if publicKey.UserID != userID {
+		logger.Warn("Public key id does not match user id", zap.String("userID", userID.String()), zap.String("publicKeyID", request.ID))
 		handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
 		return
 	}
 
-	err = h.settingStore.DeletePublicKey(traceCtx, publicKeyId)
+	err = h.settingStore.DeletePublicKey(traceCtx, publicKeyID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

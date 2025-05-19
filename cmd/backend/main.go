@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/group"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
@@ -112,11 +113,13 @@ func main() {
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
+	groupService := group.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
 
 	// Basic Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -124,8 +127,8 @@ func main() {
 	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
 
 	// Auth Middleware
-	//jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
-	//authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
+	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
@@ -139,6 +142,12 @@ func main() {
 	mux.HandleFunc("GET /api/publickey", traced.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", traced.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
 	mux.HandleFunc("DELETE /api/publickey", traced.HandlerFunc(settingHandler.DeletePublicKeyHandler))
+
+	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
+	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
+	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
