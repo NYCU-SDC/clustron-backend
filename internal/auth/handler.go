@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth/oauthProvider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"encoding/base64"
@@ -14,6 +15,8 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -33,6 +36,10 @@ type UserStore interface {
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
 	FindOrCreate(ctx context.Context, username string, email string, studentID string) (user.User, error)
+}
+
+type SettingStore interface {
+	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, username pgtype.Text) (setting.Setting, error)
 }
 
 type OAuthProvider interface {
@@ -57,9 +64,10 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	userStore UserStore
-	jwtIssuer JWTIssuer
-	provider  map[string]OAuthProvider
+	userStore    UserStore
+	jwtIssuer    JWTIssuer
+	settingStore SettingStore
+	provider     map[string]OAuthProvider
 }
 
 func NewHandler(
@@ -68,7 +76,8 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
-	jwtIssuer JWTIssuer) *Handler {
+	jwtIssuer JWTIssuer,
+	settingStore SettingStore) *Handler {
 
 	googleProvider := oauthProvider.NewGoogleConfig(
 		config.GoogleOauthClientID,
@@ -88,8 +97,9 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 
-		userStore: userStore,
-		jwtIssuer: jwtIssuer,
+		userStore:    userStore,
+		jwtIssuer:    jwtIssuer,
+		settingStore: settingStore,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
@@ -170,6 +180,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the user exists in the database, if not, create a new user
 	jwtUser, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name, userInfo.Email, userInfo.StudentID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Create a new setting for the user
+	_, err = h.settingStore.FindOrCreateSetting(traceCtx, jwtUser.ID, pgtype.Text{String: userInfo.Name, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

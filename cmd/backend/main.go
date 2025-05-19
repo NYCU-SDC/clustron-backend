@@ -116,7 +116,7 @@ func main() {
 	groupService := group.NewService(logger, dbPool)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
@@ -137,11 +137,11 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
 
-	mux.HandleFunc("GET /api/settings", traced.HandlerFunc(settingHandler.GetUserSettingHandler))
-	mux.HandleFunc("PUT /api/settings", traced.HandlerFunc(settingHandler.UpdateUserSettingHandler))
-	mux.HandleFunc("GET /api/publickey", traced.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
-	mux.HandleFunc("POST /api/publickey", traced.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
-	mux.HandleFunc("DELETE /api/publickey", traced.HandlerFunc(settingHandler.DeletePublicKeyHandler))
+	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
+	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
+	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
+	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))

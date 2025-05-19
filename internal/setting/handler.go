@@ -20,7 +20,7 @@ import (
 
 type UpdateSettingRequest struct {
 	Username      string `json:"username" validate:"required"`
-	LinuxUsername string `json:"linux_username" validate:"excludesall= \t\r\n"`
+	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
 }
 
 type BasicSettingResponse struct {
@@ -101,7 +101,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := BasicSettingResponse{
-		Username:      setting.Username,
+		Username:      setting.Username.String,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -130,7 +130,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 
 	setting := Setting{
 		UserID:        userID,
-		Username:      request.Username,
+		Username:      pgtype.Text{String: request.Username, Valid: true},
 		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
 	}
 
@@ -141,7 +141,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := BasicSettingResponse{
-		Username:      updatedSetting.Username,
+		Username:      updatedSetting.Username.String,
 		LinuxUsername: updatedSetting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
