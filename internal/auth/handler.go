@@ -29,10 +29,10 @@ type JWTIssuer interface {
 }
 
 type UserStore interface {
-	Create(ctx context.Context, username string, email string, studentID string) (user.User, error)
+	Create(ctx context.Context, email string, studentID string) (user.User, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
-	FindOrCreate(ctx context.Context, username string, email string, studentID string) (user.User, error)
+	FindOrCreate(ctx context.Context, email string, studentID string) (user.User, error)
 }
 
 type OAuthProvider interface {
@@ -169,7 +169,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user exists in the database, if not, create a new user
-	jwtUser, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name, userInfo.Email, userInfo.StudentID)
+	jwtUser, err := h.userStore.FindOrCreate(traceCtx, userInfo.Email, userInfo.StudentID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

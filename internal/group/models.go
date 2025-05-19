@@ -54,7 +54,6 @@ type Setting struct {
 
 type User struct {
 	ID         uuid.UUID
-	Username   string
 	Email      string
 	Role       pgtype.Text
 	Department pgtype.Text
