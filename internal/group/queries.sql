@@ -89,3 +89,61 @@ SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHE
 
 -- name: GetGroupRoleByID :one
 SELECT * FROM group_role WHERE id = $1;
+
+-- name: ListGroupMembersAscPaged :many
+SELECT *
+FROM memberships
+WHERE group_id = $1
+ORDER BY @SortBy::text ASC
+LIMIT @Size OFFSET @page;
+
+-- name: ListGroupMembersDescPaged :many
+SELECT *
+FROM memberships
+WHERE group_id = $1
+ORDER BY @SortBy::text DESC
+LIMIT @Size OFFSET @page;
+
+-- name: AddGroupMember :one
+INSERT INTO memberships (group_id, user_id, role_id)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: RemoveGroupMember :exec
+DELETE FROM memberships
+WHERE group_id = $1 AND user_id = $2;
+
+-- name: UpdateGroupMemberRole :one
+UPDATE group_role
+SET role = @role::text
+WHERE id = $1
+RETURNING *;
+
+-- name: GetRoleIdByGroupAndUser :one
+SELECT role_id
+FROM memberships
+WHERE group_id = $1 AND user_id = $2;
+
+-- name: AddPendingGroupMember :one
+INSERT INTO pending_group_members (user_identifier, group_id, role_id)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: GetPendingGroupMember :one
+SELECT *
+FROM pending_group_members
+WHERE user_identifier = $1 AND group_id = $2;
+
+-- name: DeletePendingGroupMember :exec
+DELETE FROM pending_group_members
+WHERE user_identifier = $1 AND group_id = $2;
+
+-- name: CreateRole :one
+INSERT INTO group_role (role, access_level)
+VALUES ($1, $2)
+RETURNING *;
+
+-- name: GetAccessLevelByRole :one
+SELECT access_level
+FROM group_role
+WHERE role = @role::text;
