@@ -619,3 +619,60 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, user
 
 	return nil
 }
+
+func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role string) (MemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	roleId, err := s.queries.GetRoleIdByGroupAndUser(traceCtx, GetRoleIdByGroupAndUserParams{
+		GroupID: groupId,
+		UserID:  userId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to get role_id")
+		span.RecordError(err)
+		return MemberResponse{}, err
+	}
+
+	updatedRole, err := s.queries.UpdateGroupMemberRole(ctx, UpdateGroupMemberRoleParams{
+		ID:   roleId,
+		Role: role,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"group_roles",
+			"role_id",
+			roleId.String(),
+			logger,
+			"failed to update role",
+		)
+	}
+
+	u, err := s.userStore.GetByID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"users",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user info",
+		)
+	}
+
+	return MemberResponse{
+		ID:        u.ID,
+		Username:  u.Username,
+		Email:     u.Email,
+		StudentID: u.StudentID.String,
+		Role: Role{
+			ID:          updatedRole.ID,
+			Role:        updatedRole.Role.String,
+			AccessLevel: updatedRole.AccessLevel,
+		},
+	}, nil
+}
