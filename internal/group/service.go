@@ -2,6 +2,7 @@ package group
 
 import (
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
@@ -9,22 +10,32 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"strings"
 )
 
-type Service struct {
-	logger  *zap.Logger
-	tracer  trace.Tracer
-	queries *Queries
+type UserStore interface {
+	GetByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type Service struct {
+	logger    *zap.Logger
+	tracer    trace.Tracer
+	queries   *Queries
+	userStore user.Service
+}
+
+func NewService(logger *zap.Logger, db DBTX, userStore user.Service) *Service {
 	return &Service{
-		logger:  logger,
-		tracer:  otel.Tracer("group/service"),
-		queries: New(db),
+		logger:    logger,
+		tracer:    otel.Tracer("group/service"),
+		queries:   New(db),
+		userStore: userStore,
 	}
 }
 
