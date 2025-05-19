@@ -55,7 +55,7 @@ func Test_RefreshTokenHandler(t *testing.T) {
 	jwtUser := jwt.User{
 		ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
 		Email: "testuser@testuser.com",
-		Role:  pgtype.Text{String: "user"},
+		Role:  "user",
 	}
 
 	issuer.On("GetUserByRefreshToken",
