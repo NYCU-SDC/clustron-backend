@@ -28,10 +28,10 @@ type Service struct {
 	logger    *zap.Logger
 	tracer    trace.Tracer
 	queries   *Queries
-	userStore user.Service
+	userStore user.ServiceInterface
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore user.Service) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore user.ServiceInterface) *Service {
 	return &Service{
 		logger:    logger,
 		tracer:    otel.Tracer("group/service"),

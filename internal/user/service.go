@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -15,6 +16,12 @@ type Service struct {
 	queries *Queries
 	logger  *zap.Logger
 	tracer  trace.Tracer
+}
+
+type ServiceInterface interface {
+	GetByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
 func NewService(logger *zap.Logger, db DBTX) *Service {
