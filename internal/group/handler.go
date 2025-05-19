@@ -24,12 +24,12 @@ type Auth interface {
 
 //go:generate mockery --name=Store
 type Store interface {
-	GetAllWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]UserScope, int /* totalCount */, error)
-	GetByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (UserScope, error)
-	GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (RoleResponse, string, error)
-	CreateGroup(ctx context.Context, group CreateParams) (Group, error)
-	ArchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
-	UnarchiveGroup(ctx context.Context, groupID uuid.UUID) (Group, error)
+	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]UserScope, int /* totalCount */, error)
+	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (UserScope, error)
+	GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (Role, string, error)
+	Create(ctx context.Context, group CreateParams) (Group, error)
+	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
+	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
 }
 
@@ -105,7 +105,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userScopeResponse, totalCount, err := h.store.GetAllWithUserScope(traceCtx, user, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
+	userScopeResponse, totalCount, err := h.store.ListWithUserScope(traceCtx, user, pageRequest.Page, pageRequest.Size, pageRequest.Sort, pageRequest.SortBy)
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
@@ -154,7 +154,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userScopeResponse, err := h.store.GetByIDWithUserScope(traceCtx, user, groupUUID)
+	userScopeResponse, err := h.store.ListByIDWithUserScope(traceCtx, user, groupUUID)
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
@@ -202,7 +202,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.CreateGroup(traceCtx, CreateParams{
+	group, err := h.store.Create(traceCtx, CreateParams{
 		Title:       request.Title,
 		Description: pgtype.Text{String: request.Description, Valid: true},
 	})
@@ -268,13 +268,13 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	group, err := h.store.ArchiveGroup(traceCtx, groupUUID)
+	group, err := h.store.Archive(traceCtx, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	roleResponse, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -290,7 +290,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = roleResponse
+		groupResponse.Me.Role = role.ToResponse()
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
@@ -327,13 +327,13 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	group, err := h.store.UnarchiveGroup(traceCtx, groupUUID)
+	group, err := h.store.Unarchive(traceCtx, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	roleResponse, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -349,7 +349,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = roleResponse
+		groupResponse.Me.Role = role.ToResponse()
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)

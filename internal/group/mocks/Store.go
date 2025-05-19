@@ -22,7 +22,7 @@ func (_m *Store) ArchiveGroup(ctx context.Context, groupID uuid.UUID) (group.Gro
 	ret := _m.Called(ctx, groupID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ArchiveGroup")
+		panic("no return value specified for Archive")
 	}
 
 	var r0 group.Group
@@ -50,7 +50,7 @@ func (_m *Store) CreateGroup(ctx context.Context, _a1 group.CreateParams) (group
 	ret := _m.Called(ctx, _a1)
 
 	if len(ret) == 0 {
-		panic("no return value specified for CreateGroup")
+		panic("no return value specified for Create")
 	}
 
 	var r0 group.Group
@@ -74,7 +74,7 @@ func (_m *Store) CreateGroup(ctx context.Context, _a1 group.CreateParams) (group
 }
 
 // GetAllWithUserScope provides a mock function with given fields: ctx, user, page, size, sort, sortBy
-func (_m *Store) GetAllWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]group.UserScope, int, error) {
+func (_m *Store) ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]group.UserScope, int, error) {
 	ret := _m.Called(ctx, user, page, size, sort, sortBy)
 
 	if len(ret) == 0 {
@@ -115,7 +115,7 @@ func (_m *Store) GetByIDWithUserScope(ctx context.Context, user jwt.User, groupI
 	ret := _m.Called(ctx, user, groupID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetByIDWithUserScope")
+		panic("no return value specified for ListByIDWithUserScope")
 	}
 
 	var r0 group.UserScope
@@ -206,7 +206,7 @@ func (_m *Store) UnarchiveGroup(ctx context.Context, groupID uuid.UUID) (group.G
 	ret := _m.Called(ctx, groupID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UnarchiveGroup")
+		panic("no return value specified for Unarchive")
 	}
 
 	var r0 group.Group
