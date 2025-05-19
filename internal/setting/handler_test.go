@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -89,7 +88,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Role: pgtype.Text{String: "user", Valid: true},
+				Role: "user",
 			}))
 
 			w := httptest.NewRecorder()
@@ -119,7 +118,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			name: "Should delete public key",
 			user: jwt.User{
 				ID:   publicKey.UserID,
-				Role: pgtype.Text{String: "user", Valid: true},
+				Role: "user",
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -130,7 +129,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			name: "Should return permission denied when user is not the owner of the public key",
 			user: jwt.User{
 				ID:   uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
-				Role: pgtype.Text{String: "user", Valid: true},
+				Role: "user",
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -227,7 +226,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Role: pgtype.Text{String: "user", Valid: true},
+				Role: "user",
 			}))
 			w := httptest.NewRecorder()
 
