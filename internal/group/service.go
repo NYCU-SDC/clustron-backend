@@ -6,15 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/NYCU-SDC/summer/pkg/database"
+	"strings"
+
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
-	"github.com/NYCU-SDC/summer/pkg/log"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"strings"
 )
 
 type UserStore interface {
@@ -499,6 +500,39 @@ func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, use
 	return roleResponse, roleType, nil
 }
 
+func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetGroupMembers")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var members []Membership
+	var err error
+	if sort == "desc" {
+		params := ListGroupMembersDescPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Page:    int32(page),
+		}
+		members, err = s.queries.ListGroupMembersDescPaged(ctx, params)
+	} else {
+		params := ListGroupMembersAscPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Page:    int32(page),
+		}
+		members, err = s.queries.ListGroupMembersAscPaged(ctx, params)
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get members")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return members, nil
+}
+
 func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role string) (Membership, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
@@ -513,12 +547,19 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 		userId, err = s.userStore.GetIdByStudentId(ctx, userIdentifier)
 	}
 
-	// user does not exist, adding to pending_group_members table
+	// user does not exist, adding to the pending_group_members table
 	if err != nil {
-		_, err := s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
+		roleID, err := uuid.Parse(role)
+		if err != nil {
+			span.RecordError(fmt.Errorf("invalid role id: %s", role))
+			return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
+				fmt.Errorf("invalid role id: %s", role), "pending_group_members", "role_id", role, logger, "invalid role id")
+		}
+
+		_, err = s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
 			UserIdentifier: userIdentifier,
 			GroupID:        groupId,
-			Role:           role,
+			RoleID:         roleID,
 		})
 		if err != nil {
 			span.RecordError(err)
