@@ -19,6 +19,13 @@ const (
 	AccessLevelUser  AccessLevel = "USER"
 )
 
+var DefaultRoleToAccessLevel = map[DefaultRole]AccessLevel{
+	RoleOwner:   AccessLevelOwner,
+	RoleTA:      AccessLevelAdmin,
+	RoleStudent: AccessLevelUser,
+	RoleAuditor: AccessLevelUser,
+}
+
 type UserScope struct {
 	Group
 	Me struct {
@@ -39,4 +46,12 @@ func (r Role) ToResponse() RoleResponse {
 		Role:        r.Role,
 		AccessLevel: r.AccessLevel,
 	}
+}
+
+type MemberResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	StudentID string    `json:"studentId"`
+	Role      Role      `json:"role"`
 }
