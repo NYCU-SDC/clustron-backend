@@ -38,19 +38,17 @@ CSV_FILES=()
 # Automatically find all policy.csv files under current directory and subdirectories
 mapfile -t CSV_FILES < <(find . -type f -name "policy.csv")
 
-# Check if any files found
-if [ ${#CSV_FILES[@]} -eq 0 ]; then
-    echo "No policy.csv files found."
-    exit 1
-fi
+# Clear the output file
+> "$OUTPUT_FILE"
 
-# Clear and initialize the output file with the header from the first file
-head -n 1 "${CSV_FILES[0]}" > "$OUTPUT_FILE"
+# Append all CSV data with newlines between files, except after the last one
+for ((i = 0; i < ${#CSV_FILES[@]}; i++)); do
+    cat "${CSV_FILES[i]}" >> "$OUTPUT_FILE"
 
-# Append all CSV data (excluding header from each file)
-for CSV in "${CSV_FILES[@]}"; do
-    echo >> "$OUTPUT_FILE"
-    tail -n +2 "$CSV" >> "$OUTPUT_FILE"
+    # Add newline if not the last file
+    if [ $i -lt $((${#CSV_FILES[@]} - 1)) ]; then
+        echo >> "$OUTPUT_FILE"
+    fi
 done
 
 echo "Merged ${#CSV_FILES[@]} files into $OUTPUT_FILE"

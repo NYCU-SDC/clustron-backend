@@ -1,6 +1,6 @@
 p, user, /api/settings, GET
 p, organizer, /api/settings, GET
-p, admin /api/settings, GET
+p, admin, /api/settings, GET
 
 p, user, /api/settings, PUT
 p, organizer, /api/settings, PUT

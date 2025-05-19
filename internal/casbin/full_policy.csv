@@ -1,5 +1,4 @@
 p, user, /api/groups, GET
-
 p, organizer, /api/groups, GET
 p, admin, /api/groups, GET
 
@@ -15,8 +14,9 @@ p, admin, /api/groups/{groupId}/archive, POST
 
 p, admin, /api/groups/{groupId}/unarchive, POST
 p, organizer, /api/groups/{groupId}/unarchive, POST
+p, user, /api/settings, GET
 p, organizer, /api/settings, GET
-p, admin /api/settings, GET
+p, admin, /api/settings, GET
 
 p, user, /api/settings, PUT
 p, organizer, /api/settings, PUT
