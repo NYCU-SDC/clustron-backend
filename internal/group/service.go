@@ -65,7 +65,7 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 
 	var response []UserScope
 	var totalCount int
-	if user.Role.String == "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role == "admin" { // TODO: the string comparison should be replaced with a enum.
 		groups, err := s.ListPaged(traceCtx, page, size, sort, sortBy)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "Get all groups")
@@ -207,7 +207,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 
 	var group Group
 	var err error
-	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
 		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
 	} else {
 		group, err = s.Get(traceCtx, groupID)
@@ -218,7 +218,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		return UserScope{}, err
 	}
 
-	roleResponse, roleType, err := s.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupID)
+	roleResponse, roleType, err := s.GetUserGroupRoleType(traceCtx, user.Role, user.ID, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
 		span.RecordError(err)

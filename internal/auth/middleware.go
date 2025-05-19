@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/jwt"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -14,13 +16,17 @@ type Middleware struct {
 	logger   *zap.Logger
 	tracer   trace.Tracer
 	enforcer *casbin.Enforcer
+
+	problemWriter *problem.HttpWriter
 }
 
-func NewMiddleware(logger *zap.Logger, enforcer *casbin.Enforcer) *Middleware {
+func NewMiddleware(logger *zap.Logger, enforcer *casbin.Enforcer, problemWriter *problem.HttpWriter) *Middleware {
 	return &Middleware{
 		logger:   logger,
 		tracer:   otel.Tracer("auth/middleware"),
 		enforcer: enforcer,
+
+		problemWriter: problemWriter,
 	}
 }
 
@@ -47,7 +53,7 @@ func (m *Middleware) HandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if !ok {
 			logger.Warn("User does not have permission", zap.String("user_id", user.ID.String()), zap.String("role", user.Role))
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
 			return
 		}
 

@@ -17,35 +17,15 @@ type Enforcer struct {
 }
 
 func NewEnforcer(logger *zap.Logger, userStore UserStore) *Enforcer {
-
-	// Load the model and policy from files
-	e, err := casbin.NewEnforcer("path/to/model.conf", "path/to/policy.csv")
+	// Create a new enforcer with the model and adapter
+	e, err := casbin.NewEnforcer("internal/casbin/model.conf", "internal/casbin/full_policy.csv")
 	if err != nil {
 		logger.Fatal("Failed to create enforcer", zap.Error(err))
 		return nil
 	}
 
-	e.AddFunction("getLevel", func(args ...interface{}) (interface{}, error) {
-		roleLevel := map[string]int{
-			"admin":     3,
-			"organizer": 2,
-			"user":      1,
-		}
-
-		userID := args[0].(uuid.UUID)
-
-		role, err := userStore.GetRoleByID(context.Background(), userID)
-		if err != nil {
-			return nil, err
-		}
-
-		if level, ok := roleLevel[role]; ok {
-			return level, nil
-		}
-		return 0, nil
-	})
-
 	return &Enforcer{
+		logger:   logger,
 		enforcer: e,
 	}
 }

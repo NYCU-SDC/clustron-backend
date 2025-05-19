@@ -3,7 +3,7 @@
 set -e
 
 # Default values
-OUTPUT_FILE=".internal/casbin/full_policy.csv"
+OUTPUT_FILE="./internal/casbin/full_policy.csv"
 
 # Print help message
 print_help() {
