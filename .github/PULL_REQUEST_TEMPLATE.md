@@ -1,5 +1,5 @@
 ## Type of changes
-- Feature/Fix/Docs/Refactor/Chore
+- Feature/Fix/Docs/Refactor/CI/Test/Chore
 
 ## Purpose
 - Add XXX
