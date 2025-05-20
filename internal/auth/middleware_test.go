@@ -4,7 +4,7 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/auth/mocks"
-	"clustron-backend/internal/user"
+	"clustron-backend/internal/jwt"
 	"context"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -14,21 +14,48 @@ import (
 )
 
 func TestMiddleware_HandlerFunc(t *testing.T) {
+	type EnforceCase struct {
+		subject string
+		object  string
+		action  string
+	}
+
 	testCase := []struct {
 		name           string
-		user           user.User
+		user           jwt.User
 		expectedStatus int
 		expectError    bool
-		enforcer       mocks.CasbinEnforcer
+		enforceCase    EnforceCase
 	}{
 		{
 			name: "Should return 200 when token is valid",
-			user: user.User{
-				ID:   uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
-				Role: "user",
+			user: jwt.User{
+				ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+				Role:  "user",
+				Email: "test@gmail.com",
 			},
 			expectedStatus: http.StatusOK,
 			expectError:    false,
+			enforceCase: EnforceCase{
+				subject: "user",
+				object:  "/api/v1/user",
+				action:  "GET",
+			},
+		},
+		{
+			name: "Should return 403 when does not have permission",
+			user: jwt.User{
+				ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+				Role:  "user",
+				Email: "test@gmail.com",
+			},
+			expectedStatus: http.StatusForbidden,
+			expectError:    true,
+			enforceCase: EnforceCase{
+				subject: "user",
+				object:  "/api/v1/user",
+				action:  "GET",
+			},
 		},
 	}
 
@@ -42,7 +69,7 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
 			enforcer := mocks.NewCasbinEnforcer(t)
-			enforcer.On("Enforce", tc.user.Role, "/api/v1/user", "GET").Return(true, nil)
+			enforcer.On("Enforce", tc.enforceCase.subject, tc.enforceCase.object, tc.enforceCase.action).Return(tc.expectedStatus == http.StatusOK, nil)
 
 			middleware := auth.NewMiddleware(logger, enforcer, problemWriter)
 			handler := middleware.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
