@@ -46,7 +46,7 @@ var CommitHash = "no-commit-hash"
 func main() {
 	AppName = os.Getenv("APP_NAME")
 	if AppName == "" {
-		AppName = "summer-example-dev"
+		AppName = "clustron-backend"
 	}
 
 	if BuildTime == "no-build-time" {
