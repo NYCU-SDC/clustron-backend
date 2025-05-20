@@ -147,3 +147,6 @@ RETURNING *;
 SELECT access_level
 FROM group_role
 WHERE role = @role::text;
+
+-- name: GetGroupRoleByName :one
+SELECT * FROM group_role WHERE role = $1;

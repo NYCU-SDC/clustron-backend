@@ -538,19 +538,8 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// map role to access level
-	accessLevel, ok := DefaultRoleToAccessLevel[DefaultRole(role)]
-	if !ok {
-		span.RecordError(fmt.Errorf("invalid role: %s", role))
-		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
-			fmt.Errorf("invalid role: %s", role), "group_role", "role", role, logger, "invalid role")
-	}
-
-	// create group_role
-	groupRole, err := s.queries.CreateRole(ctx, CreateRoleParams{
-		Role:        pgtype.Text{String: role, Valid: true},
-		AccessLevel: string(accessLevel),
-	})
+	// find a group role by name
+	groupRole, err := s.queries.GetGroupRoleByName(ctx, pgtype.Text{String: role, Valid: true})
 	if err != nil {
 		span.RecordError(err)
 		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role, logger, "invalid role")
@@ -564,7 +553,7 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 		userId, err = s.userStore.GetIdByStudentId(ctx, userIdentifier)
 	}
 
-	// user not registered, adding to the pending_group_members table
+	// user isn't registered, add to pending_group_members
 	if err != nil {
 		_, err = s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
 			UserIdentifier: userIdentifier,

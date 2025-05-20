@@ -201,6 +201,17 @@ func (q *Queries) GetGroupRoleByID(ctx context.Context, id uuid.UUID) (GroupRole
 	return i, err
 }
 
+const getGroupRoleByName = `-- name: GetGroupRoleByName :one
+SELECT id, role, access_level FROM group_role WHERE role = $1
+`
+
+func (q *Queries) GetGroupRoleByName(ctx context.Context, role pgtype.Text) (GroupRole, error) {
+	row := q.db.QueryRow(ctx, getGroupRoleByName, role)
+	var i GroupRole
+	err := row.Scan(&i.ID, &i.Role, &i.AccessLevel)
+	return i, err
+}
+
 const getIfMember = `-- name: GetIfMember :one
 SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2
 `
