@@ -47,7 +47,7 @@ for ((i = 0; i < ${#CSV_FILES[@]}; i++)); do
 
     # Add newline if not the last file
     if [ $i -lt $((${#CSV_FILES[@]} - 1)) ]; then
-        echo >> "$OUTPUT_FILE"
+        echo -e "\n" >> "$OUTPUT_FILE"
     fi
 done
 

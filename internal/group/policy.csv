@@ -1,16 +1,9 @@
 p, user, /api/groups, GET
-p, organizer, /api/groups, GET
-p, admin, /api/groups, GET
 
 p, organizer, /api/groups, POST
-p, admin, /api/groups, POST
 
 p, user, /api/groups/{groupId}, GET
-p, organizer, /api/groups/{groupId}, GET
-p, admin, /api/groups/{groupId}, GET
 
 p, organizer, /api/groups/{groupId}/archive, POST
-p, admin, /api/groups/{groupId}/archive, POST
 
-p, admin, /api/groups/{groupId}/unarchive, POST
 p, organizer, /api/groups/{groupId}/unarchive, POST

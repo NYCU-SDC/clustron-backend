@@ -1,33 +1,24 @@
 p, user, /api/groups, GET
-p, organizer, /api/groups, GET
-p, admin, /api/groups, GET
 
 p, organizer, /api/groups, POST
-p, admin, /api/groups, POST
 
 p, user, /api/groups/{groupId}, GET
-p, organizer, /api/groups/{groupId}, GET
-p, admin, /api/groups/{groupId}, GET
 
 p, organizer, /api/groups/{groupId}/archive, POST
-p, admin, /api/groups/{groupId}/archive, POST
 
-p, admin, /api/groups/{groupId}/unarchive, POST
 p, organizer, /api/groups/{groupId}/unarchive, POST
+
 p, user, /api/settings, GET
-p, organizer, /api/settings, GET
-p, admin, /api/settings, GET
 
 p, user, /api/settings, PUT
-p, organizer, /api/settings, PUT
-p, admin, /api/settings, PUT
 
 p, user, /api/publickey, GET
-p, organizer, /api/publickey, GET
-p, admin, /api/publickey, GET
 
 p, user, /api/publickey, POST
-p, organizer, /api/publickey, POST
-p, admin, /api/publickey, POST
 
 p, admin, /api/publickey, DELETE
+
+g, admin, user
+g, admin, organizer
+
+g, organizer, user

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/jwt"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -12,15 +11,21 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name CasbinEnforcer
+type CasbinEnforcer interface {
+	Enforce(role, path, method string) (bool, error)
+}
+
 type Middleware struct {
-	logger   *zap.Logger
-	tracer   trace.Tracer
-	enforcer *casbin.Enforcer
+	logger *zap.Logger
+	tracer trace.Tracer
+
+	enforcer CasbinEnforcer
 
 	problemWriter *problem.HttpWriter
 }
 
-func NewMiddleware(logger *zap.Logger, enforcer *casbin.Enforcer, problemWriter *problem.HttpWriter) *Middleware {
+func NewMiddleware(logger *zap.Logger, enforcer CasbinEnforcer, problemWriter *problem.HttpWriter) *Middleware {
 	return &Middleware{
 		logger:   logger,
 		tracer:   otel.Tracer("auth/middleware"),
