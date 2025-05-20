@@ -66,15 +66,13 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 	jwtID := uuid.New()
 
 	id := user.ID
-	username := user.Username
 	email := user.Email
 	role := user.Role.String
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		ID:       id,
-		Username: username,
-		Email:    email,
-		Role:     role,
+		ID:    id,
+		Email: email,
+		Role:  role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "Clustron",
 			Subject:   id.String(),
@@ -87,11 +85,11 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 
 	tokenString, err := token.SignedString([]byte(s.secret))
 	if err != nil {
-		logger.Error("Failed to sign token", zap.Error(err), zap.String("id", id.String()), zap.String("username", username), zap.String("role", role))
+		logger.Error("Failed to sign token", zap.Error(err), zap.String("id", id.String()), zap.String("role", role))
 		return "", err
 	}
 
-	logger.Debug("Generated new JWT token", zap.String("id", id.String()), zap.String("username", username), zap.String("role", role))
+	logger.Debug("Generated new JWT token", zap.String("id", id.String()), zap.String("role", role))
 
 	return tokenString, nil
 }
@@ -146,14 +144,11 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 
 	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.Username), zap.String("role", claims.Role))
 
-	jwtUser, err := s.userStore.GetByEmail(ctx, claims.Email)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "user", "email", claims.Email, logger, "get user by email")
-		span.RecordError(err)
-		return User{}, err
-	}
-
-	return User(jwtUser), nil
+	return User{
+		ID:    claims.ID,
+		Email: claims.Email,
+		Role:  pgtype.Text{String: claims.Role, Valid: true},
+	}, nil
 }
 
 func (s Service) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {

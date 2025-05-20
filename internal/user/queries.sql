@@ -10,10 +10,7 @@ SELECT EXISTS (
 ) AS email_exists;
 
 -- name: Create :one
-INSERT INTO users (username, email, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING *;
-
--- name: UpdateName :one
-UPDATE users SET username = $2, updated_at = now() WHERE id = $1 RETURNING *;
+INSERT INTO users (email, student_id, updated_at) VALUES ($1, $2, now()) RETURNING *;
 
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;

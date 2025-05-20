@@ -8,6 +8,7 @@ import (
 	"clustron-backend/internal/setting/mocks"
 	"context"
 	"encoding/json"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -78,7 +79,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 		PublicKey: exampleValidKey,
 	}, nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,9 +89,8 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Username: "testuser",
-				Role:     pgtype.Text{String: "user"},
+				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Role: pgtype.Text{String: "user", Valid: true},
 			}))
 
 			w := httptest.NewRecorder()
@@ -119,9 +119,8 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		{
 			name: "Should delete public key",
 			user: jwt.User{
-				ID:       publicKey.UserID,
-				Username: "testuser",
-				Role:     pgtype.Text{String: "user"},
+				ID:   publicKey.UserID,
+				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -131,9 +130,8 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		{
 			name: "Should return permission denied when user is not the owner of the public key",
 			user: jwt.User{
-				ID:       uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
-				Username: "testuser",
-				Role:     pgtype.Text{String: "user"},
+				ID:   uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
+				Role: pgtype.Text{String: "user", Valid: true},
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -151,7 +149,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 	store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
 	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -216,10 +214,10 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
 		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		Username: "testuser",
+		Username: pgtype.Text{String: "testuser", Valid: true},
 	}, nil)
 
-	h := setting.NewHandler(validator.New(), logger, store)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -229,9 +227,8 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-				ID:       uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Username: "testuser",
-				Role:     pgtype.Text{String: "user"},
+				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Role: pgtype.Text{String: "user", Valid: true},
 			}))
 			w := httptest.NewRecorder()
 

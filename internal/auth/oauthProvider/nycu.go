@@ -118,7 +118,6 @@ func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (User
 
 	return UserInfo{
 		ID:        profile.Username,
-		Name:      profile.Username,
 		StudentID: profile.Username,
 		Email:     profile.Email,
 	}, nil

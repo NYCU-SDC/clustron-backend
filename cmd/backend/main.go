@@ -6,20 +6,14 @@ import (
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/group"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
-	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/middleware"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5"
@@ -33,6 +27,12 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 var AppName = "no-app-name"
@@ -46,7 +46,7 @@ var CommitHash = "no-commit-hash"
 func main() {
 	AppName = os.Getenv("APP_NAME")
 	if AppName == "" {
-		AppName = "summer-example-dev"
+		AppName = "clustron-backend"
 	}
 
 	if BuildTime == "no-build-time" {
@@ -112,11 +112,13 @@ func main() {
 	// Service
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	settingService := setting.NewService(logger, dbPool)
 	groupService := group.NewService(logger, dbPool, userService)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
+	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
 
 	// Basic Middleware
@@ -134,6 +136,12 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
+
+	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
+	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
+	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
+	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))

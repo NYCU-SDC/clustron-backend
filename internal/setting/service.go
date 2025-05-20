@@ -5,6 +5,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -34,6 +35,38 @@ func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Set
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
 		return Setting{}, err
+	}
+
+	return setting, nil
+}
+
+func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, username pgtype.Text) (Setting, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exist, err := s.query.SettingExists(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "check setting exists")
+		span.RecordError(err)
+		return Setting{}, err
+	}
+
+	var setting Setting
+	if !exist {
+		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, Username: username})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create setting")
+			span.RecordError(err)
+			return Setting{}, err
+		}
+	} else {
+		setting, err = s.query.GetSetting(ctx, userID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
+			span.RecordError(err)
+			return Setting{}, err
+		}
 	}
 
 	return setting, nil

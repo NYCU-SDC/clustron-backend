@@ -47,13 +47,12 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return user, nil
 }
 
-func (s *Service) Create(ctx context.Context, username, email, studentID string) (User, error) {
+func (s *Service) Create(ctx context.Context, email, studentID string) (User, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	param := CreateParams{
-		Username:  username,
 		Email:     email,
 		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
 	}
@@ -97,7 +96,7 @@ func (s *Service) ExistsByEmail(ctx context.Context, email string) (bool, error)
 	return exists, nil
 }
 
-func (s *Service) FindOrCreate(ctx context.Context, username, email, studentID string) (User, error) {
+func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (User, error) {
 	traceCtx, span := s.tracer.Start(ctx, "findOrCreateUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -111,7 +110,7 @@ func (s *Service) FindOrCreate(ctx context.Context, username, email, studentID s
 
 	var jwtUser User
 	if !exists {
-		jwtUser, err = s.Create(traceCtx, username, email, studentID)
+		jwtUser, err = s.Create(traceCtx, email, studentID)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "create user")
 			span.RecordError(err)

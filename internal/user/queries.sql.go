@@ -13,21 +13,19 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (username, email, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, username, email, role, department, student_id, created_at, updated_at
+INSERT INTO users (email, student_id, updated_at) VALUES ($1, $2, now()) RETURNING id, email, role, department, student_id, created_at, updated_at
 `
 
 type CreateParams struct {
-	Username  string
 	Email     string
 	StudentID pgtype.Text
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
-	row := q.db.QueryRow(ctx, create, arg.Username, arg.Email, arg.StudentID)
+	row := q.db.QueryRow(ctx, create, arg.Email, arg.StudentID)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Username,
 		&i.Email,
 		&i.Role,
 		&i.Department,
@@ -64,7 +62,7 @@ func (q *Queries) ExistsByEmail(ctx context.Context, email string) (bool, error)
 }
 
 const getByEmail = `-- name: GetByEmail :one
-SELECT id, username, email, role, department, student_id, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, role, department, student_id, created_at, updated_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
@@ -72,7 +70,6 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Username,
 		&i.Email,
 		&i.Role,
 		&i.Department,
@@ -84,7 +81,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, username, email, role, department, student_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, role, department, student_id, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -101,28 +98,6 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getIdByEmail = `-- name: GetIdByEmail :one
-SELECT id FROM users WHERE email = $1
-`
-
-func (q *Queries) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getIdByEmail, email)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
-const getIdByStudentId = `-- name: GetIdByStudentId :one
-SELECT id FROM users WHERE student_id = $1
-`
-
-func (q *Queries) GetIdByStudentId(ctx context.Context, studentID pgtype.Text) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getIdByStudentId, studentID)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const updateName = `-- name: UpdateName :one
