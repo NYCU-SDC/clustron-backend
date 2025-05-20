@@ -12,7 +12,10 @@ import (
 
 const DefaultSecret = "default-secret"
 
-var ErrDatabaseURLRequired = errors.New("database_url is required")
+var (
+	ErrDatabaseURLRequired = errors.New("database_url is required")
+	ErrInvaldUserRole      = errors.New("invalid user role")
+)
 
 type PresetUserInfo struct {
 	Role string `yaml:"role"`
@@ -69,6 +72,12 @@ func (cl *LogBuffer) FlushToZap(logger *zap.Logger) {
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return ErrDatabaseURLRequired
+	}
+
+	for _, user := range c.PresetUser {
+		if user.Role != "user" && user.Role != "admin" && user.Role != "organizer" {
+			return ErrInvaldUserRole
+		}
 	}
 
 	return nil
