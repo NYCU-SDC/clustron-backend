@@ -49,11 +49,11 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/user", nil)
-			req = req.WithContext(context.WithValue(req.Context(), internal.UserContextKey, tc.user))
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/user", nil)
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
-			handler(w, req)
+			handler(w, r)
 
 			res := w.Result()
 			if res.StatusCode != tc.expectedStatus {
