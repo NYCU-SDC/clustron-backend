@@ -4,6 +4,8 @@ import (
 	"clustron-backend/internal/jwt"
 	"context"
 	"errors"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -13,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 //go:generate mockery --name=Auth
@@ -31,6 +32,10 @@ type Store interface {
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
+	AddGroupMember(ctx context.Context, member string, groupID uuid.UUID, role string) (UserScope, error)
+	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role string) (UserScope, error)
+	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]UserScope, error)
 }
 
 type RoleResponse struct {
@@ -211,7 +216,28 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Add members to the group and set the creator as the group-owner
+	// 1. Set creator as a group-owner
+	_, err = h.store.AddGroupMember(traceCtx, user.Email, group.ID, "Group Owner")
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// 2. Add other members
+	// type AddMemberRequest struct {
+	//	Member string `json:"member"` // email or student id
+	//	Role   string `json:"role"`
+	//}
+	for _, m := range request.Members {
+		if m.Member == user.Email {
+			continue
+		}
+		_, err := h.store.AddGroupMember(traceCtx, m.Member, group.ID, m.Role)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+	}
 
 	roleOwner, err := h.store.GetGroupRoleByID(traceCtx, uuid.MustParse(string(RoleOwner)))
 	if err != nil {
@@ -353,4 +379,196 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "AddGroupMemberHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "AddGroupMemberHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	var req AddMemberRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	member, err := h.store.AddGroupMember(traceCtx, req.Member, groupUUID, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, member)
+}
+
+func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "RemoveGroupMemberHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "RemoveGroupMemberHandler"))
+
+	groupID := r.PathValue("group_id")
+	removedUserID := r.PathValue("user_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	removedUserUUID, err := uuid.Parse(removedUserID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	if err := h.store.RemoveGroupMember(traceCtx, groupUUID, removedUserUUID); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+}
+
+func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateGroupMemberHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateGroupMemberHandler"))
+
+	groupID := r.PathValue("group_id")
+	userID := r.PathValue("user_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	var req AddMemberRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	member, err := h.store.UpdateGroupMember(traceCtx, groupUUID, userUUID, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, member)
+}
+
+func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListGroupMembersPagedHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "ListGroupMembersPagedHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	pageRequest, err := h.paginationFactory.GetRequest(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	members, err := h.store.ListGroupMembersPaged(
+		traceCtx,
+		groupUUID,
+		pageRequest.Page,
+		pageRequest.Size,
+		pageRequest.Sort,
+		pageRequest.SortBy,
+	)
+	if err != nil {
+		if errors.As(err, &handlerutil.NotFoundError{}) {
+			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
+			return
+		}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, members)
 }
