@@ -89,7 +89,6 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Username,
 		&i.Email,
 		&i.Role,
 		&i.Department,
@@ -100,27 +99,24 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const updateName = `-- name: UpdateName :one
-UPDATE users SET username = $2, updated_at = now() WHERE id = $1 RETURNING id, username, email, role, department, student_id, created_at, updated_at
+const getIdByEmail = `-- name: GetIdByEmail :one
+SELECT id FROM users WHERE email = $1
 `
 
-type UpdateNameParams struct {
-	ID       uuid.UUID
-	Username string
+func (q *Queries) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIdByEmail, email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
-func (q *Queries) UpdateName(ctx context.Context, arg UpdateNameParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateName, arg.ID, arg.Username)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Username,
-		&i.Email,
-		&i.Role,
-		&i.Department,
-		&i.StudentID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+const getIdByStudentId = `-- name: GetIdByStudentId :one
+SELECT id FROM users WHERE student_id = $1
+`
+
+func (q *Queries) GetIdByStudentId(ctx context.Context, studentID pgtype.Text) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIdByStudentId, studentID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
