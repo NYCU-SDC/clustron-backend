@@ -14,19 +14,24 @@ const DefaultSecret = "default-secret"
 
 var ErrDatabaseURLRequired = errors.New("database_url is required")
 
+type PresetUserInfo struct {
+	Role string `yaml:"role"`
+}
+
 type Config struct {
-	Debug                   bool   `yaml:"debug"              envconfig:"DEBUG"`
-	Host                    string `yaml:"host"               envconfig:"HOST"`
-	Port                    string `yaml:"port"               envconfig:"PORT"`
-	BaseURL                 string `yaml:"base_url"          envconfig:"BASE_URL"`
-	Secret                  string `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL             string `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource         string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	OtelCollectorUrl        string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	GoogleOauthClientID     string `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
-	GoogleOauthClientSecret string `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
-	NYCUOauthClientID       string `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
-	NYCUOauthClientSecret   string `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	Debug                   bool                      `yaml:"debug"              envconfig:"DEBUG"`
+	Host                    string                    `yaml:"host"               envconfig:"HOST"`
+	Port                    string                    `yaml:"port"               envconfig:"PORT"`
+	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
+	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	NYCUOauthClientID       string                    `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
+	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
 }
 
 type LogBuffer struct {

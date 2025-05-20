@@ -110,7 +110,7 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 
 	// Service
-	userService := user.NewService(logger, dbPool)
+	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
 	groupService := group.NewService(logger, dbPool)
