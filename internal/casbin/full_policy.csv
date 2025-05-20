@@ -16,7 +16,7 @@ p, user, /api/publickey, GET
 
 p, user, /api/publickey, POST
 
-p, admin, /api/publickey, DELETE
+p, user, /api/publickey, DELETE
 
 g, admin, user
 g, admin, organizer
