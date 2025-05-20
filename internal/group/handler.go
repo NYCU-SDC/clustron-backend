@@ -32,10 +32,10 @@ type Store interface {
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
-	AddGroupMember(ctx context.Context, member string, groupID uuid.UUID, role string) (UserScope, error)
+	AddGroupMember(ctx context.Context, member string, groupID uuid.UUID, role string) (Membership, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role string) (UserScope, error)
-	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]UserScope, error)
+	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role string) (MemberResponse, error)
+	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
 }
 
 type RoleResponse struct {
@@ -226,7 +226,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	// 2. Add other members
 	// type AddMemberRequest struct {
 	//	Member string `json:"member"` // email or student id
-	//	Role   string `json:"role"`
+	//	Role string `json:"role"`
 	//}
 	for _, m := range request.Members {
 		if m.Member == user.Email {
