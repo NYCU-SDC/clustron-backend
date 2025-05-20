@@ -144,14 +144,11 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 
 	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.Username), zap.String("role", claims.Role))
 
-	jwtUser, err := s.userStore.GetByEmail(ctx, claims.Email)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "user", "email", claims.Email, logger, "get user by email")
-		span.RecordError(err)
-		return User{}, err
-	}
-
-	return User(jwtUser), nil
+	return User{
+		ID:    claims.ID,
+		Email: claims.Email,
+		Role:  pgtype.Text{String: claims.Role, Valid: true},
+	}, nil
 }
 
 func (s Service) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {
