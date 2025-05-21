@@ -48,7 +48,7 @@ func NewService(logger *zap.Logger, secret string, expiration, refreshTokenExpir
 
 type claims struct {
 	ID       uuid.UUID
-	Username string
+	FullName string
 	Email    string
 	Role     string
 	jwt.RegisteredClaims
@@ -142,7 +142,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 		return User{}, fmt.Errorf("failed to extract claims from JWT token")
 	}
 
-	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.Username), zap.String("role", claims.Role))
+	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.FullName), zap.String("role", claims.Role))
 
 	return User{
 		ID:    claims.ID,

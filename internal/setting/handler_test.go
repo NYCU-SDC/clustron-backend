@@ -177,7 +177,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		{
 			name: "Should update user setting",
 			body: setting.UpdateSettingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "testuser",
 			},
 			expectedStatus: http.StatusOK,
@@ -185,12 +185,12 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		{
 			name: "Should update user setting without linux username",
 			body: setting.UpdateSettingRequest{
-				Username: "testuser",
+				FullName: "testuser",
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "Should return error when username is empty",
+			name: "Should return error when fullName is empty",
 			body: setting.UpdateSettingRequest{
 				LinuxUsername: "testuser",
 			},
@@ -199,7 +199,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		{
 			name: "Should return error when linux username contain space",
 			body: setting.UpdateSettingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test user",
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -214,7 +214,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
 		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		Username: pgtype.Text{String: "testuser", Valid: true},
+		FullName: pgtype.Text{String: "testuser", Valid: true},
 	}, nil)
 
 	h := setting.NewHandler(logger, validator.New(), problem.New(), store)

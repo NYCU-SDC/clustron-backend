@@ -39,7 +39,7 @@ type UserStore interface {
 }
 
 type SettingStore interface {
-	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, username pgtype.Text) (setting.Setting, error)
+	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (setting.Setting, error)
 }
 
 type OAuthProvider interface {
