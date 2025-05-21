@@ -35,18 +35,18 @@ func (q *Queries) AddPublicKey(ctx context.Context, arg AddPublicKeyParams) (Pub
 }
 
 const createSetting = `-- name: CreateSetting :one
-INSERT INTO settings (user_id, username, linux_username) VALUES ($1, $2, '') RETURNING user_id, username, linux_username
+INSERT INTO settings (user_id, full_name, linux_username) VALUES ($1, $2, '') RETURNING user_id, full_name, linux_username
 `
 
 type CreateSettingParams struct {
 	UserID   uuid.UUID
-	Username pgtype.Text
+	FullName pgtype.Text
 }
 
 func (q *Queries) CreateSetting(ctx context.Context, arg CreateSettingParams) (Setting, error) {
-	row := q.db.QueryRow(ctx, createSetting, arg.UserID, arg.Username)
+	row := q.db.QueryRow(ctx, createSetting, arg.UserID, arg.FullName)
 	var i Setting
-	err := row.Scan(&i.UserID, &i.Username, &i.LinuxUsername)
+	err := row.Scan(&i.UserID, &i.FullName, &i.LinuxUsername)
 	return i, err
 }
 
@@ -105,13 +105,13 @@ func (q *Queries) GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]Public
 }
 
 const getSetting = `-- name: GetSetting :one
-SELECT user_id, username, linux_username FROM settings WHERE user_id = $1
+SELECT user_id, full_name, linux_username FROM settings WHERE user_id = $1
 `
 
 func (q *Queries) GetSetting(ctx context.Context, userID uuid.UUID) (Setting, error) {
 	row := q.db.QueryRow(ctx, getSetting, userID)
 	var i Setting
-	err := row.Scan(&i.UserID, &i.Username, &i.LinuxUsername)
+	err := row.Scan(&i.UserID, &i.FullName, &i.LinuxUsername)
 	return i, err
 }
 
@@ -127,18 +127,18 @@ func (q *Queries) SettingExists(ctx context.Context, userID uuid.UUID) (bool, er
 }
 
 const updateSetting = `-- name: UpdateSetting :one
-UPDATE settings SET username = $2, linux_username = $3 WHERE user_id = $1 RETURNING user_id, username, linux_username
+UPDATE settings SET full_name = $2, linux_username = $3 WHERE user_id = $1 RETURNING user_id, full_name, linux_username
 `
 
 type UpdateSettingParams struct {
 	UserID        uuid.UUID
-	Username      pgtype.Text
+	FullName      pgtype.Text
 	LinuxUsername pgtype.Text
 }
 
 func (q *Queries) UpdateSetting(ctx context.Context, arg UpdateSettingParams) (Setting, error) {
-	row := q.db.QueryRow(ctx, updateSetting, arg.UserID, arg.Username, arg.LinuxUsername)
+	row := q.db.QueryRow(ctx, updateSetting, arg.UserID, arg.FullName, arg.LinuxUsername)
 	var i Setting
-	err := row.Scan(&i.UserID, &i.Username, &i.LinuxUsername)
+	err := row.Scan(&i.UserID, &i.FullName, &i.LinuxUsername)
 	return i, err
 }

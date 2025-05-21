@@ -48,7 +48,7 @@ type RefreshToken struct {
 
 type Setting struct {
 	UserID        uuid.UUID
-	Username      pgtype.Text
+	FullName      pgtype.Text
 	LinuxUsername pgtype.Text
 }
 

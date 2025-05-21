@@ -5,10 +5,10 @@ SELECT * FROM settings WHERE user_id = $1;
 SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists;
 
 -- name: CreateSetting :one
-INSERT INTO settings (user_id, username, linux_username) VALUES ($1, $2, '') RETURNING *;
+INSERT INTO settings (user_id, full_name, linux_username) VALUES ($1, $2, '') RETURNING *;
 
 -- name: UpdateSetting :one
-UPDATE settings SET username = $2, linux_username = $3 WHERE user_id = $1 RETURNING *;
+UPDATE settings SET full_name = $2, linux_username = $3 WHERE user_id = $1 RETURNING *;
 
 -- name: GetPublicKeys :many
 SELECT * FROM public_keys WHERE user_id = $1;

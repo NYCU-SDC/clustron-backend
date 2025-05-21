@@ -40,7 +40,7 @@ func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Set
 	return setting, nil
 }
 
-func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, username pgtype.Text) (Setting, error) {
+func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (Setting, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -54,7 +54,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 
 	var setting Setting
 	if !exist {
-		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, Username: username})
+		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, FullName: fullName})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "create setting")
 			span.RecordError(err)
@@ -68,7 +68,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 			return Setting{}, err
 		}
 	}
-	
+
 	return setting, nil
 }
 
