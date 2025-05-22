@@ -5,3 +5,6 @@ google_oauth_client_id:
 google_oauth_client_secret:
 nycu_oauth_client_id:
 nycu_oauth_client_secret:
+preset_user:
+  'YOUR_EMAIL':
+    role: admin
