@@ -57,7 +57,7 @@ func (m *Middleware) HandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if !ok {
-			logger.Warn("User does not have permission", zap.String("user_id", user.ID.String()), zap.String("role", user.Role))
+			logger.Warn("User does not have permission", zap.String("user_id", user.ID.String()), zap.String("role", user.Role), zap.String("path", r.URL.Path), zap.String("method", r.Method))
 			m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
 			return
 		}
