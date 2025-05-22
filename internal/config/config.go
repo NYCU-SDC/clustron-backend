@@ -15,7 +15,7 @@ const DefaultSecret = "default-secret"
 
 var (
 	ErrDatabaseURLRequired = errors.New("database_url is required")
-	ErrInvaldUserRole      = errors.New("invalid user role")
+	ErrInvalidUserRole     = errors.New("invalid user role")
 )
 
 type PresetUserInfo struct {
@@ -78,8 +78,8 @@ func (c *Config) Validate() error {
 	}
 
 	for _, user := range c.PresetUser {
-		if role.IsValidGlobalRole(user.Role) {
-			return ErrInvaldUserRole
+		if !role.IsValidGlobalRole(user.Role) {
+			return ErrInvalidUserRole
 		}
 	}
 
