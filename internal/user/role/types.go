@@ -14,8 +14,8 @@ var GlobalRoles = map[GlobalRole]bool{
 	User:      true,
 }
 
-func (g *GlobalRole) String() string {
-	return string(*g)
+func (g GlobalRole) String() string {
+	return string(g)
 }
 
 func IsValidGlobalRole(role string) bool {
