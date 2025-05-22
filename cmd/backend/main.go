@@ -121,7 +121,7 @@ func main() {
 	groupService := group.NewService(logger, dbPool)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
@@ -141,6 +141,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
+	mux.HandleFunc("POST /api/logout", authMiddleware.HandlerFunc(authHandler.Logout))
 
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
