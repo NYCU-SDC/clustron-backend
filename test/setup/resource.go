@@ -2,7 +2,7 @@ package setup
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ory/dockertest/v3"
@@ -19,8 +19,6 @@ type ResourceManager struct {
 	pool     *dockertest.Pool
 	postgres *pgxpool.Pool
 
-	DatabaseUrl string
-
 	resources map[string]*dockertest.Resource
 	cleanups  []func()
 }
@@ -35,17 +33,16 @@ type ResourceManager struct {
 //	tx, rollback, err := rm.SetupPostgres()
 //	defer rollback()
 func (r *ResourceManager) SetupPostgres() (pgx.Tx, func(), error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.postgres == nil {
-		pool, databaseUrl, cleanup, err := setupPostgresWithMigrations(r.pool, r.logger, "file://../../internal/database/migrations")
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		pool, _, cleanup, err := setupPostgresWithMigrations(r.pool, r.logger, "file://../../internal/database/migrations")
 		if err != nil {
 			return nil, nil, err
 		}
 
 		r.postgres = pool
-		r.DatabaseUrl = databaseUrl
 		r.resources = make(map[string]*dockertest.Resource)
 		r.cleanups = append(r.cleanups, cleanup)
 	}
@@ -56,8 +53,9 @@ func (r *ResourceManager) SetupPostgres() (pgx.Tx, func(), error) {
 	}
 
 	cleanup := func() {
-		if err := tx.Rollback(context.Background()); err != nil {
-			fmt.Println("Failed to rollback transaction:", err)
+		err := tx.Rollback(context.Background())
+		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			r.logger.Error("Failed to rollback transaction", zap.Error(err))
 		}
 	}
 
@@ -91,15 +89,13 @@ func (r *ResourceManager) WithPostgresTx(t *testing.T, fn func(tx pgx.Tx)) {
 }
 
 func (r *ResourceManager) Cleanup() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	for _, c := range r.cleanups {
 		c()
 	}
 
 	for _, resource := range r.resources {
-		if err := r.pool.Purge(resource); err != nil {
+		err := r.pool.Purge(resource)
+		if err != nil {
 			r.logger.Error("Failed to purge resource", zap.Error(err))
 		}
 	}

@@ -1,7 +1,6 @@
-package testdata
+package dbtestdata
 
 import (
-	"clustron-backend/internal/user"
 	"context"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -14,13 +13,11 @@ type DBTX interface {
 	QueryRow(context.Context, string, ...interface{}) pgx.Row
 }
 
-type DBTestData struct {
+type Builder struct {
 	t    *testing.T
 	pool DBTX
-
-	UserQueries *user.Queries
 }
 
-func NewTestDataBuilder(t *testing.T, db DBTX) *DBTestData {
-	return &DBTestData{t: t, pool: db}
+func NewBuilder(t *testing.T, db DBTX) *Builder {
+	return &Builder{t: t, pool: db}
 }

@@ -3,13 +3,23 @@ package setup
 import (
 	"go.uber.org/zap"
 	"os"
+	"strings"
 )
 
 func NewTestLogger() (*zap.Logger, error) {
 	cfg := zap.NewDevelopmentConfig()
-	if os.Getenv("TEST_DEBUG") == "1" {
+
+	levelStr := strings.ToLower(os.Getenv("TEST_LOG_LEVEL"))
+	switch levelStr {
+	case "debug":
 		cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	} else {
+	case "info":
+		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	case "warn":
+		cfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		cfg.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	default:
 		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 

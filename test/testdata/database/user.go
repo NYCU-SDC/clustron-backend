@@ -1,6 +1,7 @@
-package testdata
+package dbtestdata
 
 import (
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/test/testutil"
 	"context"
@@ -8,9 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 type UserFactoryParams struct {
+	FullName   string
 	Email      string
 	Role       string
 	Department string
@@ -43,12 +46,32 @@ func WithStudentID(sid string) UserOption {
 	}
 }
 
-func (db DBTestData) GetUserQueries() *user.Queries {
-	return user.New(db.pool)
+func WithFullName(fullName string) UserOption {
+	return func(p *UserFactoryParams) {
+		p.FullName = fullName
+	}
 }
 
-func (db *DBTestData) CreateUser(name string, opts ...UserOption) user.User {
-	queries := user.New(db.pool)
+func (b Builder) User() *UserBuilder {
+	return &UserBuilder{t: b.t, db: b.pool}
+}
+
+type UserBuilder struct {
+	t  *testing.T
+	db DBTX
+}
+
+func NewUserBuilder(t *testing.T, db DBTX) *UserBuilder {
+	return &UserBuilder{t: t, db: db}
+}
+
+func (b UserBuilder) GetUserQueries() *user.Queries {
+	return user.New(b.db)
+}
+
+func (b UserBuilder) CreateUser(opts ...UserOption) user.User {
+	queries := user.New(b.db)
+	settingQueries := setting.New(b.db)
 
 	p := &UserFactoryParams{}
 	for _, opt := range opts {
@@ -71,13 +94,22 @@ func (db *DBTestData) CreateUser(name string, opts ...UserOption) user.User {
 		Email:     p.Email,
 		StudentID: pgtype.Text{String: p.StudentID, Valid: true},
 	})
-	require.NoError(db.t, err)
+	require.NoError(b.t, err)
 
 	userRow, err = queries.UpdateRoleAndDepartment(context.Background(), user.UpdateRoleAndDepartmentParams{
 		ID:         userRow.ID,
 		Role:       pgtype.Text{String: p.Role, Valid: true},
 		Department: pgtype.Text{String: p.Department, Valid: true},
 	})
+	require.NoError(b.t, err)
+
+	if p.FullName != "" {
+		_, err = settingQueries.CreateSetting(context.Background(), setting.CreateSettingParams{
+			UserID:   userRow.ID,
+			Username: pgtype.Text{String: p.FullName, Valid: true},
+		})
+		require.NoError(b.t, err)
+	}
 
 	return userRow
 }
