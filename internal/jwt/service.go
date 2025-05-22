@@ -230,6 +230,21 @@ func (s Service) InactivateRefreshToken(ctx context.Context, id uuid.UUID) error
 	return nil
 }
 
+func (s Service) InactivateRefreshTokensByUserID(ctx context.Context, userID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "InactivateRefreshTokensByUserID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	_, err := s.queries.InactivateByUserID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "user_id", userID.String(), logger, "inactivate refresh tokens by user id")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
 // DeleteExpiredRefreshTokens Remove expired and inactive refresh tokens
 func (s Service) DeleteExpiredRefreshTokens(ctx context.Context) (int64, error) {
 	traceCtx, span := s.tracer.Start(ctx, "DeleteExpiredRefreshTokens")

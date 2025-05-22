@@ -95,3 +95,15 @@ func (q *Queries) Inactivate(ctx context.Context, id uuid.UUID) (RefreshToken, e
 	)
 	return i, err
 }
+
+const inactivateByUserID = `-- name: InactivateByUserID :execrows
+UPDATE refresh_tokens SET is_active = FALSE WHERE user_id = $1 RETURNING id, user_id, is_active, expiration_date
+`
+
+func (q *Queries) InactivateByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, inactivateByUserID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
