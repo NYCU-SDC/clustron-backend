@@ -42,7 +42,7 @@ func (m *Middleware) HandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 		logger := logutil.WithContext(traceCtx, m.logger)
 
 		// Extract the user from the request context
-		user, err := jwt.GetUserFromContext(r.Context())
+		user, err := jwt.GetUserFromContext(traceCtx)
 		if err != nil {
 			logger.Error("Failed to get user from context", zap.Error(err))
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
