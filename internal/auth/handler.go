@@ -23,12 +23,17 @@ import (
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type JWTIssuer interface {
 	New(ctx context.Context, user jwt.User) (string, error)
 	Parse(ctx context.Context, tokenString string) (jwt.User, error)
 	GenerateRefreshToken(ctx context.Context, user jwt.User) (jwt.RefreshToken, error)
+}
+
+type JWTStore interface {
+	InactivateRefreshTokensByUserID(ctx context.Context, userID uuid.UUID) error
 }
 
 type UserStore interface {
@@ -66,6 +71,7 @@ type Handler struct {
 
 	userStore    UserStore
 	jwtIssuer    JWTIssuer
+	jwtStore     JWTStore
 	settingStore SettingStore
 	provider     map[string]OAuthProvider
 }
@@ -77,6 +83,7 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
+	jwtStore JWTStore,
 	settingStore SettingStore) *Handler {
 
 	googleProvider := oauthProvider.NewGoogleConfig(
@@ -99,6 +106,7 @@ func NewHandler(
 
 		userStore:    userStore,
 		jwtIssuer:    jwtIssuer,
+		jwtStore:     jwtStore,
 		settingStore: settingStore,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
@@ -278,4 +286,46 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
 		callback:   *callback,
 		redirectTo: redirectTo,
 	}, nil
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Logout")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	jwtUser, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Invalidate the refresh token associated with the user
+	err = h.jwtStore.InactivateRefreshTokensByUserID(traceCtx, jwtUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Clean the client side cookie
+	accessTokenCookie := &http.Cookie{
+		Name:     "accessToken",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	}
+	refreshTokenCookie := &http.Cookie{
+		Name:     "refreshToken",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, accessTokenCookie)
+	http.SetCookie(w, refreshTokenCookie)
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
