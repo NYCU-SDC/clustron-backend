@@ -55,7 +55,7 @@ type claims struct {
 }
 
 func (u User) HasRole(role string) bool {
-	return u.Role.String == role
+	return u.Role == role
 }
 
 func (s Service) New(ctx context.Context, user User) (string, error) {
@@ -67,7 +67,7 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 
 	id := user.ID
 	email := user.Email
-	role := user.Role.String
+	role := user.Role
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		ID:    id,
@@ -147,7 +147,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 	return User{
 		ID:    claims.ID,
 		Email: claims.Email,
-		Role:  pgtype.Text{String: claims.Role, Valid: true},
+		Role:  claims.Role,
 	}, nil
 }
 

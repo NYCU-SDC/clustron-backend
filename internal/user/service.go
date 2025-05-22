@@ -2,6 +2,7 @@ package user
 
 import (
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/user/role"
 	"context"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -53,11 +54,11 @@ func (s *Service) Create(ctx context.Context, email, studentID string) (User, er
 		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
 	}
 
-	role, exist := s.presetMap[email]
+	presetRole, exist := s.presetMap[email]
 	if exist {
-		param.Role = pgtype.Text{String: role.Role, Valid: true}
+		param.Role = presetRole.Role
 	} else {
-		param.Role = pgtype.Text{String: "user", Valid: true}
+		param.Role = role.User.String()
 	}
 
 	user, err := s.queries.Create(traceCtx, param)
@@ -128,4 +129,19 @@ func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (Us
 	}
 
 	return jwtUser, nil
+}
+
+func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetRoleByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get role by id")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return role, nil
 }

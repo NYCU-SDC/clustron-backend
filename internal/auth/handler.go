@@ -276,6 +276,7 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
 		return callBackInfo{}, err
 	}
 
+	// Clear the query parameters from the callback URL, due to "?" symbol in original URL
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
 
@@ -285,7 +286,6 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
 		callback:   *callback,
 		redirectTo: redirectTo,
 	}, nil
-
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {

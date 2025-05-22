@@ -190,7 +190,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" && user.Role.String != "organizer" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != "admin" && user.Role != "organizer" { // TODO: the string comparison should be replaced with a enum.
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
@@ -256,7 +256,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
 		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -274,7 +274,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -315,7 +315,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role.String != "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
 		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -333,7 +333,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role.String, user.ID, groupUUID)
+	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
