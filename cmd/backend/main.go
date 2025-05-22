@@ -70,6 +70,11 @@ func main() {
 			message := "Please set the DATABASE_URL environment variable or provide a config file with the database_url key."
 			message = EarlyApplicationFailed(title, message)
 			log.Fatal(message)
+		} else if errors.Is(err, config.ErrInvaldUserRole) {
+			title := "Invalid user role"
+			message := "Please check the user role in the config file, it should be one of the following: admin, user, or guest."
+			message = EarlyApplicationFailed(title, message)
+			log.Fatal(message)
 		} else {
 			log.Fatalf("Failed to validate config: %v, exiting...", err)
 		}
@@ -111,7 +116,7 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 
 	// Service
-	userService := user.NewService(logger, dbPool)
+	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
 	groupService := group.NewService(logger, dbPool)

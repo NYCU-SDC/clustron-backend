@@ -1,6 +1,7 @@
 package user
 
 import (
+	"clustron-backend/internal/config"
 	"context"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -12,16 +13,18 @@ import (
 )
 
 type Service struct {
-	queries *Queries
-	logger  *zap.Logger
-	tracer  trace.Tracer
+	queries   *Queries
+	logger    *zap.Logger
+	presetMap map[string]config.PresetUserInfo
+	tracer    trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX) *Service {
 	return &Service{
-		queries: New(db),
-		logger:  logger,
-		tracer:  otel.Tracer("user/service"),
+		queries:   New(db),
+		logger:    logger,
+		presetMap: presetMap,
+		tracer:    otel.Tracer("user/service"),
 	}
 }
 
@@ -48,6 +51,13 @@ func (s *Service) Create(ctx context.Context, email, studentID string) (User, er
 	param := CreateParams{
 		Email:     email,
 		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
+	}
+
+	role, exist := s.presetMap[email]
+	if exist {
+		param.Role = pgtype.Text{String: role.Role, Valid: true}
+	} else {
+		param.Role = pgtype.Text{String: "user", Valid: true}
 	}
 
 	user, err := s.queries.Create(traceCtx, param)

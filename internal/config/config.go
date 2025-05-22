@@ -12,23 +12,31 @@ import (
 
 const DefaultSecret = "default-secret"
 
-var ErrDatabaseURLRequired = errors.New("database_url is required")
+var (
+	ErrDatabaseURLRequired = errors.New("database_url is required")
+	ErrInvaldUserRole      = errors.New("invalid user role")
+)
+
+type PresetUserInfo struct {
+	Role string `yaml:"role"`
+}
 
 type Config struct {
-	Debug                   bool   `yaml:"debug"              envconfig:"DEBUG"`
-	Host                    string `yaml:"host"               envconfig:"HOST"`
-	Port                    string `yaml:"port"               envconfig:"PORT"`
-	BaseURL                 string `yaml:"base_url"          envconfig:"BASE_URL"`
-	Secret                  string `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL             string `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource         string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	CasbinPolicySource      string `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
-	CasbinModelSource       string `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
-	OtelCollectorUrl        string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	GoogleOauthClientID     string `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
-	GoogleOauthClientSecret string `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
-	NYCUOauthClientID       string `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
-	NYCUOauthClientSecret   string `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	Debug                   bool                      `yaml:"debug"              envconfig:"DEBUG"`
+	Host                    string                    `yaml:"host"               envconfig:"HOST"`
+	Port                    string                    `yaml:"port"               envconfig:"PORT"`
+	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
+	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
+	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
+	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	NYCUOauthClientID       string                    `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
+	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
 }
 
 type LogBuffer struct {
@@ -66,6 +74,12 @@ func (cl *LogBuffer) FlushToZap(logger *zap.Logger) {
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return ErrDatabaseURLRequired
+	}
+
+	for _, user := range c.PresetUser {
+		if user.Role != "user" && user.Role != "admin" && user.Role != "organizer" {
+			return ErrInvaldUserRole
+		}
 	}
 
 	return nil

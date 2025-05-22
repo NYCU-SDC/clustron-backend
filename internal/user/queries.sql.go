@@ -13,16 +13,17 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (email, student_id, updated_at) VALUES ($1, $2, now()) RETURNING id, email, role, student_id, created_at, updated_at
+INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, now()) RETURNING id, email, role, student_id, created_at, updated_at
 `
 
 type CreateParams struct {
 	Email     string
+	Role      pgtype.Text
 	StudentID pgtype.Text
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
-	row := q.db.QueryRow(ctx, create, arg.Email, arg.StudentID)
+	row := q.db.QueryRow(ctx, create, arg.Email, arg.Role, arg.StudentID)
 	var i User
 	err := row.Scan(
 		&i.ID,
