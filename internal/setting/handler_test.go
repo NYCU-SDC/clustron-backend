@@ -6,6 +6,7 @@ import (
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
+	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -90,7 +91,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Role: "user",
+				Role: role.User.String(),
 			}))
 
 			w := httptest.NewRecorder()
@@ -120,7 +121,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			name: "Should delete public key",
 			user: jwt.User{
 				ID:   publicKey.UserID,
-				Role: "user",
+				Role: role.User.String(),
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -131,7 +132,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			name: "Should return permission denied when user is not the owner of the public key",
 			user: jwt.User{
 				ID:   uuid.MustParse("8814749c-49db-451d-9c78-5118138a7612"),
-				Role: "user",
+				Role: role.User.String(),
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
@@ -228,7 +229,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
 				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Role: "user",
+				Role: role.User.String(),
 			}))
 			w := httptest.NewRecorder()
 

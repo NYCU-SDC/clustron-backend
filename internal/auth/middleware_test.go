@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/auth/mocks"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/user/role"
 	"context"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectError:    false,
 			enforceCase: EnforceCase{
-				subject: "user",
+				subject: role.User.String(),
 				object:  "/api/v1/user",
 				action:  "GET",
 			},
@@ -46,13 +47,13 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 			name: "Should return 403 when does not have permission",
 			user: jwt.User{
 				ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
-				Role:  "user",
+				Role:  role.User.String(),
 				Email: "test@gmail.com",
 			},
 			expectedStatus: http.StatusForbidden,
 			expectError:    true,
 			enforceCase: EnforceCase{
-				subject: "user",
+				subject: role.User.String(),
 				object:  "/api/v1/user",
 				action:  "GET",
 			},
