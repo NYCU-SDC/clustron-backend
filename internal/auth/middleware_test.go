@@ -6,8 +6,8 @@ import (
 	"clustron-backend/internal/auth/mocks"
 	"clustron-backend/internal/jwt"
 	"context"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,7 +60,7 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 	}
 
 	// Mock the dependencies
-	logger, err := zap.NewDevelopment()
+	logger, err := logutil.ZapDevelopmentConfig().Build()
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
