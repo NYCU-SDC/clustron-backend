@@ -2,6 +2,7 @@ package group
 
 import (
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"fmt"
@@ -65,7 +66,7 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 
 	var response []UserScope
 	var totalCount int
-	if user.Role == "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role == role.Admin.String() {
 		groups, err := s.ListPaged(traceCtx, page, size, sort, sortBy)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "Get all groups")
@@ -207,7 +208,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 
 	var group Group
 	var err error
-	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != role.Admin.String() {
 		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
 	} else {
 		group, err = s.Get(traceCtx, groupID)
@@ -458,14 +459,14 @@ func (s *Service) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (Group
 }
 
 func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (Role, string, error) {
-	role, err := s.GetUserGroupRole(ctx, userID, groupID)
+	groupRole, err := s.GetUserGroupRole(ctx, userID, groupID)
 	roleType := "membership"
 	roleResponse := Role{}
 	if err != nil {
 		// if the user is not a member of the group, check if the user is an admin
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			// if the user is an admin, return the group with admin override
-			if userRole == "admin" { // TODO: the string comparison should be replaced with a enum.
+			if userRole == role.Admin.String() {
 				roleType = "adminOverride"
 			} else {
 				// if the user is not a member of the group and not an admin, return 404
@@ -479,9 +480,9 @@ func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, use
 	// if roleResponse hasn't been set, it means the user is a member of the group
 	if roleResponse == (Role{}) && roleType != "adminOverride" {
 		roleResponse = Role{
-			ID:          role.ID,
-			Role:        role.Role.String,
-			AccessLevel: role.AccessLevel,
+			ID:          groupRole.ID,
+			Role:        groupRole.Role.String,
+			AccessLevel: groupRole.AccessLevel,
 		}
 	}
 

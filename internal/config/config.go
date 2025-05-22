@@ -1,6 +1,7 @@
 package config
 
 import (
+	"clustron-backend/internal/user/role"
 	"errors"
 	"flag"
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
@@ -77,7 +78,7 @@ func (c *Config) Validate() error {
 	}
 
 	for _, user := range c.PresetUser {
-		if user.Role != "user" && user.Role != "admin" && user.Role != "organizer" {
+		if role.IsValidGlobalRole(user.Role) {
 			return ErrInvaldUserRole
 		}
 	}
