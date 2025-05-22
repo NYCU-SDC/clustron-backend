@@ -13,12 +13,12 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, now()) RETURNING id, email, role, student_id, created_at, updated_at
+INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, email, role, student_id, created_at, updated_at
 `
 
 type CreateParams struct {
 	Email     string
-	Role      pgtype.Text
+	Role      string
 	StudentID pgtype.Text
 }
 
