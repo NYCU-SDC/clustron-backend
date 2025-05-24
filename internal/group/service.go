@@ -24,19 +24,25 @@ type UserStore interface {
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
-type Service struct {
-	logger    *zap.Logger
-	tracer    trace.Tracer
-	queries   *Queries
-	userStore user.ServiceInterface
+type SettingStore interface {
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore user.ServiceInterface) *Service {
+type Service struct {
+	logger       *zap.Logger
+	tracer       trace.Tracer
+	queries      *Queries
+	userStore    user.ServiceInterface
+	settingStore SettingStore
+}
+
+func NewService(logger *zap.Logger, db DBTX, userStore user.ServiceInterface, settingStore SettingStore) *Service {
 	return &Service{
-		logger:    logger,
-		tracer:    otel.Tracer("group/service"),
-		queries:   New(db),
-		userStore: userStore,
+		logger:       logger,
+		tracer:       otel.Tracer("group/service"),
+		queries:      New(db),
+		userStore:    userStore,
+		settingStore: settingStore,
 	}
 }
 
@@ -646,9 +652,22 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 		)
 	}
 
+	setting, err := s.settingStore.GetSettingByUserID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"settings",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user setting",
+		)
+	}
+
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  u.Username,
+		Username:  setting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role: Role{

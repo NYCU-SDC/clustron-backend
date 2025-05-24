@@ -114,7 +114,7 @@ func main() {
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
-	groupService := group.NewService(logger, dbPool, userService)
+	groupService := group.NewService(logger, dbPool, userService, settingService)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
