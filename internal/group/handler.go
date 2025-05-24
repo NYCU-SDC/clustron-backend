@@ -32,9 +32,9 @@ type Store interface {
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
-	AddGroupMember(ctx context.Context, member string, groupID uuid.UUID, role string) (Membership, error)
+	AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role uuid.UUID) (Membership, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role string) (MemberResponse, error)
+	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
 	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
 }
@@ -59,8 +59,13 @@ type Response struct {
 }
 
 type AddMemberRequest struct {
-	Member string `json:"member"` // email or student id
-	Role   string `json:"role"`
+	Member string    `json:"member"` // email or student id
+	Role   uuid.UUID `json:"role"`
+}
+
+type UpdateMemberRequest struct {
+	ID   uuid.UUID `json:"id"`
+	Role uuid.UUID `json:"role"`
 }
 
 type CreateRequest struct {
@@ -217,8 +222,14 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roleOwner, err := h.store.GetGroupRoleByID(traceCtx, uuid.MustParse(string(RoleOwner)))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	// 1. Set creator as a group-owner
-	_, err = h.store.AddGroupMember(traceCtx, user.Email, group.ID, "Group Owner")
+	_, err = h.store.AddGroupMember(traceCtx, user.Email, group.ID, roleOwner.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -238,12 +249,6 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-	}
-
-	roleOwner, err := h.store.GetGroupRoleByID(traceCtx, uuid.MustParse(string(RoleOwner)))
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
 	}
 
 	groupResponse := Response{
@@ -417,6 +422,18 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// check if the user's access_level is bigger than the member's access_level
+	newRole, err := h.store.GetGroupRoleByID(traceCtx, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if accessLevel <= newRole.AccessLevel {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
 	member, err := h.store.AddGroupMember(traceCtx, req.Member, groupUUID, req.Role)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -504,7 +521,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req AddMemberRequest
+	var req UpdateMemberRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

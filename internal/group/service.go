@@ -2,6 +2,7 @@ package group
 
 import (
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
@@ -12,7 +13,6 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -539,20 +539,14 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, 
 	return members, nil
 }
 
-func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role string) (Membership, error) {
+func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role uuid.UUID) (Membership, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// find a group role by name
-	groupRole, err := s.queries.GetGroupRoleByName(ctx, pgtype.Text{String: role, Valid: true})
-	if err != nil {
-		span.RecordError(err)
-		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role, logger, "invalid role")
-	}
-
 	// get user id by email or student id
 	var userId uuid.UUID
+	var err error
 	if strings.Contains(userIdentifier, "@") {
 		userId, err = s.userStore.GetIdByEmail(ctx, userIdentifier)
 	} else {
@@ -564,7 +558,7 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 		_, err = s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
 			UserIdentifier: userIdentifier,
 			GroupID:        groupId,
-			RoleID:         groupRole.ID,
+			RoleID:         role,
 		})
 		if err != nil {
 			span.RecordError(err)
@@ -581,7 +575,7 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 	member, err := s.queries.AddGroupMember(ctx, AddGroupMemberParams{
 		GroupID: groupId,
 		UserID:  userId,
-		RoleID:  groupRole.ID,
+		RoleID:  role,
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -608,24 +602,13 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, user
 	return nil
 }
 
-func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role string) (MemberResponse, error) {
+func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	roleId, err := s.queries.GetRoleIdByGroupAndUser(traceCtx, GetRoleIdByGroupAndUserParams{
-		GroupID: groupId,
-		UserID:  userId,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to get role_id")
-		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-
 	updatedRole, err := s.queries.UpdateGroupMemberRole(ctx, UpdateGroupMemberRoleParams{
-		ID:   roleId,
-		Role: role,
+		ID: role,
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -633,7 +616,7 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 			err,
 			"group_roles",
 			"role_id",
-			roleId.String(),
+			role.String(),
 			logger,
 			"failed to update role",
 		)
@@ -677,6 +660,7 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 		},
 	}, nil
 }
+
 func (s *Service) ListGroupRoles(ctx context.Context) ([]GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListGroupRoles")
 	defer span.End()
