@@ -40,7 +40,7 @@ type DeletePublicKeyRequest struct {
 type PublicKeyResponse struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
-	PublicKey string `json:"publicLey"`
+	PublicKey string `json:"publicKey"`
 }
 
 //go:generate mockery --name Store

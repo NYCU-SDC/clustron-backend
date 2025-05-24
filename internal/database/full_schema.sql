@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS users
 (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           VARCHAR(255) UNIQUE NOT NULL,
-    role            VARCHAR(255) DEFAULT 'user',
-    department      VARCHAR(255),
+    role            VARCHAR(255) NOT NULL DEFAULT 'user',
     student_id      VARCHAR(255) UNIQUE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -58,7 +57,7 @@ CREATE TABLE IF NOT EXISTS pending_group_members (
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS settings (
-    user_id UUID REFERENCES users(id) NOT NULL,
+    user_id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
     username VARCHAR(255),
     linux_username VARCHAR(255)
 );

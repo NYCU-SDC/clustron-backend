@@ -1,6 +1,8 @@
 package user
 
 import (
+	"clustron-backend/internal/config"
+	"clustron-backend/internal/user/role"
 	"context"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -13,9 +15,10 @@ import (
 )
 
 type Service struct {
-	queries *Queries
-	logger  *zap.Logger
-	tracer  trace.Tracer
+	queries   *Queries
+	logger    *zap.Logger
+	presetMap map[string]config.PresetUserInfo
+	tracer    trace.Tracer
 }
 
 type ServiceInterface interface {
@@ -24,11 +27,12 @@ type ServiceInterface interface {
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX) *Service {
 	return &Service{
-		queries: New(db),
-		logger:  logger,
-		tracer:  otel.Tracer("user/service"),
+		queries:   New(db),
+		logger:    logger,
+		presetMap: presetMap,
+		tracer:    otel.Tracer("user/service"),
 	}
 }
 
@@ -55,6 +59,13 @@ func (s *Service) Create(ctx context.Context, email, studentID string) (User, er
 	param := CreateParams{
 		Email:     email,
 		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
+	}
+
+	presetRole, exist := s.presetMap[email]
+	if exist {
+		param.Role = presetRole.Role
+	} else {
+		param.Role = role.User.String()
 	}
 
 	user, err := s.queries.Create(traceCtx, param)
@@ -155,4 +166,19 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 	}
 
 	return id, nil
+
+func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetRoleByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get role by id")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return role, nil
+
 }

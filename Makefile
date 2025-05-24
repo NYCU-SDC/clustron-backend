@@ -34,6 +34,8 @@ gen:
 	@./scripts/create_full_schema.sh || (echo -e "  -> $(RED)Schema creation failed$(NC)" && exit 1)
 	@echo -e "  -> Generating SQLC code..."
 	@sqlc generate || (echo -e "  -> $(RED)SQLC generation failed$(NC)" && exit 1)
+	@echo -e "  -> Generating Casbin Policyfile..."
+	@./scripts/create_full_schema.sh || (echo -e "  -> $(RED)Policyfile generation failed$(NC)" && exit 1)
 	@echo -e "  -> Running go generate..."
 	@go generate ./... || (echo -e "  -> $(RED)Go generate failed$(NC)" && exit 1)
 	@echo -e "==> $(BLUE)Generation completed$(NC)"

@@ -62,7 +62,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (RefreshToken, erro
 }
 
 const getUserByRefreshToken = `-- name: GetUserByRefreshToken :one
-SELECT u.id, u.email, u.role, u.department, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1
+SELECT u.id, u.email, u.role, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1
 `
 
 func (q *Queries) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {
@@ -72,7 +72,6 @@ func (q *Queries) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User
 		&i.ID,
 		&i.Email,
 		&i.Role,
-		&i.Department,
 		&i.StudentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -94,4 +93,16 @@ func (q *Queries) Inactivate(ctx context.Context, id uuid.UUID) (RefreshToken, e
 		&i.ExpirationDate,
 	)
 	return i, err
+}
+
+const inactivateByUserID = `-- name: InactivateByUserID :execrows
+UPDATE refresh_tokens SET is_active = FALSE WHERE user_id = $1 RETURNING id, user_id, is_active, expiration_date
+`
+
+func (q *Queries) InactivateByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, inactivateByUserID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

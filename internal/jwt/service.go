@@ -55,7 +55,7 @@ type claims struct {
 }
 
 func (u User) HasRole(role string) bool {
-	return u.Role.String == role
+	return u.Role == role
 }
 
 func (s Service) New(ctx context.Context, user User) (string, error) {
@@ -67,7 +67,7 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 
 	id := user.ID
 	email := user.Email
-	role := user.Role.String
+	role := user.Role
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		ID:    id,
@@ -147,7 +147,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 	return User{
 		ID:    claims.ID,
 		Email: claims.Email,
-		Role:  pgtype.Text{String: claims.Role, Valid: true},
+		Role:  claims.Role,
 	}, nil
 }
 
@@ -223,6 +223,21 @@ func (s Service) InactivateRefreshToken(ctx context.Context, id uuid.UUID) error
 	_, err := s.queries.Inactivate(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "id", id.String(), logger, "inactivate refresh token")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (s Service) InactivateRefreshTokensByUserID(ctx context.Context, userID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "InactivateRefreshTokensByUserID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	_, err := s.queries.InactivateByUserID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "refresh_token", "user_id", userID.String(), logger, "inactivate refresh tokens by user id")
 		span.RecordError(err)
 		return err
 	}

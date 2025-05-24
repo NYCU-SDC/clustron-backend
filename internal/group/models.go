@@ -62,11 +62,10 @@ type Setting struct {
 }
 
 type User struct {
-	ID         uuid.UUID
-	Email      string
-	Role       pgtype.Text
-	Department pgtype.Text
-	StudentID  pgtype.Text
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID        uuid.UUID
+	Email     string
+	Role      string
+	StudentID pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
