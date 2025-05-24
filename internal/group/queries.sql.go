@@ -752,21 +752,28 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Group, error) {
 	return i, err
 }
 
-const updateGroupMemberRole = `-- name: UpdateGroupMemberRole :one
-UPDATE group_role
-SET role = $2::text
-WHERE id = $1
-RETURNING id, role, access_level
+const updateMembershipRole = `-- name: UpdateMembershipRole :one
+UPDATE memberships
+SET role_id = $1
+WHERE group_id = $2 AND user_id = $3
+RETURNING user_id, group_id, role_id, created_at, updated_at
 `
 
-type UpdateGroupMemberRoleParams struct {
-	ID   uuid.UUID
-	Role string
+type UpdateMembershipRoleParams struct {
+	RoleID  uuid.UUID
+	GroupID uuid.UUID
+	UserID  uuid.UUID
 }
 
-func (q *Queries) UpdateGroupMemberRole(ctx context.Context, arg UpdateGroupMemberRoleParams) (GroupRole, error) {
-	row := q.db.QueryRow(ctx, updateGroupMemberRole, arg.ID, arg.Role)
-	var i GroupRole
-	err := row.Scan(&i.ID, &i.Role, &i.AccessLevel)
+func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembershipRoleParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, updateMembershipRole, arg.RoleID, arg.GroupID, arg.UserID)
+	var i Membership
+	err := row.Scan(
+		&i.UserID,
+		&i.GroupID,
+		&i.RoleID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }

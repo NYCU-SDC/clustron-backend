@@ -113,10 +113,10 @@ RETURNING *;
 DELETE FROM memberships
 WHERE group_id = $1 AND user_id = $2;
 
--- name: UpdateGroupMemberRole :one
-UPDATE group_role
-SET role = @role::text
-WHERE id = $1
+-- name: UpdateMembershipRole :one
+UPDATE memberships
+SET role_id = $1
+WHERE group_id = $2 AND user_id = $3
 RETURNING *;
 
 -- name: GetRoleIdByGroupAndUser :one
