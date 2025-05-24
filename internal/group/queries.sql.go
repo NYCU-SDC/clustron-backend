@@ -177,19 +177,6 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (Group, error) {
 	return i, err
 }
 
-const getAccessLevelByRole = `-- name: GetAccessLevelByRole :one
-SELECT access_level
-FROM group_role
-WHERE role = $1::text
-`
-
-func (q *Queries) GetAccessLevelByRole(ctx context.Context, role string) (string, error) {
-	row := q.db.QueryRow(ctx, getAccessLevelByRole, role)
-	var access_level string
-	err := row.Scan(&access_level)
-	return access_level, err
-}
-
 const getGroupRoleByID = `-- name: GetGroupRoleByID :one
 SELECT id, role, access_level FROM group_role WHERE id = $1
 `
