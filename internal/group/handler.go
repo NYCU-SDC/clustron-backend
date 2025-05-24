@@ -415,7 +415,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+	if !HasGroupControlAccess(accessLevel) {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
@@ -433,12 +433,49 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if accessLevel <= newRole.AccessLevel {
+	if !CanAssignRole(accessLevel, role.AccessLevel) {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
 
-	member, err := h.store.AddGroupMember(traceCtx, req.Member, groupUUID, req.Role)
+	// check if the user is already a member of the group
+	_, err = h.store.GetMembershipsByUser(traceCtx, GetMembershipsByUserParams{
+		UserID:  user.ID,
+		GroupID: groupUUID,
+	})
+	if err == nil {
+		handlerutil.WriteJSONResponse(w, http.StatusConflict, "user is already a member of the group")
+		return
+	}
+	if !errors.As(err, &handlerutil.NotFoundError{}) {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// get user id by email or student id
+	var userId uuid.UUID
+	if strings.Contains(req.Member, "@") {
+		userId, err = h.store.GetIdByEmail(traceCtx, req.Member)
+	} else {
+		userId, err = h.store.GetIdByStudentId(traceCtx, req.Member)
+	}
+
+	// if the user is not found, add to pending_group_members
+	if err != nil {
+		pendingMember, err := h.store.AddPendingGroupMember(traceCtx, AddPendingGroupMemberParams{
+			UserIdentifier: req.Member,
+			GroupID:        groupUUID,
+			RoleID:         req.Role,
+		})
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		handlerutil.WriteJSONResponse(w, http.StatusCreated, pendingMember)
+	}
+
+	// add the user to the group
+	member, err := h.store.AddGroupMember(traceCtx, userId, groupUUID, req.Role)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -477,7 +514,7 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+	if !HasGroupControlAccess(accessLevel) {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
@@ -520,7 +557,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+	if !HasGroupControlAccess(accessLevel) {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
@@ -528,6 +565,18 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 	var req UpdateMemberRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the user's role is greater than the target role
+	role, err := h.store.GetGroupRoleByID(traceCtx, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if !CanAssignRole(accessLevel, role.AccessLevel) {
+		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
 
@@ -564,7 +613,7 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	if accessLevel != string(AccessLevelOwner) && accessLevel != string(AccessLevelAdmin) {
+	if !HasGroupControlAccess(accessLevel) {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
