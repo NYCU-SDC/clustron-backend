@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -539,39 +538,38 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, 
 	return members, nil
 }
 
-func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, groupId uuid.UUID, role uuid.UUID) (Membership, error) {
+func (s *Service) AddPendingGroupMember(ctx context.Context, params AddPendingGroupMemberParams) (PendingMemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddPendingGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	pendingMember, err := s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
+		UserIdentifier: params.UserIdentifier,
+		GroupID:        params.GroupID,
+		RoleID:         params.RoleID,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return PendingMemberResponse{}, databaseutil.WrapDBError(
+			err,
+			logger,
+			"failed to add pending member",
+		)
+	}
+
+	return PendingMemberResponse{
+		ID:             pendingMember.ID,
+		UserIdentifier: pendingMember.UserIdentifier,
+		GroupID:        pendingMember.GroupID,
+		RoleID:         pendingMember.RoleID,
+	}, nil
+}
+
+func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// get user id by email or student id
-	var userId uuid.UUID
-	var err error
-	if strings.Contains(userIdentifier, "@") {
-		userId, err = s.userStore.GetIdByEmail(ctx, userIdentifier)
-	} else {
-		userId, err = s.userStore.GetIdByStudentId(ctx, userIdentifier)
-	}
-
-	// user isn't registered, add to pending_group_members
-	if err != nil {
-		_, err = s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
-			UserIdentifier: userIdentifier,
-			GroupID:        groupId,
-			RoleID:         role,
-		})
-		if err != nil {
-			span.RecordError(err)
-			return Membership{}, databaseutil.WrapDBError(
-				err,
-				logger,
-				"failed to add pending member",
-			)
-		}
-		return Membership{}, nil
-	}
-
-	// add member to group
 	member, err := s.queries.AddGroupMember(ctx, AddGroupMemberParams{
 		GroupID: groupId,
 		UserID:  userId,
@@ -579,10 +577,59 @@ func (s *Service) AddGroupMember(ctx context.Context, userIdentifier string, gro
 	})
 	if err != nil {
 		span.RecordError(err)
-		return Membership{}, databaseutil.WrapDBError(err, logger, "failed to add member")
+		return MemberResponse{}, databaseutil.WrapDBError(err, logger, "failed to add member")
 	}
 
-	return member, nil
+	u, err := s.userStore.GetByID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"users",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user info",
+		)
+	}
+
+	setting, err := s.settingStore.GetSettingByUserID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"settings",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user setting",
+		)
+	}
+
+	roleResponse, err := s.GetGroupRoleByID(ctx, member.RoleID)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"group_roles",
+			"role_id",
+			member.RoleID.String(),
+			logger,
+			"failed to get group role",
+		)
+	}
+
+	return MemberResponse{
+		ID:        u.ID,
+		Username:  setting.Username.String,
+		Email:     u.Email,
+		StudentID: u.StudentID.String,
+		Role: Role{
+			ID:          roleResponse.ID,
+			Role:        roleResponse.Role.String,
+			AccessLevel: roleResponse.AccessLevel,
+		},
+	}, nil
 }
 
 func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID) error {
@@ -607,18 +654,20 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	updatedRole, err := s.queries.UpdateGroupMemberRole(ctx, UpdateGroupMemberRoleParams{
-		ID: role,
+	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  role,
 	})
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
 			err,
-			"group_roles",
-			"role_id",
-			role.String(),
+			"memberships",
+			"group_id/user_id",
+			fmt.Sprintf("%s/%s", groupId, userId),
 			logger,
-			"failed to update role",
+			"failed to update membership",
 		)
 	}
 
@@ -648,15 +697,28 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 		)
 	}
 
+	roleResponse, err := s.GetGroupRoleByID(ctx, updatedMembership.RoleID)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"group_roles",
+			"role_id",
+			updatedMembership.RoleID.String(),
+			logger,
+			"failed to get group role",
+		)
+	}
+
 	return MemberResponse{
 		ID:        u.ID,
 		Username:  setting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role: Role{
-			ID:          updatedRole.ID,
-			Role:        updatedRole.Role.String,
-			AccessLevel: updatedRole.AccessLevel,
+			ID:          roleResponse.ID,
+			Role:        roleResponse.Role.String,
+			AccessLevel: roleResponse.AccessLevel,
 		},
 	}, nil
 }
