@@ -166,6 +166,7 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 	}
 
 	return id, nil
+}
 
 func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")

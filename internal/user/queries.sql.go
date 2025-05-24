@@ -117,7 +117,8 @@ func (q *Queries) GetIdByStudentId(ctx context.Context, studentID pgtype.Text) (
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
-  
+}
+
 const getRoleByID = `-- name: GetRoleByID :one
 SELECT role FROM users WHERE id = $1
 `
