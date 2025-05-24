@@ -2,30 +2,47 @@ package group
 
 import (
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
+	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/NYCU-SDC/summer/pkg/database"
+
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
-	"github.com/NYCU-SDC/summer/pkg/log"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
-type Service struct {
-	logger  *zap.Logger
-	tracer  trace.Tracer
-	queries *Queries
+type UserStore interface {
+	GetByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type SettingStore interface {
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
+}
+
+type Service struct {
+	logger       *zap.Logger
+	tracer       trace.Tracer
+	queries      *Queries
+	userStore    user.ServiceInterface
+	settingStore SettingStore
+}
+
+func NewService(logger *zap.Logger, db DBTX, userStore user.ServiceInterface, settingStore SettingStore) *Service {
 	return &Service{
-		logger:  logger,
-		tracer:  otel.Tracer("group/service"),
-		queries: New(db),
+		logger:       logger,
+		tracer:       otel.Tracer("group/service"),
+		queries:      New(db),
+		userStore:    userStore,
+		settingStore: settingStore,
 	}
 }
 
@@ -487,4 +504,236 @@ func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, use
 	}
 
 	return roleResponse, roleType, nil
+}
+
+func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetGroupMembers")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var members []Membership
+	var err error
+	if sort == "desc" {
+		params := ListGroupMembersDescPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Page:    int32(page),
+		}
+		members, err = s.queries.ListGroupMembersDescPaged(ctx, params)
+	} else {
+		params := ListGroupMembersAscPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Page:    int32(page),
+		}
+		members, err = s.queries.ListGroupMembersAscPaged(ctx, params)
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get members")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return members, nil
+}
+
+func (s *Service) AddPendingGroupMember(ctx context.Context, params AddPendingGroupMemberParams) (PendingMemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddPendingGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	pendingMember, err := s.queries.AddPendingGroupMember(ctx, AddPendingGroupMemberParams{
+		UserIdentifier: params.UserIdentifier,
+		GroupID:        params.GroupID,
+		RoleID:         params.RoleID,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return PendingMemberResponse{}, databaseutil.WrapDBError(
+			err,
+			logger,
+			"failed to add pending member",
+		)
+	}
+
+	return PendingMemberResponse{
+		ID:             pendingMember.ID,
+		UserIdentifier: pendingMember.UserIdentifier,
+		GroupID:        pendingMember.GroupID,
+		RoleID:         pendingMember.RoleID,
+	}, nil
+}
+
+func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	member, err := s.queries.AddGroupMember(ctx, AddGroupMemberParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  role,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBError(err, logger, "failed to add member")
+	}
+
+	u, err := s.userStore.GetByID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"users",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user info",
+		)
+	}
+
+	setting, err := s.settingStore.GetSettingByUserID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"settings",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user setting",
+		)
+	}
+
+	roleResponse, err := s.GetGroupRoleByID(ctx, member.RoleID)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"group_roles",
+			"role_id",
+			member.RoleID.String(),
+			logger,
+			"failed to get group role",
+		)
+	}
+
+	return MemberResponse{
+		ID:        u.ID,
+		Username:  setting.Username.String,
+		Email:     u.Email,
+		StudentID: u.StudentID.String,
+		Role: Role{
+			ID:          roleResponse.ID,
+			Role:        roleResponse.Role.String,
+			AccessLevel: roleResponse.AccessLevel,
+		},
+	}, nil
+}
+
+func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "RemoveGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.RemoveGroupMember(ctx, RemoveGroupMemberParams{
+		GroupID: groupId,
+		UserID:  userId,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to remove group member")
+	}
+
+	return nil
+}
+
+func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupMember")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  role,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"memberships",
+			"group_id/user_id",
+			fmt.Sprintf("%s/%s", groupId, userId),
+			logger,
+			"failed to update membership",
+		)
+	}
+
+	u, err := s.userStore.GetByID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"users",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user info",
+		)
+	}
+
+	setting, err := s.settingStore.GetSettingByUserID(ctx, userId)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"settings",
+			"user_id",
+			userId.String(),
+			logger,
+			"failed to get user setting",
+		)
+	}
+
+	roleResponse, err := s.GetGroupRoleByID(ctx, updatedMembership.RoleID)
+	if err != nil {
+		span.RecordError(err)
+		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"group_roles",
+			"role_id",
+			updatedMembership.RoleID.String(),
+			logger,
+			"failed to get group role",
+		)
+	}
+
+	return MemberResponse{
+		ID:        u.ID,
+		Username:  setting.Username.String,
+		Email:     u.Email,
+		StudentID: u.StudentID.String,
+		Role: Role{
+			ID:          roleResponse.ID,
+			Role:        roleResponse.Role.String,
+			AccessLevel: roleResponse.AccessLevel,
+		},
+	}, nil
+}
+
+func (s *Service) ListGroupRoles(ctx context.Context) ([]GroupRole, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListGroupRoles")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	roles, err := s.queries.ListGroupRoles(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to list group roles")
+		span.RecordError(err)
+		return nil, err
+	}
+	return roles, nil
 }

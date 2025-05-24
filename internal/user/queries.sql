@@ -17,3 +17,9 @@ INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now(
 
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;
+
+-- name: GetIdByEmail :one
+SELECT id FROM users WHERE email = $1;
+
+-- name: GetIdByStudentId :one
+SELECT id FROM users WHERE student_id = $1;

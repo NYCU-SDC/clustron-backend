@@ -13,8 +13,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
-	"github.com/NYCU-SDC/summer/pkg/log"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/middleware"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5"
@@ -28,12 +35,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 var AppName = "no-app-name"
@@ -119,7 +120,7 @@ func main() {
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
-	groupService := group.NewService(logger, dbPool)
+	groupService := group.NewService(logger, dbPool, userService, settingService)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
@@ -163,6 +164,12 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
+
+	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.ListGroupMembersPagedHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.AddGroupMemberHandler))
+	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.RemoveGroupMemberHandler))
+	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.UpdateGroupMemberHandler))
+	mux.HandleFunc("GET /api/groups/roles", authMiddleware.HandlerFunc(groupHandler.ListGroupRolesHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

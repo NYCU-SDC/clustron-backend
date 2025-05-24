@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/user/role"
 	"context"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -18,6 +19,12 @@ type Service struct {
 	logger    *zap.Logger
 	presetMap map[string]config.PresetUserInfo
 	tracer    trace.Tracer
+}
+
+type ServiceInterface interface {
+	GetByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 }
 
 func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX) *Service {
@@ -131,6 +138,36 @@ func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (Us
 	return jwtUser, nil
 }
 
+func (s *Service) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetIdByEmail")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id, err := s.queries.GetIdByEmail(traceCtx, email)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user id by email")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return id, nil
+}
+
+func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetIdByStudentId")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id, err := s.queries.GetIdByStudentId(traceCtx, pgtype.Text{String: studentID, Valid: studentID != ""})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user id by student id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return id, nil
+}
+
 func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")
 	defer span.End()
@@ -144,4 +181,5 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error)
 	}
 
 	return role, nil
+
 }
