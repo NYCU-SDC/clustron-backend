@@ -498,6 +498,30 @@ func (q *Queries) ListGroupMembersDescPaged(ctx context.Context, arg ListGroupMe
 	return items, nil
 }
 
+const listGroupRoles = `-- name: ListGroupRoles :many
+SELECT id, role, access_level FROM group_role
+`
+
+func (q *Queries) ListGroupRoles(ctx context.Context) ([]GroupRole, error) {
+	rows, err := q.db.Query(ctx, listGroupRoles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GroupRole
+	for rows.Next() {
+		var i GroupRole
+		if err := rows.Scan(&i.ID, &i.Role, &i.AccessLevel); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIfMemberAscPaged = `-- name: ListIfMemberAscPaged :many
 SELECT
     g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,

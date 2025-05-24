@@ -150,3 +150,6 @@ WHERE role = @role::text;
 
 -- name: GetGroupRoleByName :one
 SELECT * FROM group_role WHERE role = $1;
+
+-- name: ListGroupRoles :many
+SELECT * FROM group_role;
