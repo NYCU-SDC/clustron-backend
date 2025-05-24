@@ -658,3 +658,16 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 		},
 	}, nil
 }
+func (s *Service) ListGroupRoles(ctx context.Context) ([]GroupRole, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListGroupRoles")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	roles, err := s.queries.ListGroupRoles(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to list group roles")
+		span.RecordError(err)
+		return nil, err
+	}
+	return roles, nil
+}
