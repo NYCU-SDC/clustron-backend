@@ -153,7 +153,7 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.ListGroupMembersPagedHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.AddGroupMemberHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.RemoveGroupMemberHandler))
-	mux.HandleFunc("POST /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.UpdateGroupMemberHandler))
+	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.UpdateGroupMemberHandler))
 	mux.HandleFunc("GET /api/groups/roles", authMiddleware.HandlerFunc(groupHandler.ListGroupRolesHandler))
 
 	// handle interrupt signal
