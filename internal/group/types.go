@@ -19,6 +19,12 @@ const (
 	AccessLevelUser  AccessLevel = "USER"
 )
 
+var accessLevelRank = map[string]int{
+	"GROUP_OWNER": 3,
+	"GROUP_ADMIN": 2,
+	"USER":        1,
+}
+
 var DefaultRoleToAccessLevel = map[DefaultRole]AccessLevel{
 	RoleOwner:   AccessLevelOwner,
 	RoleTA:      AccessLevelAdmin,
@@ -54,4 +60,11 @@ type MemberResponse struct {
 	Email     string    `json:"email"`
 	StudentID string    `json:"studentId"`
 	Role      Role      `json:"role"`
+}
+
+type PendingMemberResponse struct {
+	ID             uuid.UUID `json:"id"`
+	UserIdentifier string    `json:"userIdentifier"`
+	GroupID        uuid.UUID `json:"groupId"`
+	RoleID         uuid.UUID `json:"roleId"`
 }
