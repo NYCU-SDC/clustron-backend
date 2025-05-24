@@ -36,6 +36,7 @@ type Store interface {
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role string) (MemberResponse, error)
 	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
+	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
 }
 
 type RoleResponse struct {
@@ -571,4 +572,18 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, members)
+}
+
+func (h *Handler) ListGroupRolesHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListGroupRolesHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "ListGroupRolesHandler"))
+
+	roles, err := h.store.ListGroupRoles(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, roles)
 }
