@@ -514,6 +514,7 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, g
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		logger.Error("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
 		return nil, errors.New("forbidden")
 	}
 
@@ -548,56 +549,62 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, g
 func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		logger.Error("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
 		return nil, errors.New("forbidden")
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !CanAssignRole(s, ctx, userId, groupId, role) {
+		logger.Error("user does not have permission to assign this role", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
 		return nil, errors.New("forbidden")
-	}
-
-	// check if the user is already a member of the group
-	_, err := s.queries.GetMembershipByUser(ctx, GetMembershipByUserParams{
-		UserID:  userId,
-		GroupID: groupId,
-	})
-	if err == nil {
-		return nil, errors.New("user is already a member of the group")
-	}
-	if !errors.As(err, &handlerutil.NotFoundError{}) {
-		return nil, err
 	}
 
 	// get user id by email or student id
 	var memberUserId uuid.UUID
+	var err error
 	if strings.Contains(memberIdentifier, "@") {
 		memberUserId, err = s.userStore.GetIdByEmail(traceCtx, memberIdentifier)
 	} else {
 		memberUserId, err = s.userStore.GetIdByStudentId(traceCtx, memberIdentifier)
 	}
+	if err != nil {
+		logger.Error("failed to get user id by email or student id", zap.String("user_id", memberUserId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()), zap.Error(err))
+		return nil, err
+	}
 
 	// if the user is not found, add to pending_group_members
-	if !errors.As(err, &handlerutil.NotFoundError{}) {
+	if memberUserId == uuid.Nil {
+		logger.Info("user not found, adding to pending_group_members", zap.String("user_id", memberUserId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
 		pendingMember, err := s.JoinPendingGroupMember(traceCtx, AddPendingGroupMemberParams{
 			UserIdentifier: memberIdentifier,
 			GroupID:        groupId,
 			RoleID:         role,
 		})
 		if err != nil {
+			logger.Error("failed to join pending group member", zap.String("user_id", memberUserId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()), zap.Error(err))
 			return nil, err
 		}
 		return pendingMember, nil
 	}
-	if err != nil {
-		return nil, err
+
+	// check if the target user is already a member of the group
+	_, err = s.queries.GetMembershipByUser(ctx, GetMembershipByUserParams{
+		UserID:  memberUserId,
+		GroupID: groupId,
+	})
+	if err == nil {
+		logger.Error("user is already a member of the group", zap.String("user_id", memberUserId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
+		return nil, errors.New("user is already a member of the group")
 	}
 
 	// call JoinGroupMember
 	member, err := s.JoinGroupMember(traceCtx, memberUserId, groupId, role)
 	if err != nil {
+		logger.Error("failed to join group member", zap.String("user_id", memberUserId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()), zap.Error(err))
 		return nil, err
 	}
 
