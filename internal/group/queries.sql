@@ -71,7 +71,7 @@ JOIN
 WHERE
     user_id = $1;
 
--- name: GetMembershipsByUser :one
+-- name: GetMembershipByUser :one
 SELECT
     m.group_id,
     m.role_id,

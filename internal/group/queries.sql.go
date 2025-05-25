@@ -222,7 +222,7 @@ func (q *Queries) GetIfMember(ctx context.Context, arg GetIfMemberParams) (Group
 	return i, err
 }
 
-const getMembershipsByUser = `-- name: GetMembershipsByUser :one
+const getMembershipByUser = `-- name: GetMembershipByUser :one
 SELECT
     m.group_id,
     m.role_id,
@@ -236,21 +236,21 @@ WHERE
     user_id = $1 AND group_id = $2
 `
 
-type GetMembershipsByUserParams struct {
+type GetMembershipByUserParams struct {
 	UserID  uuid.UUID
 	GroupID uuid.UUID
 }
 
-type GetMembershipsByUserRow struct {
+type GetMembershipByUserRow struct {
 	GroupID     uuid.UUID
 	RoleID      uuid.UUID
 	Role        pgtype.Text
 	AccessLevel string
 }
 
-func (q *Queries) GetMembershipsByUser(ctx context.Context, arg GetMembershipsByUserParams) (GetMembershipsByUserRow, error) {
-	row := q.db.QueryRow(ctx, getMembershipsByUser, arg.UserID, arg.GroupID)
-	var i GetMembershipsByUserRow
+func (q *Queries) GetMembershipByUser(ctx context.Context, arg GetMembershipByUserParams) (GetMembershipByUserRow, error) {
+	row := q.db.QueryRow(ctx, getMembershipByUser, arg.UserID, arg.GroupID)
+	var i GetMembershipByUserRow
 	err := row.Scan(
 		&i.GroupID,
 		&i.RoleID,
