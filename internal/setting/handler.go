@@ -2,7 +2,6 @@ package setting
 
 import (
 	"clustron-backend/internal/jwt"
-	"clustron-backend/internal/user/role"
 	"context"
 	"fmt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
@@ -56,11 +55,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
-}
-
-//go:generate mockery --name UserStore
-type UserStore interface {
-	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error
 }
 
 type Handler struct {
@@ -104,11 +99,6 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != role.NotSetup.String() {
-		handlerutil.WriteJSONResponse(w, http.StatusBadRequest, "User already set up")
-		return
-	}
-
 	var request OnboardingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -116,19 +106,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// update user's setting
-	setting := Setting{
-		UserID:   user.ID,
-		Username: pgtype.Text{String: request.Username, Valid: true},
-	}
-	_, err = h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// set up the user's role
-	_, err = h.userStore.SetupUserRole(traceCtx, user.ID)
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

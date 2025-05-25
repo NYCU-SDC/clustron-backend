@@ -1,8 +1,10 @@
 package setting
 
 import (
+	"clustron-backend/internal/user/role"
 	"context"
 	"github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -11,18 +13,54 @@ import (
 	"go.uber.org/zap"
 )
 
+type UserStore interface {
+	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+}
 type Service struct {
 	logger *zap.Logger
 	tracer trace.Tracer
 	query  *Queries
+
+	userStore UserStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
 		query:  New(db),
+
+		userStore: userStore,
 	}
+}
+
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error {
+	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
+	defer span.End()
+
+	// validate user role
+	if userRole != role.NotSetup.String() {
+		return handlerutil.ErrForbidden
+	}
+
+	// update user's setting
+	_, err := s.UpdateSetting(traceCtx, userID, Setting{
+		UserID:   userID,
+		Username: username,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	// set up the user's role
+	_, err = s.userStore.SetupUserRole(traceCtx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error) {
