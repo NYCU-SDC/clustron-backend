@@ -3,6 +3,7 @@ package setting
 import (
 	"clustron-backend/internal/jwt"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
@@ -106,6 +107,10 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true})
 	if err != nil {
+		if errors.Is(err, ErrAlreadyOnboarded) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, problem.NewForbiddenProblem("You have already onboarded, you can update your setting instead."))
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

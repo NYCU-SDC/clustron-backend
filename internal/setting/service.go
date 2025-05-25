@@ -3,14 +3,18 @@ package setting
 import (
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"github.com/NYCU-SDC/summer/pkg/database"
-	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+)
+
+var (
+	ErrAlreadyOnboarded = errors.New("user already onboarded")
 )
 
 type UserStore interface {
@@ -37,10 +41,12 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore) *Service {
 func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// validate user role
 	if userRole != role.NotSetup.String() {
-		return handlerutil.ErrForbidden
+		logger.Warn(ErrAlreadyOnboarded.Error(), zap.String("userID", userID.String()), zap.String("userRole", userRole))
+		return ErrAlreadyOnboarded
 	}
 
 	// update user's setting
