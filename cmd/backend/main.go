@@ -126,7 +126,7 @@ func main() {
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
-	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService, userService)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
