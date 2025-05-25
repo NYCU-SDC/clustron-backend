@@ -49,6 +49,9 @@ SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.u
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING *;
+
 -- name: Update :one
 UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 

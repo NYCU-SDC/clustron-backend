@@ -140,7 +140,7 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 			response[i].Me.Type = "membership"
 			response[i].Me.Role = Role{
 				ID:          role.ID,
-				Role:        role.Role.String,
+				Role:        role.Role,
 				AccessLevel: role.AccessLevel,
 			}
 		}
@@ -154,7 +154,7 @@ func buildRoleGroupIDMap(roles []ListMembershipsByUserRow) map[uuid.UUID]Role {
 	for _, r := range roles {
 		m[r.GroupID] = Role{
 			ID:          r.RoleID,
-			Role:        r.Role.String,
+			Role:        r.Role,
 			AccessLevel: r.AccessLevel,
 		}
 	}
