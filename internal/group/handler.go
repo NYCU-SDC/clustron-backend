@@ -40,11 +40,6 @@ type Store interface {
 	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
 }
 
-type UserService interface {
-	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
-	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
-}
-
 type RoleResponse struct {
 	ID          string `json:"id"`
 	Role        string `json:"role"`
@@ -87,19 +82,17 @@ type Handler struct {
 	tracer        trace.Tracer
 
 	store             Store
-	userService       UserService
 	auth              Auth
 	paginationFactory pagination.Factory[Response]
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, store Store, auth Auth, userService UserService) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, store Store, auth Auth) *Handler {
 	return &Handler{
 		validator:         validator,
 		logger:            logger,
 		tracer:            otel.Tracer("group/handler"),
 		problemWriter:     problemWriter,
 		store:             store,
-		userService:       userService,
 		auth:              auth,
 		paginationFactory: pagination.NewFactory[Response](200, []string{"created_at"}),
 	}
@@ -255,7 +248,6 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		// err != nil
 		//    append to errorList
 		//
-
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
 		}
