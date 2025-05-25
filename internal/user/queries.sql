@@ -15,6 +15,11 @@ SELECT EXISTS (
 -- name: Create :one
 INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO users (id, email, role, student_id, updated_at)
+VALUES ($1, $2, $3, $4, now())
+RETURNING *;
+
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;
 
