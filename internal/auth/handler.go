@@ -38,7 +38,7 @@ type JWTStore interface {
 
 type UserStore interface {
 	Create(ctx context.Context, email string, studentID string) (user.User, error)
-	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	ExistsByIdentifier(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
 	FindOrCreate(ctx context.Context, email string, studentID string) (user.User, error)
 }

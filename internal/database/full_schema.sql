@@ -2,6 +2,13 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TABLE IF NOT EXISTS group_role (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role VARCHAR(50) NOT NULL,
+    access_level VARCHAR(50) NOT NULL
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS users
 (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,15 +20,6 @@ CREATE TABLE IF NOT EXISTS users
 );
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE IF NOT EXISTS groups (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    is_archived BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS memberships (
     user_id UUID REFERENCES users(id) NOT NULL,
     group_id UUID REFERENCES groups(id) NOT NULL,
@@ -30,12 +28,7 @@ CREATE TABLE IF NOT EXISTS memberships (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS group_role (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    role VARCHAR(50),
-    access_level VARCHAR(50) NOT NULL
-);
-
+-- TODO: Rename to pending_membership
 CREATE TABLE IF NOT EXISTS pending_group_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_identifier TEXT NOT NULL,
@@ -44,6 +37,25 @@ CREATE TABLE IF NOT EXISTS pending_group_members (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_identifier, group_id)
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS refresh_tokens
+(
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES users(id) NOT NULL,
+    is_active       BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_archived BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -58,13 +70,4 @@ CREATE TABLE IF NOT EXISTS public_keys (
     user_id UUID REFERENCES users(id) NOT NULL,
     title VARCHAR(255) NOT NULL,
     public_key TEXT NOT NULL
-);
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-CREATE TABLE IF NOT EXISTS refresh_tokens
-(
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID REFERENCES users(id) NOT NULL,
-    is_active       BOOLEAN DEFAULT TRUE,
-    expiration_date TIMESTAMPTZ NOT NULL
 );

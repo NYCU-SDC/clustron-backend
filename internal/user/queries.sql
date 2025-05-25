@@ -7,9 +7,9 @@ SELECT * FROM users WHERE email = $1;
 -- name: GetRoleByID :one
 SELECT role FROM users WHERE id = $1;
 
--- name: ExistsByEmail :one
+-- name: ExistsByIdentifier :one
 SELECT EXISTS (
-    SELECT 1 FROM users WHERE email = $1
+    SELECT 1 FROM users WHERE email = $1 OR student_id = $1
 ) AS email_exists;
 
 -- name: Create :one
