@@ -3,6 +3,7 @@ package main
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
+	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/group"
 	"clustron-backend/internal/jwt"
@@ -69,6 +70,11 @@ func main() {
 			message := "Please set the DATABASE_URL environment variable or provide a config file with the database_url key."
 			message = EarlyApplicationFailed(title, message)
 			log.Fatal(message)
+		} else if errors.Is(err, config.ErrInvalidUserRole) {
+			title := "Invalid user role"
+			message := "Please check the user role in the config file, it should be one of the following: admin, user, or guest."
+			message = EarlyApplicationFailed(title, message)
+			log.Fatal(message)
 		} else {
 			log.Fatalf("Failed to validate config: %v, exiting...", err)
 		}
@@ -110,32 +116,41 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 
 	// Service
-	userService := user.NewService(logger, dbPool)
+	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
 	groupService := group.NewService(logger, dbPool)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
 
-	// Basic Middleware
-	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
-	recovered := middleware.NewSet(traceMiddleware.RecoverMiddleware)
-	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
+	// Components
+	enforcer := casbin.NewEnforcer(logger, cfg)
 
-	// Auth Middleware
+	// Middleware
+	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
-	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
+
+	// Basic Middleware (Tracing and Recover)
+	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
+	basicMiddleware = basicMiddleware.Append(traceMiddleware.TraceMiddleWare)
+
+	// Auth Middleware (JWT and Role filtering)
+	authMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
+	authMiddleware = authMiddleware.Append(traceMiddleware.TraceMiddleWare)
+	authMiddleware = authMiddleware.Append(jwtMiddleware.HandlerFunc)
+	authMiddleware = authMiddleware.Append(roleMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/login/oauth/{provider}", traced.HandlerFunc(authHandler.Oauth2Start))
-	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
-	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
-	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
+	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
+	mux.HandleFunc("GET /api/oauth/{provider}/callback", basicMiddleware.HandlerFunc(authHandler.Callback))
+	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
+	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))

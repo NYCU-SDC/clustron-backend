@@ -1,0 +1,15 @@
+p, user, /api/groups, GET
+p, organizer, /api/groups, POST
+p, user, /api/groups/:groupId, GET
+p, organizer, /api/groups/:groupId/archive, POST
+p, organizer, /api/groups/:groupId/unarchive, POST
+
+p, user, /api/settings, GET
+p, user, /api/settings, PUT
+p, user, /api/publickey, GET
+p, user, /api/publickey, POST
+p, user, /api/publickey, DELETE
+
+g, admin, user
+g, admin, organizer
+g, organizer, user

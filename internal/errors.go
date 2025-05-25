@@ -6,10 +6,12 @@ import (
 )
 
 var (
+	// Auth Errors
 	ErrInvalidRefreshToken  = errors.New("invalid refresh token")
 	ErrProviderNotFound     = errors.New("provider not found")
 	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
+	ErrPermissionDenied     = errors.New("permission denied")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -26,6 +28,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid exchange token")
 	case errors.Is(err, ErrInvalidCallbackInfo):
 		return problem.NewValidateProblem("invalid callback info")
+	case errors.Is(err, ErrPermissionDenied):
+		return problem.NewForbiddenProblem("permission denied")
 	}
 	return problem.Problem{}
 }
