@@ -514,8 +514,8 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, g
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
-		logger.Error("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
-		return nil, errors.New("forbidden")
+		logger.Info("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
+		return nil, handlerutil.ErrForbidden
 	}
 
 	var members []Membership
@@ -553,14 +553,14 @@ func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId 
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
-		logger.Error("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
-		return nil, errors.New("forbidden")
+		logger.Info("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
+		return nil, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !CanAssignRole(s, ctx, userId, groupId, role) {
-		logger.Error("user does not have permission to assign this role", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
-		return nil, errors.New("forbidden")
+		logger.Info("user does not have permission to assign this role", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
+		return nil, handlerutil.ErrForbidden
 	}
 
 	// get user id by email or student id
@@ -712,7 +712,8 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, user
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
-		return errors.New("forbidden")
+		logger.Info("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
+		return handlerutil.ErrForbidden
 	}
 
 	// check if the member is a member of the group
@@ -735,7 +736,8 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, user
 	}
 
 	if !CanAssignRole(s, ctx, userId, groupId, role.ID) {
-		return errors.New("forbidden")
+		logger.Info("user does not have permission to assign this role", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.ID.String()))
+		return handlerutil.ErrForbidden
 	}
 
 	err = s.queries.RemoveGroupMember(ctx, RemoveGroupMemberParams{
@@ -757,12 +759,14 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 
 	// check if the user has access to the group (group owner or group admin)
 	if !HasGroupControlAccess(s, ctx, userId, groupId) {
-		return MemberResponse{}, errors.New("forbidden")
+		logger.Info("user does not have control access to the group", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()))
+		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
 	// check if the user's role is greater than the target role
 	if !CanAssignRole(s, ctx, userId, groupId, role) {
-		return MemberResponse{}, errors.New("forbidden")
+		logger.Info("user does not have permission to assign this role", zap.String("user_id", userId.String()), zap.String("group_id", groupId.String()), zap.String("role_id", role.String()))
+		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
 	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{

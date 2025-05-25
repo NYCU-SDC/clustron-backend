@@ -413,6 +413,10 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 
 	member, err := h.store.AddGroupMember(traceCtx, user.ID, groupUUID, req.Member, req.Role)
 	if err != nil {
+		if errors.Is(err, handlerutil.ErrForbidden) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -446,6 +450,10 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.store.RemoveGroupMember(traceCtx, groupUUID, user.ID, removedUserUUID); err != nil {
+		if errors.Is(err, handlerutil.ErrForbidden) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -486,6 +494,10 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	member, err := h.store.UpdateGroupMember(traceCtx, groupUUID, user.ID, memberUserUUID, req.Role)
 	if err != nil {
+		if errors.Is(err, handlerutil.ErrForbidden) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -530,6 +542,10 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
+			return
+		}
+		if errors.Is(err, handlerutil.ErrForbidden) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
