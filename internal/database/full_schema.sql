@@ -2,17 +2,6 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE IF NOT EXISTS users
-(
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255) UNIQUE NOT NULL,
-    role            VARCHAR(255) NOT NULL DEFAULT 'user',
-    student_id      VARCHAR(255) UNIQUE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -53,6 +42,17 @@ CREATE TABLE IF NOT EXISTS pending_group_members (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_identifier, group_id)
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS users
+(
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    role            VARCHAR(255) NOT NULL DEFAULT 'user',
+    student_id      VARCHAR(255) UNIQUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
