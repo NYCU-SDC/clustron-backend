@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -52,13 +53,7 @@ func (s *Service) Create(ctx context.Context, email, studentID string) (User, er
 	param := CreateParams{
 		Email:     email,
 		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
-	}
-
-	presetRole, exist := s.presetMap[email]
-	if exist {
-		param.Role = presetRole.Role
-	} else {
-		param.Role = role.User.String()
+		Role:      role.NotSetup.String(),
 	}
 
 	user, err := s.queries.Create(traceCtx, param)
@@ -83,6 +78,21 @@ func (s *Service) GetByEmail(ctx context.Context, email string) (User, error) {
 	}
 
 	return user, nil
+}
+
+func (s *Service) GetEmailByID(ctx context.Context, id uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetEmailByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	email, err := s.queries.GetEmailByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "get user email by id")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return email, nil
 }
 
 func (s *Service) ExistsByEmail(ctx context.Context, email string) (bool, error) {
@@ -144,4 +154,58 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error)
 	}
 
 	return role, nil
+}
+
+func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) error {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateRoleByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if !role.IsValidGlobalRole(globalRole) {
+		err := errors.New("invalid role provided: " + globalRole)
+		logger.Error("Invalid role provided", zap.String("role", globalRole))
+		span.RecordError(err)
+		return err
+	}
+
+	_, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{
+		ID:   id,
+		Role: globalRole,
+	})
+
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "update user role")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "SetupUserRole")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	userEmail, err := s.GetEmailByID(ctx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
+
+	var userRole string
+	presetRole, exist := s.presetMap[userEmail]
+	if exist {
+		userRole = presetRole.Role
+	} else {
+		userRole = role.User.String()
+	}
+	err = s.UpdateRoleByID(ctx, userID, userRole)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user role")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return userRole, nil
 }
