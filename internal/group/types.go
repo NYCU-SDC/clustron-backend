@@ -68,3 +68,22 @@ type PendingMemberResponse struct {
 	GroupID        uuid.UUID `json:"groupId"`
 	RoleID         uuid.UUID `json:"roleId"`
 }
+
+type JoinResult interface {
+	JoinType() JoinMemberResponseType
+}
+
+type JoinMemberResponseType string
+
+const (
+	JoinMemberResponseTypeMember  JoinMemberResponseType = "member"
+	JoinMemberResponseTypePending JoinMemberResponseType = "pending"
+)
+
+func (m MemberResponse) JoinType() JoinMemberResponseType {
+	return JoinMemberResponseTypeMember
+}
+
+func (p PendingMemberResponse) JoinType() JoinMemberResponseType {
+	return JoinMemberResponseTypePending
+}
