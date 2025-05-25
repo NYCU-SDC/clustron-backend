@@ -507,10 +507,15 @@ func (s *Service) GetUserGroupRoleType(ctx context.Context, userRole string, use
 	return roleResponse, roleType, nil
 }
 
-func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error) {
+func (s *Service) ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetGroupMembers")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		return nil, errors.New("forbidden")
+	}
 
 	var members []Membership
 	var err error

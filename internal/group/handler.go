@@ -36,7 +36,7 @@ type Store interface {
 	JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
-	ListGroupMembersPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
+	ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
 	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
 }
 
@@ -507,6 +507,12 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	pageRequest, err := h.paginationFactory.GetRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -515,6 +521,7 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 
 	members, err := h.store.ListGroupMembersPaged(
 		traceCtx,
+		user.ID,
 		groupUUID,
 		pageRequest.Page,
 		pageRequest.Size,
