@@ -32,7 +32,7 @@ type Store interface {
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
-	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (MemberResponse, error)
+	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
 	JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
@@ -255,6 +255,10 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		// err != nil
 		//    append to errorList
 		//
+
+		if m.Member == user.Email || m.Member == user.StudentID.String {
+			continue
+		}
 
 		_, err = h.store.AddGroupMember(traceCtx, user.ID, group.ID, m.Member, m.Role)
 		if err != nil {
