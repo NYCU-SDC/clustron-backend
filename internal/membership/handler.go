@@ -16,6 +16,7 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=Store
 type Store interface {
 	Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
@@ -24,6 +25,7 @@ type Store interface {
 	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
 }
 
+//go:generate mockery --name=UserService
 type UserService interface {
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)

@@ -4,8 +4,10 @@ package mocks
 
 import (
 	group "clustron-backend/internal/group"
-	jwt "clustron-backend/internal/jwt"
+	grouprole "clustron-backend/internal/grouprole"
 	context "context"
+
+	jwt "clustron-backend/internal/jwt"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -73,23 +75,23 @@ func (_m *Store) Create(ctx context.Context, _a1 group.CreateParams) (group.Grou
 	return r0, r1
 }
 
-// GetGroupRoleByID provides a mock function with given fields: ctx, roleID
-func (_m *Store) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (group.GroupRole, error) {
+// GetByID provides a mock function with given fields: ctx, roleID
+func (_m *Store) GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error) {
 	ret := _m.Called(ctx, roleID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetGroupRoleByID")
+		panic("no return value specified for GetByID")
 	}
 
-	var r0 group.GroupRole
+	var r0 grouprole.GroupRole
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (group.GroupRole, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (grouprole.GroupRole, error)); ok {
 		return rf(ctx, roleID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) group.GroupRole); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) grouprole.GroupRole); ok {
 		r0 = rf(ctx, roleID)
 	} else {
-		r0 = ret.Get(0).(group.GroupRole)
+		r0 = ret.Get(0).(grouprole.GroupRole)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
@@ -101,24 +103,24 @@ func (_m *Store) GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (group.
 	return r0, r1
 }
 
-// GetUserGroupRoleType provides a mock function with given fields: ctx, userRole, userID, groupID
-func (_m *Store) GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (group.Role, string, error) {
+// GetTypeByUser provides a mock function with given fields: ctx, userRole, userID, groupID
+func (_m *Store) GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error) {
 	ret := _m.Called(ctx, userRole, userID, groupID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetUserGroupRoleType")
+		panic("no return value specified for GetTypeByUser")
 	}
 
-	var r0 group.Role
+	var r0 grouprole.GroupRole
 	var r1 string
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) (group.Role, string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) (grouprole.GroupRole, string, error)); ok {
 		return rf(ctx, userRole, userID, groupID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) group.Role); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, uuid.UUID) grouprole.GroupRole); ok {
 		r0 = rf(ctx, userRole, userID, groupID)
 	} else {
-		r0 = ret.Get(0).(group.Role)
+		r0 = ret.Get(0).(grouprole.GroupRole)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string, uuid.UUID, uuid.UUID) string); ok {
@@ -136,23 +138,51 @@ func (_m *Store) GetUserGroupRoleType(ctx context.Context, userRole string, user
 	return r0, r1, r2
 }
 
+// GetUserGroupAccessLevel provides a mock function with given fields: ctx, userID, groupID
+func (_m *Store) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error) {
+	ret := _m.Called(ctx, userID, groupID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserGroupAccessLevel")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (string, error)); ok {
+		return rf(ctx, userID, groupID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) string); ok {
+		r0 = rf(ctx, userID, groupID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r1 = rf(ctx, userID, groupID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // ListByIDWithUserScope provides a mock function with given fields: ctx, user, groupID
-func (_m *Store) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (group.UserScope, error) {
+func (_m *Store) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error) {
 	ret := _m.Called(ctx, user, groupID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListByIDWithUserScope")
 	}
 
-	var r0 group.UserScope
+	var r0 grouprole.UserScope
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) (group.UserScope, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) (grouprole.UserScope, error)); ok {
 		return rf(ctx, user, groupID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) group.UserScope); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, uuid.UUID) grouprole.UserScope); ok {
 		r0 = rf(ctx, user, groupID)
 	} else {
-		r0 = ret.Get(0).(group.UserScope)
+		r0 = ret.Get(0).(grouprole.UserScope)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, jwt.User, uuid.UUID) error); ok {
@@ -165,24 +195,24 @@ func (_m *Store) ListByIDWithUserScope(ctx context.Context, user jwt.User, group
 }
 
 // ListWithUserScope provides a mock function with given fields: ctx, user, page, size, sort, sortBy
-func (_m *Store) ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]group.UserScope, int, error) {
+func (_m *Store) ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int, error) {
 	ret := _m.Called(ctx, user, page, size, sort, sortBy)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListWithUserScope")
 	}
 
-	var r0 []group.UserScope
+	var r0 []grouprole.UserScope
 	var r1 int
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) ([]group.UserScope, int, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) ([]grouprole.UserScope, int, error)); ok {
 		return rf(ctx, user, page, size, sort, sortBy)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) []group.UserScope); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, jwt.User, int, int, string, string) []grouprole.UserScope); ok {
 		r0 = rf(ctx, user, page, size, sort, sortBy)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]group.UserScope)
+			r0 = ret.Get(0).([]grouprole.UserScope)
 		}
 	}
 

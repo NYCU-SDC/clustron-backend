@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name=MemberStore
 type MemberStore interface {
 	Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (membership.JoinResult, error)
 	Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
@@ -84,8 +85,7 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
-	memberStore MemberStore,
-	roleStore RoleStore) *Handler {
+	memberStore MemberStore) *Handler {
 	return &Handler{
 		validator:         validator,
 		logger:            logger,

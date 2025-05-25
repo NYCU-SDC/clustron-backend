@@ -14,6 +14,7 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=Store
 type Store interface {
 	GetAll(ctx context.Context) ([]GroupRole, error)
 	Create(ctx context.Context, params CreateParams) (GroupRole, error)

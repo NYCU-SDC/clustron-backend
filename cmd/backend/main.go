@@ -130,7 +130,7 @@ func main() {
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
-	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService, groupRoleService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 
