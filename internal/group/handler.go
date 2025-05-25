@@ -243,10 +243,8 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = h.store.AddGroupMember(traceCtx, user.ID, group.ID, m.Member, m.Role)
-		if err != nil {
-			// TODO: add error to errorList
-		}
+		_, _ = h.store.AddGroupMember(traceCtx, user.ID, group.ID, m.Member, m.Role)
+		// TODO: add error to errorList
 	}
 
 	groupResponse := Response{
