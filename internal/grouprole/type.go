@@ -1,4 +1,4 @@
-package group
+package grouprole
 
 import "github.com/google/uuid"
 
@@ -19,7 +19,7 @@ const (
 	AccessLevelUser  AccessLevel = "USER"
 )
 
-var accessLevelRank = map[string]int{
+var AccessLevelRank = map[string]int{
 	"GROUP_OWNER": 3,
 	"GROUP_ADMIN": 2,
 	"USER":        1,
@@ -46,44 +46,16 @@ type Role struct {
 	AccessLevel string
 }
 
+type RoleResponse struct {
+	ID          string `json:"id"`
+	Role        string `json:"role"`
+	AccessLevel string `json:"accessLevel"`
+}
+
 func (r Role) ToResponse() RoleResponse {
 	return RoleResponse{
 		ID:          r.ID.String(),
 		Role:        r.Role,
 		AccessLevel: r.AccessLevel,
 	}
-}
-
-type MemberResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	StudentID string    `json:"studentId"`
-	Role      Role      `json:"role"`
-}
-
-type PendingMemberResponse struct {
-	ID             uuid.UUID `json:"id"`
-	UserIdentifier string    `json:"userIdentifier"`
-	GroupID        uuid.UUID `json:"groupId"`
-	RoleID         uuid.UUID `json:"roleId"`
-}
-
-type JoinResult interface {
-	JoinType() JoinMemberResponseType
-}
-
-type JoinMemberResponseType string
-
-const (
-	JoinMemberResponseTypeMember  JoinMemberResponseType = "member"
-	JoinMemberResponseTypePending JoinMemberResponseType = "pending"
-)
-
-func (m MemberResponse) JoinType() JoinMemberResponseType {
-	return JoinMemberResponseTypeMember
-}
-
-func (p PendingMemberResponse) JoinType() JoinMemberResponseType {
-	return JoinMemberResponseTypePending
 }
