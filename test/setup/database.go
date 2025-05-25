@@ -95,6 +95,11 @@ func setupPostgresWithMigrations(pool *dockertest.Pool, logger *zap.Logger, sour
 	}
 
 	err = databaseutil.MigrationUp("file://../../../internal/database/migrations", databaseURL, logger)
+	if err != nil {
+		cleanup()
+		logger.Fatal("Failed to apply migrations", zap.Error(err))
+		return nil, "", nil, err
+	}
 
 	return dbPool, databaseURL, cleanup, nil
 }
