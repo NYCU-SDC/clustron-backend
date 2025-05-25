@@ -14,6 +14,12 @@ p, user, /api/groups/:groupId, GET
 p, organizer, /api/groups/:groupId/archive, POST
 p, organizer, /api/groups/:groupId/unarchive, POST
 
+p, user, /api/groups/:group_id/members, GET
+p, user, /api/groups/:group_id/members, POST
+p, user, /api/groups/:group_id/members/:user_id, DELETE
+p, user, /api/groups/:group_id/members/:user_id, PUT
+p, user, /api/groups/roles, GET
+
 p, user, /api/settings, GET
 p, user, /api/settings, PUT
 p, user, /api/publickey, GET

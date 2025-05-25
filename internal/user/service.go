@@ -4,10 +4,12 @@ import (
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -145,6 +147,9 @@ func (s *Service) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, er
 
 	id, err := s.queries.GetIdByEmail(traceCtx, email)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, nil
+		}
 		err = databaseutil.WrapDBError(err, logger, "get user id by email")
 		span.RecordError(err)
 		return uuid.Nil, err
@@ -160,6 +165,9 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 
 	id, err := s.queries.GetIdByStudentId(traceCtx, pgtype.Text{String: studentID, Valid: studentID != ""})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, nil
+		}
 		err = databaseutil.WrapDBError(err, logger, "get user id by student id")
 		span.RecordError(err)
 		return uuid.Nil, err

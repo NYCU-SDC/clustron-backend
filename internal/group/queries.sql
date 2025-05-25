@@ -124,6 +124,7 @@ WHERE group_id = $1 AND user_id = $2;
 -- name: AddPendingGroupMember :one
 INSERT INTO pending_group_members (user_identifier, group_id, role_id)
 VALUES ($1, $2, $3)
+ON CONFLICT (user_identifier, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
 RETURNING *;
 
 -- name: GetPendingGroupMember :one

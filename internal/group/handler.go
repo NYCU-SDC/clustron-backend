@@ -236,12 +236,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Add other members
-	// type AddMemberRequest struct {
-	//	Member string `json:"member"` // email or student id
-	//	Role string `json:"role"`
-	//}
-	// TODO:
-	// errorList := []MemberError{}
+	// TODO: adding errorList to return all the errors in adding members
 	for _, m := range request.Members {
 		// Call Add
 		// err != nil
