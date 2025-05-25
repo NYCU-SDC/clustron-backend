@@ -15,13 +15,5 @@ SELECT EXISTS (
 -- name: Create :one
 INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING *;
 
--- name: UpdateRoleAndDepartment :one
-UPDATE users
-SET role = $2,
-    department = $3,
-    updated_at = now()
-WHERE id = $1
-RETURNING *;
-
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;
