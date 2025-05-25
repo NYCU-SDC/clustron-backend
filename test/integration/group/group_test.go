@@ -60,14 +60,14 @@ func TestGroupService_CountAll(t *testing.T) {
 		},
 	}
 
+	resourceManager, logger, err := integration.GetOrInitResource()
+	if err != nil {
+		t.Fatalf("failed to get resource manager: %v", err)
+	}
+	defer resourceManager.Cleanup()
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resourceManager, _, err := integration.GetOrInitResource()
-			if err != nil {
-				t.Fatalf("failed to get resource manager: %v", err)
-			}
-			defer resourceManager.Cleanup()
-
 			db, rollback, err := resourceManager.SetupPostgres()
 			if err != nil {
 				t.Fatalf("failed to setup postgres: %v", err)
@@ -89,4 +89,33 @@ func TestGroupService_CountAll(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGroupService_Create(t *testing.T) {
+	//testCases := []struct {
+	//	name        string
+	//	setup       func(t *testing.T, db dbtestdata.DBTX)
+	//	expect      int64
+	//	expectError bool
+	//}{
+	//	{
+	//		name: "count all groups",
+	//		setup: func(t *testing.T, db dbtestdata.DBTX) {
+	//			builder := dbtestdata.NewBuilder(t, db)
+	//			for i := 0; i < 3; i++ {
+	//				builder.Group().Create(
+	//					dbtestdata.WithTitle(fmt.Sprintf("Group %d", i+1)),
+	//					dbtestdata.WithDescription(fmt.Sprintf("Description for Group %d", i+1)),
+	//				)
+	//			}
+	//		},
+	//		expect:      3,
+	//		expectError: false,
+	//	},
+	//	{
+	//		name:        "count with no groups",
+	//		expect:      0,
+	//		expectError: false,
+	//	},
+	//}
 }

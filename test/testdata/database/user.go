@@ -67,7 +67,7 @@ func NewUserBuilder(t *testing.T, db DBTX) *UserBuilder {
 	return &UserBuilder{t: t, db: db}
 }
 
-func (b UserBuilder) GetUserQueries() *user.Queries {
+func (b UserBuilder) Queries() *user.Queries {
 	return user.New(b.db)
 }
 

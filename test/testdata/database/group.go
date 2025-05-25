@@ -53,7 +53,7 @@ func NewGroupBuilder(t *testing.T, db DBTX) *GroupBuilder {
 	return &GroupBuilder{t: t, db: db}
 }
 
-func (b GroupBuilder) GetGroupQueries() *group.Queries {
+func (b GroupBuilder) Queries() *group.Queries {
 	return group.New(b.db)
 }
 
@@ -68,8 +68,9 @@ func (b GroupBuilder) Create(opts ...GroupOption) *group.Group {
 		opt(&params)
 	}
 
-	q := b.GetGroupQueries()
-	result, err := q.Create(b.t.Context(), group.CreateParams{
+	q := b.Queries()
+	result, err := q.CreateWithID(b.t.Context(), group.CreateWithIDParams{
+		ID:          params.ID,
 		Title:       params.Title,
 		Description: pgtype.Text{String: params.Description, Valid: true},
 	})
