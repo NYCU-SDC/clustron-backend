@@ -715,14 +715,24 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, user
 	return nil
 }
 
-func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
+func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, memberUserId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// check if the user has access to the group (group owner or group admin)
+	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		return MemberResponse{}, errors.New("forbidden")
+	}
+
+	// check if the user's role is greater than the target role
+	if !CanAssignRole(s, ctx, userId, groupId, role) {
+		return MemberResponse{}, errors.New("forbidden")
+	}
+
 	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{
 		GroupID: groupId,
-		UserID:  userId,
+		UserID:  memberUserId,
 		RoleID:  role,
 	})
 	if err != nil {
@@ -731,33 +741,33 @@ func (s *Service) UpdateGroupMember(ctx context.Context, groupId uuid.UUID, user
 			err,
 			"memberships",
 			"group_id/user_id",
-			fmt.Sprintf("%s/%s", groupId, userId),
+			fmt.Sprintf("%s/%s", groupId, memberUserId),
 			logger,
 			"failed to update membership",
 		)
 	}
 
-	u, err := s.userStore.GetByID(ctx, userId)
+	u, err := s.userStore.GetByID(ctx, memberUserId)
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
 			err,
 			"users",
 			"user_id",
-			userId.String(),
+			memberUserId.String(),
 			logger,
 			"failed to get user info",
 		)
 	}
 
-	setting, err := s.settingStore.GetSettingByUserID(ctx, userId)
+	setting, err := s.settingStore.GetSettingByUserID(ctx, memberUserId)
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
 			err,
 			"settings",
 			"user_id",
-			userId.String(),
+			memberUserId.String(),
 			logger,
 			"failed to get user setting",
 		)

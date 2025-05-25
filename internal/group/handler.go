@@ -35,7 +35,7 @@ type Store interface {
 	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
 	JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
+	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, memberUserId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
 	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
 }
@@ -467,14 +467,20 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "UpdateGroupMemberHandler"))
 
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupID := r.PathValue("group_id")
-	userID := r.PathValue("user_id")
+	memberUserID := r.PathValue("user_id")
 	groupUUID, err := uuid.Parse(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	userUUID, err := uuid.Parse(userID)
+	memberUserUUID, err := uuid.Parse(memberUserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -486,7 +492,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	member, err := h.store.UpdateGroupMember(traceCtx, groupUUID, userUUID, req.Role)
+	member, err := h.store.UpdateGroupMember(traceCtx, groupUUID, user.ID, memberUserUUID, req.Role)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
