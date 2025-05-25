@@ -28,18 +28,6 @@ func WithEmail(email string) UserOption {
 	}
 }
 
-func WithRole(role string) UserOption {
-	return func(p *UserFactoryParams) {
-		p.Role = role
-	}
-}
-
-func WithDepartment(dept string) UserOption {
-	return func(p *UserFactoryParams) {
-		p.Department = dept
-	}
-}
-
 func WithStudentID(sid string) UserOption {
 	return func(p *UserFactoryParams) {
 		p.StudentID = sid
@@ -93,13 +81,6 @@ func (b UserBuilder) Create(opts ...UserOption) user.User {
 	userRow, err := queries.Create(context.Background(), user.CreateParams{
 		Email:     p.Email,
 		StudentID: pgtype.Text{String: p.StudentID, Valid: true},
-	})
-	require.NoError(b.t, err)
-
-	userRow, err = queries.UpdateRoleAndDepartment(context.Background(), user.UpdateRoleAndDepartmentParams{
-		ID:         userRow.ID,
-		Role:       pgtype.Text{String: p.Role, Valid: true},
-		Department: pgtype.Text{String: p.Department, Valid: true},
 	})
 	require.NoError(b.t, err)
 
