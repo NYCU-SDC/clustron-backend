@@ -58,6 +58,7 @@ type Store interface {
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 }
 
+//go:generate mockery --name UserStore
 type UserStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 }
