@@ -1,10 +1,21 @@
 package testutil
 
 import (
-	"fmt"
-	"github.com/google/uuid"
+	"github.com/brianvoe/gofakeit/v7"
 )
 
 func RandomEmail() string {
-	return fmt.Sprintf("test-%s@example.com", uuid.NewString()[:8])
+	return gofakeit.Email()
+}
+
+func RandomFullName() string {
+	return gofakeit.Name()
+}
+
+func RandomName() string {
+	return gofakeit.Sentence(1)
+}
+
+func RandomDescription() string {
+	return gofakeit.Sentence(10)
 }

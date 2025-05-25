@@ -69,7 +69,7 @@ func (b UserBuilder) GetUserQueries() *user.Queries {
 	return user.New(b.db)
 }
 
-func (b UserBuilder) CreateUser(opts ...UserOption) user.User {
+func (b UserBuilder) Create(opts ...UserOption) user.User {
 	queries := user.New(b.db)
 	settingQueries := setting.New(b.db)
 
