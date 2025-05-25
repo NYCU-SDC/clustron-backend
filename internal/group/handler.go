@@ -409,6 +409,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -435,6 +436,7 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -467,6 +469,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -513,6 +516,7 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
