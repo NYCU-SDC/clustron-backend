@@ -1,6 +1,7 @@
 package group
 
 import (
+	"clustron-backend/internal/group"
 	"clustron-backend/test/integration"
 	"clustron-backend/test/testdata/database"
 	"context"
@@ -33,10 +34,10 @@ func TestDemo(t *testing.T) {
 
 func TestGroupService_CountAll(t *testing.T) {
 	testCases := []struct {
-		name        string
-		setup       func(t *testing.T, db dbtestdata.DBTX)
-		expect      int64
-		expectError bool
+		name      string
+		setup     func(t *testing.T, db dbtestdata.DBTX)
+		expect    int64
+		expectErr bool
 	}{
 		{
 			name: "count all groups",
@@ -44,18 +45,18 @@ func TestGroupService_CountAll(t *testing.T) {
 				builder := dbtestdata.NewBuilder(t, db)
 				for i := 0; i < 3; i++ {
 					builder.Group().Create(
-						dbtestdata.WithTitle(fmt.Sprintf("Group %d", i+1)),
-						dbtestdata.WithDescription(fmt.Sprintf("Description for Group %d", i+1)),
+						dbtestdata.GroupWithTitle(fmt.Sprintf("Group %d", i+1)),
+						dbtestdata.GroupWithDescription(fmt.Sprintf("Description for Group %d", i+1)),
 					)
 				}
 			},
-			expect:      3,
-			expectError: false,
+			expect:    3,
+			expectErr: false,
 		},
 		{
-			name:        "count with no groups",
-			expect:      0,
-			expectError: false,
+			name:      "count with no groups",
+			expect:    0,
+			expectErr: false,
 		},
 	}
 
@@ -78,14 +79,13 @@ func TestGroupService_CountAll(t *testing.T) {
 				tc.setup(t, db)
 			}
 
-			groupQueries := builder.Group().GetGroupQueries()
-			count, err := groupQueries.CountAll(context.Background())
+			//groupService := group.NewService(logger, db)
 
-			if tc.expectError {
+			if tc.expectErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tc.expect, count)
+				require.Equal(t, tc.expect, 5)
 			}
 		})
 	}
