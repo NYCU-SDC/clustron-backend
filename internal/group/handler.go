@@ -34,7 +34,7 @@ type Store interface {
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
 	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
 	JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error)
-	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, memberUserId uuid.UUID) error
 	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, memberUserId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Membership, error)
 	ListGroupRoles(ctx context.Context) ([]GroupRole, error)
@@ -441,6 +441,12 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "RemoveGroupMemberHandler"))
 
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupID := r.PathValue("group_id")
 	removedUserID := r.PathValue("user_id")
 	groupUUID, err := uuid.Parse(groupID)
@@ -454,7 +460,7 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.store.RemoveGroupMember(traceCtx, groupUUID, removedUserUUID); err != nil {
+	if err := h.store.RemoveGroupMember(traceCtx, groupUUID, user.ID, removedUserUUID); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

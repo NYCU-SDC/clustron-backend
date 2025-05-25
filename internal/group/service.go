@@ -698,18 +698,46 @@ func (s *Service) JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId
 	}, nil
 }
 
-func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID) error {
+func (s *Service) RemoveGroupMember(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, memberUserId uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "RemoveGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.RemoveGroupMember(ctx, RemoveGroupMemberParams{
+	// check if the user has access to the group (group owner or group admin)
+	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		return errors.New("forbidden")
+	}
+
+	// check if the member is a member of the group
+	_, err := s.queries.GetMembershipByUser(ctx, GetMembershipByUserParams{
+		UserID:  memberUserId,
 		GroupID: groupId,
-		UserID:  userId,
+	})
+	if err != nil {
+		// if the member is not a member of the group
+		if !errors.As(err, &handlerutil.NotFoundError{}) {
+			return databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, memberUserId), logger, "failed to get membership by user")
+		}
+		return err
+	}
+
+	// check if the user's role is greater than the target role
+	role, err := s.GetUserGroupRole(ctx, memberUserId, groupId)
+	if err != nil {
+		return err
+	}
+
+	if !CanAssignRole(s, ctx, userId, groupId, role.ID) {
+		return errors.New("forbidden")
+	}
+
+	err = s.queries.RemoveGroupMember(ctx, RemoveGroupMemberParams{
+		GroupID: groupId,
+		UserID:  memberUserId,
 	})
 	if err != nil {
 		span.RecordError(err)
-		return databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to remove group member")
+		return databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, memberUserId), logger, "failed to remove group member")
 	}
 
 	return nil
