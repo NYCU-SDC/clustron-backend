@@ -546,7 +546,7 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, userId uuid.UUID, g
 	return members, nil
 }
 
-func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
+func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinMemberResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)

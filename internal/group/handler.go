@@ -32,7 +32,7 @@ type Store interface {
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
-	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
+	AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinMemberResult, error)
 	JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, memberUserId uuid.UUID) error
 	UpdateGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, memberUserId uuid.UUID, role uuid.UUID) (MemberResponse, error)
