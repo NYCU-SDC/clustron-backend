@@ -87,12 +87,6 @@ JOIN
 WHERE
     user_id = $1 AND group_id = $2;
 
--- name: GetUserGroupRole :one
-SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHERE m.user_id = $1 AND m.group_id = $2;
-
--- name: GetGroupRoleByID :one
-SELECT * FROM group_role WHERE id = $1;
-
 -- name: ListGroupMembersAscPaged :many
 SELECT *
 FROM memberships
@@ -145,9 +139,3 @@ WHERE user_identifier = $1 AND group_id = $2;
 INSERT INTO group_role (role, access_level)
 VALUES ($1, $2)
 RETURNING *;
-
--- name: GetGroupRoleByName :one
-SELECT * FROM group_role WHERE role = $1;
-
--- name: ListGroupRoles :many
-SELECT * FROM group_role;

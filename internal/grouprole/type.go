@@ -4,7 +4,15 @@ import "github.com/google/uuid"
 
 type DefaultRole string
 
+func (d DefaultRole) String() string {
+	return string(d)
+}
+
 type AccessLevel string
+
+func (a AccessLevel) String() string {
+	return string(a)
+}
 
 const (
 	RoleOwner   DefaultRole = "e02311a8-5a17-444a-b5bb-5c04afa8fa88" // Access Level: GROUP_OWNER
