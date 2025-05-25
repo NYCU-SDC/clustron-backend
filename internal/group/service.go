@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -432,7 +433,7 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	membership, err := s.queries.GetMembershipsByUser(ctx, GetMembershipsByUserParams{
+	membership, err := s.queries.GetMembershipByUser(ctx, GetMembershipByUserParams{
 		UserID:  userID,
 		GroupID: groupID,
 	})
@@ -539,7 +540,66 @@ func (s *Service) ListGroupMembersPaged(ctx context.Context, groupId uuid.UUID, 
 	return members, nil
 }
 
-func (s *Service) AddPendingGroupMember(ctx context.Context, params AddPendingGroupMemberParams) (PendingMemberResponse, error) {
+func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
+	defer span.End()
+
+	// check if the user has access to the group (group owner or group admin)
+	if !HasGroupControlAccess(s, ctx, userId, groupId) {
+		return nil, errors.New("forbidden")
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !CanAssignRole(s, ctx, userId, groupId, role) {
+		return nil, errors.New("forbidden")
+	}
+
+	// check if the user is already a member of the group
+	_, err := s.queries.GetMembershipByUser(ctx, GetMembershipByUserParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err == nil {
+		return nil, errors.New("user is already a member of the group")
+	}
+	if !errors.As(err, &handlerutil.NotFoundError{}) {
+		return nil, err
+	}
+
+	// get user id by email or student id
+	var memberUserId uuid.UUID
+	if strings.Contains(memberIdentifier, "@") {
+		memberUserId, err = s.userStore.GetIdByEmail(traceCtx, memberIdentifier)
+	} else {
+		memberUserId, err = s.userStore.GetIdByStudentId(traceCtx, memberIdentifier)
+	}
+
+	// if the user is not found, add to pending_group_members
+	if !errors.As(err, &handlerutil.NotFoundError{}) {
+		pendingMember, err := s.JoinPendingGroupMember(traceCtx, AddPendingGroupMemberParams{
+			UserIdentifier: memberIdentifier,
+			GroupID:        groupId,
+			RoleID:         role,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return pendingMember, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// call JoinGroupMember
+	member, err := s.JoinGroupMember(traceCtx, memberUserId, groupId, role)
+	if err != nil {
+		return nil, err
+	}
+
+	return member, nil
+}
+
+func (s *Service) JoinPendingGroupMember(ctx context.Context, params AddPendingGroupMemberParams) (PendingMemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddPendingGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -566,7 +626,7 @@ func (s *Service) AddPendingGroupMember(ctx context.Context, params AddPendingGr
 	}, nil
 }
 
-func (s *Service) AddGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
+func (s *Service) JoinGroupMember(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddGroupMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
