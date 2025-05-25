@@ -96,3 +96,14 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	)
 	return i, err
 }
+
+const getRoleByID = `-- name: GetRoleByID :one
+SELECT role FROM users WHERE id = $1
+`
+
+func (q *Queries) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getRoleByID, id)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
