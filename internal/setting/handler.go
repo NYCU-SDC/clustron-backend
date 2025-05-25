@@ -65,7 +65,6 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 
 	settingStore Store
-	userStore    UserStore
 }
 
 func validatePublicKey(key string) error {
@@ -76,14 +75,13 @@ func validatePublicKey(key string) error {
 	return nil
 }
 
-func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
+func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store) Handler {
 	return Handler{
 		logger:        logger,
 		validator:     v,
 		tracer:        otel.Tracer("setting/handler"),
 		problemWriter: problemWriter,
 		settingStore:  store,
-		userStore:     userStore,
 	}
 }
 

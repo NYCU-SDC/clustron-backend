@@ -80,9 +80,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 		PublicKey: exampleValidKey,
 	}, nil)
 
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -152,9 +150,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 	store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
 	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
 
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
@@ -222,9 +218,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		Username: pgtype.Text{String: "testuser", Valid: true},
 	}, nil)
 
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
