@@ -1,3 +1,13 @@
+p, user, /api/roles, GET
+p, admin, /api/roles, POST
+p, admin, /api/roles/:id, PUT
+p, admin, /api/roles/:id, DELETE
+
+p, user, /api/groups/:groupId/members, GET
+p, organizer, /api/groups/:groupId/members, POST
+p, organizer, /api/groups/:groupId/members/:memberId, PUT
+p, organizer, /api/groups/:groupId/members/:memberId, DELETE
+
 p, user, /api/groups, GET
 p, organizer, /api/groups, POST
 p, user, /api/groups/:groupId, GET

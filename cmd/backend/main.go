@@ -6,7 +6,9 @@ import (
 	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/group"
+	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
@@ -120,13 +122,17 @@ func main() {
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool)
-	groupService := group.NewService(logger, dbPool, userService, settingService)
+	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService)
+	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
-	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService, userService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService, groupRoleService)
+	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
+	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
@@ -148,28 +154,40 @@ func main() {
 
 	// HTTP Server
 	mux := http.NewServeMux()
+
+	// Auth
 	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", basicMiddleware.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 
+	// Settings
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+
+	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
 	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
+	// Roles
+	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))
+	mux.HandleFunc("POST /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.CreateHandler))
+	mux.HandleFunc("PUT /api/roles/{role_id}", authMiddleware.HandlerFunc(groupRoleHandler.UpdateHandler))
+	mux.HandleFunc("DELETE /api/roles/{role_id}", authMiddleware.HandlerFunc(groupRoleHandler.DeleteHandler))
+
+	// Groups
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
 
-	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.ListGroupMembersPagedHandler))
-	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(groupHandler.AddGroupMemberHandler))
-	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.RemoveGroupMemberHandler))
-	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(groupHandler.UpdateGroupMemberHandler))
-	mux.HandleFunc("GET /api/groups/roles", authMiddleware.HandlerFunc(groupHandler.ListGroupRolesHandler))
+	// Members
+	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.ListGroupMembersPagedHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.AddGroupMemberHandler))
+	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.RemoveGroupMemberHandler))
+	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.UpdateGroupMemberHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
