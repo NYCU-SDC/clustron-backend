@@ -1,13 +1,12 @@
 package group
 
 import (
-	"clustron-backend/internal/group"
 	"clustron-backend/test/integration"
-	"clustron-backend/test/testdata/database"
-	"context"
+	dbtestdata "clustron-backend/test/testdata/database"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDemo(t *testing.T) {
@@ -60,7 +59,7 @@ func TestGroupService_CountAll(t *testing.T) {
 		},
 	}
 
-	resourceManager, logger, err := integration.GetOrInitResource()
+	resourceManager, _, err := integration.GetOrInitResource()
 	if err != nil {
 		t.Fatalf("failed to get resource manager: %v", err)
 	}
@@ -74,7 +73,7 @@ func TestGroupService_CountAll(t *testing.T) {
 			}
 			defer rollback()
 
-			builder := dbtestdata.NewBuilder(t, db)
+			// builder := dbtestdata.NewBuilder(t, db)
 			if tc.setup != nil {
 				tc.setup(t, db)
 			}
