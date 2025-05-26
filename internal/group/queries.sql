@@ -49,6 +49,9 @@ SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.u
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING *;
+
 -- name: Update :one
 UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
@@ -83,12 +86,6 @@ JOIN
     group_role AS gr ON gr.id = m.role_id
 WHERE
     user_id = $1 AND group_id = $2;
-
--- name: GetUserGroupRole :one
-SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHERE m.user_id = $1 AND m.group_id = $2;
-
--- name: GetGroupRoleByID :one
-SELECT * FROM group_role WHERE id = $1;
 
 -- name: ListGroupMembersAscPaged :many
 SELECT *
@@ -143,9 +140,3 @@ WHERE user_identifier = $1 AND group_id = $2;
 INSERT INTO group_role (role, access_level)
 VALUES ($1, $2)
 RETURNING *;
-
--- name: GetGroupRoleByName :one
-SELECT * FROM group_role WHERE role = $1;
-
--- name: ListGroupRoles :many
-SELECT * FROM group_role;

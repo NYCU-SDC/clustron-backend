@@ -94,12 +94,12 @@ func (s *Service) GetByEmail(ctx context.Context, email string) (User, error) {
 	return user, nil
 }
 
-func (s *Service) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ExistsByEmail")
+func (s *Service) ExistsByIdentifier(ctx context.Context, email string) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ExistsByIdentifier")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByEmail(traceCtx, email)
+	exists, err := s.queries.ExistsByIdentifier(traceCtx, email)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by email")
 		span.RecordError(err)
@@ -114,7 +114,7 @@ func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (Us
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.ExistsByEmail(traceCtx, email)
+	exists, err := s.ExistsByIdentifier(traceCtx, email)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by email")
 		span.RecordError(err)
@@ -189,5 +189,4 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error)
 	}
 
 	return role, nil
-
 }
