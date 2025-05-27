@@ -35,6 +35,11 @@ type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
 }
 
+//go:generate mockery --name=MembershipStore
+//type MembershipStore interface {
+//	JoinPending(ctx context.Context, params AddOrUpdatePendingParams) (PendingMemberResponse, error)
+//}
+
 type Service struct {
 	logger  *zap.Logger
 	tracer  trace.Tracer
@@ -43,16 +48,18 @@ type Service struct {
 	userStore      UserStore
 	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
+	//membershipStore MembershipStore
 }
 
 func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore) *Service {
 	return &Service{
 		logger:         logger,
-		tracer:         otel.Tracer("group/service"),
+		tracer:         otel.Tracer("membership/service"),
 		queries:        New(db),
 		userStore:      userStore,
 		groupRoleStore: groupRoleStore,
 		settingStore:   settingStore,
+		//membershipStore: membershipStore,
 	}
 }
 
@@ -62,12 +69,12 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	user, err := jwt.GetUserFromContext(traceCtx)
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
 		logger.Error("failed to get user from context", zap.Error(err))
 		return nil, err
 	}
-	if !s.hasGroupControlAccess(traceCtx, user.ID, groupId) {
+	if !s.hasGroupControlAccess(traceCtx, jwtUser.ID, groupId) {
 		return nil, handlerutil.ErrForbidden
 	}
 
@@ -136,10 +143,8 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	defer span.End()
 
 	// check if the role is group owner (it should never be allowed to add another group owner)
-	isOwner, err := s.isRoleOwner(traceCtx, role)
-	if err != nil {
-		return nil, err
-	}
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return nil, handlerutil.ErrForbidden
 	}
@@ -163,7 +168,7 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	}
 	// if the user does not exist, add them as a pending member
 	if !userExists {
-		pendingMember, err := s.JoinPending(traceCtx, AddPendingParams{
+		pendingMember, err := s.JoinPending(traceCtx, AddOrUpdatePendingParams{
 			UserIdentifier: memberIdentifier,
 			GroupID:        groupId,
 			RoleID:         role,
@@ -196,59 +201,12 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	return member, nil
 }
 
-func (s *Service) JoinPending(ctx context.Context, params AddPendingParams) (PendingMemberResponse, error) {
+func (s *Service) JoinPending(ctx context.Context, params AddOrUpdatePendingParams) (PendingMemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "JoinPending")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsPendingByIdentifier(ctx, ExistsPendingByIdentifierParams{
-		UserIdentifier: params.UserIdentifier,
-		GroupID:        params.GroupID,
-	})
-	if err != nil {
-		span.RecordError(err)
-		return PendingMemberResponse{}, databaseutil.WrapDBError(
-			err,
-			logger,
-			"failed to check if pending member exists",
-		)
-	}
-	// if the pending member already exists, update it
-	if exists {
-		// get the pending member by identifier
-		pendingMember, err := s.queries.GetPendingByIdentifier(ctx, GetPendingByIdentifierParams{
-			UserIdentifier: params.UserIdentifier,
-			GroupID:        params.GroupID,
-		})
-		if err != nil {
-			span.RecordError(err)
-			return PendingMemberResponse{}, databaseutil.WrapDBError(
-				err,
-				logger,
-				"failed to get pending member by identifier",
-			)
-		}
-
-		// update the pending member's role
-		pendingMember, err = s.queries.UpdatePending(ctx, UpdatePendingParams{
-			RoleID:         params.RoleID,
-			UserIdentifier: params.UserIdentifier,
-			GroupID:        params.GroupID,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "failed to update pending member by identifier")
-			span.RecordError(err)
-		}
-
-		return PendingMemberResponse{
-			ID:             pendingMember.ID,
-			UserIdentifier: pendingMember.UserIdentifier,
-			GroupID:        pendingMember.GroupID,
-			RoleID:         pendingMember.RoleID,
-		}, nil
-	}
-
-	pendingMember, err := s.queries.AddPending(ctx, AddPendingParams{
+	pendingMember, err := s.queries.AddOrUpdatePending(ctx, AddOrUpdatePendingParams{
 		UserIdentifier: params.UserIdentifier,
 		GroupID:        params.GroupID,
 		RoleID:         params.RoleID,
@@ -272,38 +230,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var member Membership
-	exists, err := s.queries.ExistsByID(ctx, ExistsByIDParams{
+	member, err := s.queries.AddOrUpdate(traceCtx, AddOrUpdateParams{
 		GroupID: groupId,
 		UserID:  userId,
+		RoleID:  role,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to check if member exists")
 		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-	if exists {
-		// if the member already exists, update their role
-		member, err = s.queries.UpdateMembershipRole(traceCtx, UpdateMembershipRoleParams{
-			GroupID: groupId,
-			UserID:  userId,
-			RoleID:  role,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to update membership role")
-			span.RecordError(err)
-			return MemberResponse{}, err
-		}
-	} else {
-		member, err = s.queries.Create(traceCtx, CreateParams{
-			GroupID: groupId,
-			UserID:  userId,
-			RoleID:  role,
-		})
-		if err != nil {
-			span.RecordError(err)
-			return MemberResponse{}, databaseutil.WrapDBError(err, logger, "failed to add member")
-		}
+		return MemberResponse{}, databaseutil.WrapDBError(err, logger, "failed to add member")
 	}
 
 	// get user info
@@ -321,7 +255,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	}
 
 	// get user setting
-	setting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
+	userSetting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
@@ -350,7 +284,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  setting.Username.String,
+		Username:  userSetting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role:      grouprole.Role(roleResponse),
@@ -371,10 +305,8 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 
 	// check if the role is group owner (it should never be allowed to remove the group owner)
-	isOwner, err := s.isRoleOwner(traceCtx, membership.RoleID)
-	if err != nil {
-		return err
-	}
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, membership.RoleID)
+	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return handlerutil.ErrForbidden
 	}
@@ -407,10 +339,8 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the role is group owner (it should never be allowed to update to group owner)
-	isOwner, err := s.isRoleOwner(traceCtx, role)
-	if err != nil {
-		return MemberResponse{}, err
-	}
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
@@ -455,7 +385,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		)
 	}
 
-	setting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
+	userSetting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
@@ -483,7 +413,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  setting.Username.String,
+		Username:  userSetting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role:      grouprole.Role(roleResponse),
@@ -575,10 +505,6 @@ func (s *Service) hasGroupControlAccess(ctx context.Context, userId uuid.UUID, g
 	return accessLevel == string(grouprole.AccessLevelOwner) || accessLevel == string(grouprole.AccessLevelAdmin)
 }
 
-func (s *Service) isRoleOwner(ctx context.Context, roleID uuid.UUID) (bool, error) {
-	roleInfo, err := s.groupRoleStore.GetByID(ctx, roleID)
-	if err != nil {
-		return false, err
-	}
-	return roleInfo.AccessLevel == string(grouprole.AccessLevelOwner), nil
+func (s *Service) isGroupOwner(role grouprole.GroupRole) bool {
+	return role.AccessLevel == string(grouprole.AccessLevelOwner)
 }

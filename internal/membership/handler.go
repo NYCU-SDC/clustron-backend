@@ -24,9 +24,6 @@ type Store interface {
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
 	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
-	hasGroupControlAccess(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) bool
-	isRoleOwner(ctx context.Context, roleID uuid.UUID) (bool, error)
-	canAssignRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, roleId uuid.UUID) bool
 }
 
 //go:generate mockery --name=UserService
@@ -49,7 +46,7 @@ type AddMemberRequest struct {
 }
 
 type UpdateMemberRequest struct {
-	RoleId uuid.UUID `json:"roleId"`
+	Role uuid.UUID `json:"roleId"`
 }
 
 type Handler struct {
@@ -173,7 +170,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	member, err := h.store.Update(traceCtx, groupUUID, userUUID, req.RoleId)
+	member, err := h.store.Update(traceCtx, groupUUID, userUUID, req.Role)
 	if err != nil {
 		if errors.Is(err, handlerutil.ErrForbidden) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
