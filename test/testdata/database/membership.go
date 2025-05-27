@@ -24,13 +24,13 @@ func (b MembershipBuilder) Queries() *membership.Queries {
 }
 
 func (b MembershipBuilder) Create(groupID, userID, roleID uuid.UUID) (membership.Membership, error) {
-	params := membership.CreateParams{
+	params := membership.AddOrUpdateParams{
 		GroupID: groupID,
 		UserID:  userID,
 		RoleID:  roleID,
 	}
 
-	result, err := b.Queries().Create(b.t.Context(), params)
+	result, err := b.Queries().AddOrUpdate(b.t.Context(), params)
 	if err != nil {
 		return membership.Membership{}, err
 	}

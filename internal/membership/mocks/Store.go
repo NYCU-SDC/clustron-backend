@@ -150,47 +150,6 @@ func (_m *Store) Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID
 	return r0, r1
 }
 
-// canAssignRole provides a mock function with given fields: ctx, userId, groupId, roleId
-func (_m *Store) canAssignRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, roleId uuid.UUID) bool {
-	ret := _m.Called(ctx, userId, groupId, roleId)
-
-	if len(ret) == 0 {
-		panic("no return value specified for canAssignRole")
-	}
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) bool); ok {
-		r0 = rf(ctx, userId, groupId, roleId)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
-// hasGroupControlAccess provides a mock function with given fields: ctx, userId, groupId
-func (_m *Store) hasGroupControlAccess(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) bool {
-	ret := _m.Called(ctx, userId, groupId)
-
-	if len(ret) == 0 {
-		panic("no return value specified for hasGroupControlAccess")
-	}
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) bool); ok {
-		r0 = rf(ctx, userId, groupId)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
-// isRoleOwner provides a mock function with given fields: ctx, roleID
-func (_m *Store) isRoleOwner(ctx context.Context, roleID uuid.UUID) {
-	_m.Called(ctx, roleID)
-}
-
 // NewStore creates a new instance of Store. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewStore(t interface {

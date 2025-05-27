@@ -67,9 +67,10 @@ WHERE
 SELECT COUNT(*) FROM memberships
 WHERE group_id = $1;
 
--- name: AddPending :one
+-- name: AddOrUpdatePending :one
 INSERT INTO pending_group_members (user_identifier, group_id, role_id)
 VALUES ($1, $2, $3)
+ON CONFLICT (user_identifier, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
 RETURNING *;
 
 -- name: ExistsPendingByIdentifier :one
@@ -90,9 +91,10 @@ SET role_id = $1
 WHERE group_id = $2 AND user_identifier = $3
 RETURNING *;
 
--- name: Create :one
+-- name: AddOrUpdate :one
 INSERT INTO memberships (group_id, user_id, role_id)
 VALUES ($1, $2, $3)
+ON CONFLICT (user_id, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
 RETURNING *;
 
 -- name: Delete :exec

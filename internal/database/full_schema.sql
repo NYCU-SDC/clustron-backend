@@ -2,44 +2,6 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE IF NOT EXISTS group_role (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    role VARCHAR(50) NOT NULL,
-    access_level VARCHAR(50) NOT NULL
-);
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-CREATE TABLE IF NOT EXISTS users
-(
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255) UNIQUE NOT NULL,
-    role            VARCHAR(255) NOT NULL DEFAULT 'user',
-    student_id      VARCHAR(255) UNIQUE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-CREATE TABLE IF NOT EXISTS memberships (
-    user_id UUID REFERENCES users(id) NOT NULL,
-    group_id UUID REFERENCES groups(id) NOT NULL,
-    role_id UUID REFERENCES group_role(id) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- TODO: Rename to pending_membership
-CREATE TABLE IF NOT EXISTS pending_group_members (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_identifier TEXT NOT NULL,
-    group_id UUID NOT NULL REFERENCES groups(id),
-    role_id UUID NOT NULL REFERENCES group_role(id),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_identifier, group_id)
-);
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -59,6 +21,24 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TABLE IF NOT EXISTS group_role (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role VARCHAR(50) NOT NULL,
+    access_level VARCHAR(50) NOT NULL
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS users
+(
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    role            VARCHAR(255) NOT NULL DEFAULT 'user',
+    student_id      VARCHAR(255) UNIQUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS settings (
     user_id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
     username VARCHAR(255),
@@ -70,4 +50,25 @@ CREATE TABLE IF NOT EXISTS public_keys (
     user_id UUID REFERENCES users(id) NOT NULL,
     title VARCHAR(255) NOT NULL,
     public_key TEXT NOT NULL
+);
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS memberships (
+    user_id UUID REFERENCES users(id) NOT NULL,
+    group_id UUID REFERENCES groups(id) NOT NULL,
+    role_id UUID REFERENCES group_role(id) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, group_id)
+);
+
+-- TODO: Rename to pending_membership
+CREATE TABLE IF NOT EXISTS pending_group_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_identifier TEXT NOT NULL,
+    group_id UUID NOT NULL REFERENCES groups(id),
+    role_id UUID NOT NULL REFERENCES group_role(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_identifier, group_id)
 );
