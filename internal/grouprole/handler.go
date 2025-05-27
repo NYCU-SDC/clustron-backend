@@ -2,16 +2,16 @@ package grouprole
 
 import (
 	"context"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
-	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 //go:generate mockery --name=Store
@@ -31,8 +31,7 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 	tracer        trace.Tracer
 
-	store             Store
-	paginationFactory pagination.Factory[Response]
+	store Store
 }
 
 func NewHandler(

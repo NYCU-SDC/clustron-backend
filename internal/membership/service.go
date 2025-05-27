@@ -340,11 +340,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		Username:  setting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role: grouprole.Role{
-			ID:          roleResponse.ID,
-			Role:        roleResponse.Role,
-			AccessLevel: roleResponse.AccessLevel,
-		},
+		Role:      grouprole.Role(roleResponse),
 	}, nil
 }
 
@@ -431,11 +427,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		Username:  setting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role: grouprole.Role{
-			ID:          roleResponse.ID,
-			Role:        roleResponse.Role,
-			AccessLevel: roleResponse.AccessLevel,
-		},
+		Role:      grouprole.Role(roleResponse),
 	}, nil
 }
 

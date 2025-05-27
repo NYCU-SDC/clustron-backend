@@ -260,11 +260,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		},
 	}
 	response.Me.Type = roleType
-	response.Me.Role = grouprole.Role{
-		ID:          roleResponse.ID,
-		Role:        roleResponse.Role,
-		AccessLevel: roleResponse.AccessLevel,
-	}
+	response.Me.Role = grouprole.Role(roleResponse)
 
 	return response, nil
 }
