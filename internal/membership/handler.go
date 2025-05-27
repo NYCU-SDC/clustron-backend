@@ -25,7 +25,7 @@ type Store interface {
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
 	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
 	hasGroupControlAccess(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) bool
-	isRoleOwner(ctx context.Context, roleID uuid.UUID)
+	isRoleOwner(ctx context.Context, roleID uuid.UUID) (bool, error)
 	canAssignRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, roleId uuid.UUID) bool
 }
 
