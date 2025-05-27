@@ -127,11 +127,6 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 			}
 		}
 	}
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to get members")
-		span.RecordError(err)
-		return nil, err
-	}
 
 	return members, nil
 }
