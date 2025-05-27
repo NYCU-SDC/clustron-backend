@@ -7,11 +7,11 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -61,8 +61,17 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// check if the user has access to the group (group owner or group admin)
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		logger.Error("failed to get user from context", zap.Error(err))
+		return nil, err
+	}
+	if !s.hasGroupControlAccess(traceCtx, user.ID, groupId) {
+		return nil, handlerutil.ErrForbidden
+	}
+
 	var members []Response
-	var err error
 	if sort == "desc" {
 		params := ListGroupMembersDescPagedParams{
 			GroupID: groupId,
@@ -131,14 +140,23 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	traceCtx, span := s.tracer.Start(ctx, "Add")
 	defer span.End()
 
+	// check if the role is group owner (it should never be allowed to add another group owner)
+	isOwner, err := s.isRoleOwner(traceCtx, role)
+	if err != nil {
+		return nil, err
+	}
+	if isOwner {
+		return nil, handlerutil.ErrForbidden
+	}
+
 	// check if the user has access to the group (group owner or group admin)
 	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
-		return nil, errors.New("forbidden")
+		return nil, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !s.canAssignRole(traceCtx, userId, groupId, role) {
-		return nil, errors.New("forbidden")
+		return nil, handlerutil.ErrForbidden
 	}
 
 	// get user id by email or student id
@@ -349,7 +367,34 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.Delete(traceCtx, DeleteParams{
+	membership, err := s.queries.GetMembershipByUser(traceCtx, GetMembershipByUserParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		return err
+	}
+
+	// check if the role is group owner (it should never be allowed to remove the group owner)
+	isOwner, err := s.isRoleOwner(traceCtx, membership.RoleID)
+	if err != nil {
+		return err
+	}
+	if isOwner {
+		return handlerutil.ErrForbidden
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+		return handlerutil.ErrForbidden
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, userId, groupId, membership.RoleID) {
+		return handlerutil.ErrForbidden
+	}
+
+	err = s.queries.Delete(traceCtx, DeleteParams{
 		GroupID: groupId,
 		UserID:  userId,
 	})
@@ -365,6 +410,25 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the role is group owner (it should never be allowed to update to group owner)
+	isOwner, err := s.isRoleOwner(traceCtx, role)
+	if err != nil {
+		return MemberResponse{}, err
+	}
+	if isOwner {
+		return MemberResponse{}, handlerutil.ErrForbidden
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+		return MemberResponse{}, handlerutil.ErrForbidden
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, userId, groupId, role) {
+		return MemberResponse{}, handlerutil.ErrForbidden
+	}
 
 	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{
 		GroupID: groupId,
@@ -514,4 +578,12 @@ func (s *Service) hasGroupControlAccess(ctx context.Context, userId uuid.UUID, g
 	}
 
 	return accessLevel == string(grouprole.AccessLevelOwner) || accessLevel == string(grouprole.AccessLevelAdmin)
+}
+
+func (s *Service) isRoleOwner(ctx context.Context, roleID uuid.UUID) (bool, error) {
+	roleInfo, err := s.groupRoleStore.GetByID(ctx, roleID)
+	if err != nil {
+		return false, err
+	}
+	return roleInfo.AccessLevel == string(grouprole.AccessLevelOwner), nil
 }
