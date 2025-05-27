@@ -249,8 +249,8 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		_, err = h.memberStore.Add(traceCtx, user.ID, group.ID, m.Member, m.Role)
 		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
+			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			continue
 		}
 	}
 
