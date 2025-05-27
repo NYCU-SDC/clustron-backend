@@ -3,6 +3,7 @@ package dbtestdata
 import (
 	"clustron-backend/internal/group"
 	"clustron-backend/test/testutil"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 // GroupFactoryParams defines the parameters for creating a group.
 type GroupFactoryParams struct {
+	ID          uuid.UUID
 	Title       string
 	Description string
 }
@@ -17,15 +19,22 @@ type GroupFactoryParams struct {
 // GroupOption defines a function type for modifying GroupFactoryParams.
 type GroupOption func(*GroupFactoryParams)
 
-// WithTitle sets the title for the group.
-func WithTitle(title string) GroupOption {
+// GroupWithID sets the ID for the group.
+func GroupWithID(id uuid.UUID) GroupOption {
+	return func(p *GroupFactoryParams) {
+		p.ID = id
+	}
+}
+
+// GroupWithTitle sets the title for the group.
+func GroupWithTitle(title string) GroupOption {
 	return func(p *GroupFactoryParams) {
 		p.Title = title
 	}
 }
 
-// WithDescription sets the description for the group.
-func WithDescription(description string) GroupOption {
+// GroupWithDescription sets the description for the group.
+func GroupWithDescription(description string) GroupOption {
 	return func(p *GroupFactoryParams) {
 		p.Description = description
 	}
@@ -44,13 +53,13 @@ func NewGroupBuilder(t *testing.T, db DBTX) *GroupBuilder {
 	return &GroupBuilder{t: t, db: db}
 }
 
-func (b GroupBuilder) GetGroupQueries() *group.Queries {
+func (b GroupBuilder) Queries() *group.Queries {
 	return group.New(b.db)
 }
 
-// Create creates a new group with the specified options.
 func (b GroupBuilder) Create(opts ...GroupOption) *group.Group {
 	params := GroupFactoryParams{
+		ID:          uuid.New(),
 		Title:       testutil.RandomName(),
 		Description: testutil.RandomDescription(),
 	}
@@ -59,8 +68,9 @@ func (b GroupBuilder) Create(opts ...GroupOption) *group.Group {
 		opt(&params)
 	}
 
-	q := b.GetGroupQueries()
-	result, err := q.Create(b.t.Context(), group.CreateParams{
+	q := b.Queries()
+	result, err := q.CreateWithID(b.t.Context(), group.CreateWithIDParams{
+		ID:          params.ID,
 		Title:       params.Title,
 		Description: pgtype.Text{String: params.Description, Valid: true},
 	})

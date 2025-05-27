@@ -68,7 +68,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 			return Setting{}, err
 		}
 	}
-	
+
 	return setting, nil
 }
 

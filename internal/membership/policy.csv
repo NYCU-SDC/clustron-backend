@@ -1,0 +1,4 @@
+p, user, /api/groups/:groupId/members, GET
+p, organizer, /api/groups/:groupId/members, POST
+p, organizer, /api/groups/:groupId/members/:memberId, PUT
+p, organizer, /api/groups/:groupId/members/:memberId, DELETE

@@ -28,6 +28,19 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
+    queries: "./internal/grouprole/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "grouprole"
+        out: "./internal/grouprole"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
     queries: "./internal/user/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -47,6 +60,19 @@ sql:
       go:
         package: "setting"
         out: "./internal/setting"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/membership/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "membership"
+        out: "./internal/membership"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

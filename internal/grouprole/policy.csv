@@ -1,0 +1,4 @@
+p, user, /api/roles, GET
+p, admin, /api/roles, POST
+p, admin, /api/roles/:id, PUT
+p, admin, /api/roles/:id, DELETE

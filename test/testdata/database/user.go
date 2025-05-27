@@ -3,6 +3,7 @@ package dbtestdata
 import (
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
+	"clustron-backend/internal/user/role"
 	"clustron-backend/test/testutil"
 	"context"
 	"fmt"
@@ -13,30 +14,43 @@ import (
 )
 
 type UserFactoryParams struct {
+	ID         uuid.UUID
 	FullName   string
 	Email      string
-	Role       string
+	Role       role.GlobalRole
 	Department string
 	StudentID  string
 }
 
 type UserOption func(*UserFactoryParams)
 
-func WithEmail(email string) UserOption {
+func UserWithID(id uuid.UUID) UserOption {
+	return func(p *UserFactoryParams) {
+		p.ID = id
+	}
+}
+
+func UserWithEmail(email string) UserOption {
 	return func(p *UserFactoryParams) {
 		p.Email = email
 	}
 }
 
-func WithStudentID(sid string) UserOption {
+func UserWithStudentID(sid string) UserOption {
 	return func(p *UserFactoryParams) {
 		p.StudentID = sid
 	}
 }
 
-func WithFullName(fullName string) UserOption {
+func UserWithFullName(fullName string) UserOption {
 	return func(p *UserFactoryParams) {
 		p.FullName = fullName
+	}
+}
+
+func UserWithRole(role role.GlobalRole) UserOption {
+	return func(p *UserFactoryParams) {
+		p.Role = role
 	}
 }
 
@@ -53,7 +67,7 @@ func NewUserBuilder(t *testing.T, db DBTX) *UserBuilder {
 	return &UserBuilder{t: t, db: db}
 }
 
-func (b UserBuilder) GetUserQueries() *user.Queries {
+func (b UserBuilder) Queries() *user.Queries {
 	return user.New(b.db)
 }
 
@@ -61,36 +75,30 @@ func (b UserBuilder) Create(opts ...UserOption) user.User {
 	queries := user.New(b.db)
 	settingQueries := setting.New(b.db)
 
-	p := &UserFactoryParams{}
+	p := &UserFactoryParams{
+		ID:        uuid.New(),
+		FullName:  testutil.RandomName(),
+		Email:     testutil.RandomEmail(),
+		Role:      role.User,
+		StudentID: fmt.Sprintf("sid-%s", uuid.New().String()[:8]),
+	}
 	for _, opt := range opts {
 		opt(p)
 	}
 
-	if p.Email == "" {
-		p.Email = testutil.RandomEmail()
-	}
-
-	if p.StudentID == "" {
-		p.StudentID = fmt.Sprintf("sid-%s", uuid.New().String()[:8])
-	}
-
-	if p.Role == "" {
-		p.Role = "user"
-	}
-
-	userRow, err := queries.Create(context.Background(), user.CreateParams{
+	userRow, err := queries.CreateWithID(context.Background(), user.CreateWithIDParams{
+		ID:        p.ID,
 		Email:     p.Email,
 		StudentID: pgtype.Text{String: p.StudentID, Valid: true},
+		Role:      p.Role.String(),
 	})
 	require.NoError(b.t, err)
 
-	if p.FullName != "" {
-		_, err = settingQueries.CreateSetting(context.Background(), setting.CreateSettingParams{
-			UserID:   userRow.ID,
-			Username: pgtype.Text{String: p.FullName, Valid: true},
-		})
-		require.NoError(b.t, err)
-	}
+	_, err = settingQueries.CreateSetting(context.Background(), setting.CreateSettingParams{
+		UserID:   userRow.ID,
+		Username: pgtype.Text{String: p.FullName, Valid: true},
+	})
+	require.NoError(b.t, err)
 
 	return userRow
 }

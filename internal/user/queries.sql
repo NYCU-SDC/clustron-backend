@@ -7,13 +7,24 @@ SELECT * FROM users WHERE email = $1;
 -- name: GetRoleByID :one
 SELECT role FROM users WHERE id = $1;
 
--- name: ExistsByEmail :one
+-- name: ExistsByIdentifier :one
 SELECT EXISTS (
-    SELECT 1 FROM users WHERE email = $1
+    SELECT 1 FROM users WHERE email = $1 OR student_id = $1
 ) AS email_exists;
 
 -- name: Create :one
 INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO users (id, email, role, student_id, updated_at)
+VALUES ($1, $2, $3, $4, now())
+RETURNING *;
+
 -- name: Delete :execrows
 DELETE FROM users WHERE id = $1;
+
+-- name: GetIdByEmail :one
+SELECT id FROM users WHERE email = $1;
+
+-- name: GetIdByStudentId :one
+SELECT id FROM users WHERE student_id = $1;
