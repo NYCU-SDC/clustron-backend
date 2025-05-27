@@ -9,13 +9,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"strings"
 )
 
 type groupRoleStore interface {
@@ -163,8 +164,14 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	var memberUserId uuid.UUID
 	if strings.Contains(memberIdentifier, "@") {
 		memberUserId, err = s.userStore.GetIdByEmail(traceCtx, memberIdentifier)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		memberUserId, err = s.userStore.GetIdByStudentId(traceCtx, memberIdentifier)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// call Join

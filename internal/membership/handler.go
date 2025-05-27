@@ -5,6 +5,8 @@ import (
 	"clustron-backend/internal/jwt"
 	"context"
 	"errors"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -13,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 //go:generate mockery --name=Store
@@ -206,6 +207,10 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	totalCount, err := h.store.CountByGroupID(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
 	pageResponse := h.paginationFactory.NewResponse(members, int(totalCount), pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
