@@ -24,6 +24,9 @@ type Store interface {
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
 	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
+	hasGroupControlAccess(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) bool
+	isRoleOwner(ctx context.Context, roleID uuid.UUID)
+	canAssignRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, roleId uuid.UUID) bool
 }
 
 //go:generate mockery --name=UserService

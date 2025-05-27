@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type groupRoleStore interface {
+type GroupRoleStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (grouprole.GroupRole, error)
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
 }
@@ -41,11 +41,11 @@ type Service struct {
 	queries *Queries
 
 	userStore      UserStore
-	groupRoleStore groupRoleStore
+	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore groupRoleStore, settingStore SettingStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("group/service"),
