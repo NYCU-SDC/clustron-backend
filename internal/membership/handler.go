@@ -49,8 +49,7 @@ type AddMemberRequest struct {
 }
 
 type UpdateMemberRequest struct {
-	ID   uuid.UUID `json:"id"`
-	Role uuid.UUID `json:"role"`
+	RoleId uuid.UUID `json:"roleId"`
 }
 
 type Handler struct {
@@ -174,7 +173,7 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	member, err := h.store.Update(traceCtx, groupUUID, userUUID, req.Role)
+	member, err := h.store.Update(traceCtx, groupUUID, userUUID, req.RoleId)
 	if err != nil {
 		if errors.Is(err, handlerutil.ErrForbidden) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
