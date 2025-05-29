@@ -2,7 +2,7 @@ package auth
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/auth/oauthProvider"
+	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
@@ -51,7 +51,7 @@ type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
-	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthProvider.UserInfo, error)
+	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfo, error)
 }
 
 type callBackInfo struct {
@@ -86,12 +86,12 @@ func NewHandler(
 	jwtStore JWTStore,
 	settingStore SettingStore) *Handler {
 
-	googleProvider := oauthProvider.NewGoogleConfig(
+	googleProvider := oauthprovider.NewGoogleConfig(
 		config.GoogleOauthClientID,
 		config.GoogleOauthClientSecret,
 		fmt.Sprintf("%s/api/oauth/google/callback", config.BaseURL))
 
-	nycuProvider := oauthProvider.NewNYCUConfig(
+	nycuProvider := oauthprovider.NewNYCUConfig(
 		config.NYCUOauthClientID,
 		config.NYCUOauthClientSecret,
 		fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))

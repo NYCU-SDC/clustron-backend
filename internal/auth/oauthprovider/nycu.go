@@ -1,4 +1,4 @@
-package oauthProvider
+package oauthprovider
 
 import (
 	"context"
