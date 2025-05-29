@@ -97,6 +97,17 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const getEmailByID = `-- name: GetEmailByID :one
+SELECT email FROM users WHERE id = $1
+`
+
+func (q *Queries) GetEmailByID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getEmailByID, id)
+	var email string
+	err := row.Scan(&email)
+	return email, err
+}
+
 const getRoleByID = `-- name: GetRoleByID :one
 SELECT role FROM users WHERE id = $1
 `
@@ -106,4 +117,27 @@ func (q *Queries) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error)
 	var role string
 	err := row.Scan(&role)
 	return role, err
+}
+
+const updateRole = `-- name: UpdateRole :one
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING id, email, role, student_id, created_at, updated_at
+`
+
+type UpdateRoleParams struct {
+	ID   uuid.UUID
+	Role string
+}
+
+func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateRole, arg.ID, arg.Role)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.StudentID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

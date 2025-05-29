@@ -3,3 +3,4 @@ p, user, /api/settings, PUT
 p, user, /api/publickey, GET
 p, user, /api/publickey, POST
 p, user, /api/publickey, DELETE
+p, role_not_setup, /api/onboarding, POST

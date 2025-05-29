@@ -1,7 +1,9 @@
 package setting
 
 import (
+	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -11,18 +13,60 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ErrAlreadyOnboarded = errors.New("user already onboarded")
+)
+
+type UserStore interface {
+	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+}
 type Service struct {
 	logger *zap.Logger
 	tracer trace.Tracer
 	query  *Queries
+
+	userStore UserStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
 		query:  New(db),
+
+		userStore: userStore,
 	}
+}
+
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error {
+	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// validate user role
+	if userRole != role.NotSetup.String() {
+		logger.Warn(ErrAlreadyOnboarded.Error(), zap.String("userID", userID.String()), zap.String("userRole", userRole))
+		return ErrAlreadyOnboarded
+	}
+
+	// update user's setting
+	_, err := s.UpdateSetting(traceCtx, userID, Setting{
+		UserID:   userID,
+		Username: username,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	// set up the user's role
+	_, err = s.userStore.SetupUserRole(traceCtx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error) {
@@ -68,7 +112,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 			return Setting{}, err
 		}
 	}
-	
+
 	return setting, nil
 }
 

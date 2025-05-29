@@ -3,6 +3,7 @@ package setting
 import (
 	"clustron-backend/internal/jwt"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/log"
@@ -17,6 +18,10 @@ import (
 	"net/http"
 	"strconv"
 )
+
+type OnboardingRequest struct {
+	Username string `json:"username" validate:"required"`
+}
 
 type UpdateSettingRequest struct {
 	Username      string `json:"username" validate:"required"`
@@ -51,6 +56,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error
 }
 
 type Handler struct {
@@ -78,6 +84,38 @@ func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *proble
 		problemWriter: problemWriter,
 		settingStore:  store,
 	}
+}
+
+func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "OnboardingHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request OnboardingRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true})
+	if err != nil {
+		if errors.Is(err, ErrAlreadyOnboarded) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, problem.NewForbiddenProblem("You have already onboarded, you can update your setting instead."))
+			return
+		}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }
 
 func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) {
@@ -119,8 +157,6 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID := user.ID
-
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -129,12 +165,12 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	setting := Setting{
-		UserID:        userID,
+		UserID:        user.ID,
 		Username:      pgtype.Text{String: request.Username, Valid: true},
 		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
 	}
 
-	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, userID, setting)
+	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

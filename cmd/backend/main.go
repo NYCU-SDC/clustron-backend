@@ -119,7 +119,7 @@ func main() {
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
-	settingService := setting.NewService(logger, dbPool)
+	settingService := setting.NewService(logger, dbPool, userService)
 	groupService := group.NewService(logger, dbPool)
 
 	// Handler
@@ -154,6 +154,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 
+	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
