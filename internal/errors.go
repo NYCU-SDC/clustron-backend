@@ -32,7 +32,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
 	case errors.Is(err, ErrAlreadyOnboarded):
-		return problem.NewForbiddenProblem("user already onboarded")
+		return problem.NewBadRequestProblem("user already onboarded")
 	}
 	return problem.Problem{}
 }

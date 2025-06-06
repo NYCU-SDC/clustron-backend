@@ -3,7 +3,7 @@ module clustron-backend
 go 1.24.2
 
 require (
-	github.com/NYCU-SDC/summer v0.0.0-20250525115950-09d0d110df0d
+	github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1
 	github.com/casbin/casbin/v2 v2.105.0
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/go-playground/validator/v10 v10.26.0
@@ -31,8 +31,8 @@ require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
-	github.com/brianvoe/gofakeit/v7 v7.2.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
+	github.com/brianvoe/gofakeit/v7 v7.2.1 // indirect
 	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect
