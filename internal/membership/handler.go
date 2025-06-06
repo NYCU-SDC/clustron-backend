@@ -39,6 +39,10 @@ type Response struct {
 	Role      grouprole.Role `json:"role"`
 }
 
+type AddMembersRequest struct {
+	Members []AddMemberRequest `json:"members"`
+}
+
 type AddMemberRequest struct {
 	Member string    `json:"member"` // email or student id
 	Role   uuid.UUID `json:"roleId"`
@@ -95,19 +99,28 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req AddMemberRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	member, err := h.store.Add(traceCtx, user.ID, groupUUID, req.Member, req.Role)
+	var request AddMembersRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, member)
+	var results []JoinResult
+	// TODO: adding errorList to return all the errors in adding members
+	for _, m := range request.Members {
+		if m.Member == user.Email || m.Member == user.StudentID.String {
+			continue
+		}
+		member, err := h.store.Add(traceCtx, user.ID, groupUUID, m.Member, m.Role)
+		if err != nil {
+			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			continue
+		}
+		results = append(results, member)
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
 }
 
 func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
