@@ -1,9 +1,13 @@
 package group
 
 import (
+	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/membership"
 	"context"
 	"errors"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -13,24 +17,26 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
-//go:generate mockery --name=Auth
-type Auth interface {
-	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
-	GetUserGroupRole(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (GroupRole, error)
+//go:generate mockery --name=MemberStore
+type MemberStore interface {
+	Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (membership.JoinResult, error)
+	Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
+	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
 }
 
 //go:generate mockery --name=Store
 type Store interface {
-	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]UserScope, int /* totalCount */, error)
-	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (UserScope, error)
-	GetUserGroupRoleType(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (Role, string, error)
+	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
+	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error)
 	Create(ctx context.Context, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
-	GetGroupRoleByID(ctx context.Context, roleID uuid.UUID) (GroupRole, error)
+	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
+	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
+	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 }
 
 type RoleResponse struct {
@@ -53,8 +59,8 @@ type Response struct {
 }
 
 type AddMemberRequest struct {
-	Member string `json:"member"` // email or student id
-	Role   string `json:"role"`
+	Member string    `json:"member"` // email or student id
+	Role   uuid.UUID `json:"role"`
 }
 
 type CreateRequest struct {
@@ -70,18 +76,23 @@ type Handler struct {
 	tracer        trace.Tracer
 
 	store             Store
-	auth              Auth
+	memberStore       MemberStore
 	paginationFactory pagination.Factory[Response]
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, store Store, auth Auth) *Handler {
+func NewHandler(
+	logger *zap.Logger,
+	validator *validator.Validate,
+	problemWriter *problem.HttpWriter,
+	store Store,
+	memberStore MemberStore) *Handler {
 	return &Handler{
 		validator:         validator,
 		logger:            logger,
 		tracer:            otel.Tracer("group/handler"),
 		problemWriter:     problemWriter,
 		store:             store,
-		auth:              auth,
+		memberStore:       memberStore,
 		paginationFactory: pagination.NewFactory[Response](200, []string{"created_at"}),
 	}
 }
@@ -126,7 +137,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
 		groupResponse[i].Me.Type = group.Me.Type
-		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
+		groupResponse[i].Me.Role = RoleResponse(group.Me.Role.ToResponse())
 	}
 
 	pageResponse := h.paginationFactory.NewResponse(groupResponse, totalCount, pageRequest.Page, pageRequest.Size)
@@ -173,7 +184,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = userScopeResponse.Me.Type
-	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
+	groupResponse.Me.Role = RoleResponse(userScopeResponse.Me.Role.ToResponse())
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
@@ -211,12 +222,31 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Add members to the group and set the creator as the group-owner
-
-	roleOwner, err := h.store.GetGroupRoleByID(traceCtx, uuid.MustParse(string(RoleOwner)))
+	roleOwner, err := h.store.GetByID(traceCtx, uuid.MustParse(string(grouprole.RoleOwner)))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
+	}
+
+	// 1. Set creator as a group-owner
+	_, err = h.memberStore.Join(traceCtx, user.ID, group.ID, roleOwner.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// 2. Add other members
+	// TODO: adding errorList to return all the errors in adding members
+	for _, m := range request.Members {
+		if m.Member == user.Email || m.Member == user.StudentID.String {
+			continue
+		}
+
+		_, err = h.memberStore.Add(traceCtx, user.ID, group.ID, m.Member, m.Role)
+		if err != nil {
+			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			continue
+		}
 	}
 
 	groupResponse := Response{
@@ -230,7 +260,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	groupResponse.Me.Type = "membership"
 	groupResponse.Me.Role = RoleResponse{
 		ID:          roleOwner.ID.String(),
-		Role:        roleOwner.Role.String,
+		Role:        roleOwner.Role,
 		AccessLevel: roleOwner.AccessLevel,
 	}
 
@@ -257,12 +287,12 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
-		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != string(AccessLevelOwner) {
+		if accessLevel != string(grouprole.AccessLevelOwner) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
@@ -274,7 +304,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role, user.ID, groupUUID)
+	role, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -290,7 +320,11 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = role.ToResponse()
+		groupResponse.Me.Role = RoleResponse{
+			ID:          role.ID.String(),
+			Role:        role.Role,
+			AccessLevel: role.AccessLevel,
+		}
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
@@ -316,12 +350,12 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
-		accessLevel, err := h.auth.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		if accessLevel != string(AccessLevelOwner) {
+		if accessLevel != string(grouprole.AccessLevelOwner) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
@@ -333,7 +367,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, roleType, err := h.store.GetUserGroupRoleType(traceCtx, user.Role, user.ID, groupUUID)
+	role, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -349,7 +383,11 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = role.ToResponse()
+		groupResponse.Me.Role = RoleResponse{
+			ID:          role.ID.String(),
+			Role:        role.Role,
+			AccessLevel: role.AccessLevel,
+		}
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)

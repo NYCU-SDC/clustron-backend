@@ -1,10 +1,18 @@
-package group
+package grouprole
 
 import "github.com/google/uuid"
 
 type DefaultRole string
 
+func (d DefaultRole) String() string {
+	return string(d)
+}
+
 type AccessLevel string
+
+func (a AccessLevel) String() string {
+	return string(a)
+}
 
 const (
 	RoleOwner   DefaultRole = "e02311a8-5a17-444a-b5bb-5c04afa8fa88" // Access Level: GROUP_OWNER
@@ -19,6 +27,19 @@ const (
 	AccessLevelUser  AccessLevel = "USER"
 )
 
+var AccessLevelRank = map[string]int{
+	"GROUP_OWNER": 3,
+	"GROUP_ADMIN": 2,
+	"USER":        1,
+}
+
+var DefaultRoleToAccessLevel = map[DefaultRole]AccessLevel{
+	RoleOwner:   AccessLevelOwner,
+	RoleTA:      AccessLevelAdmin,
+	RoleStudent: AccessLevelUser,
+	RoleAuditor: AccessLevelUser,
+}
+
 type UserScope struct {
 	Group
 	Me struct {
@@ -31,6 +52,12 @@ type Role struct {
 	ID          uuid.UUID
 	Role        string
 	AccessLevel string
+}
+
+type RoleResponse struct {
+	ID          string `json:"id"`
+	Role        string `json:"role"`
+	AccessLevel string `json:"accessLevel"`
 }
 
 func (r Role) ToResponse() RoleResponse {

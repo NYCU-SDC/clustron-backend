@@ -66,3 +66,7 @@ func GetUserFromContext(ctx context.Context) (User, error) {
 	}
 	return user, nil
 }
+
+func SetUserToContext(ctx context.Context, user User) context.Context {
+	return context.WithValue(ctx, internal.UserContextKey, user)
+}

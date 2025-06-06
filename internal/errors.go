@@ -13,7 +13,10 @@ var (
 	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
 	ErrPermissionDenied     = errors.New("permission denied")
-	ErrAlreadyOnboarded     = errors.New("user already onboarded")
+  ErrAlreadyOnboarded     = errors.New("user already onboarded")
+
+	// Database Errors
+	ErrDatabaseConflict = errors.New("database conflict")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -32,10 +35,20 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid callback info")
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
+	case errors.Is(err, ErrDatabaseConflict):
+		return NewBadRequestProblem("database conflict")
 	case errors.Is(err, ErrAlreadyOnboarded):
 		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")
 	}
 	return problem.Problem{}
+}
+func NewBadRequestProblem(message string) problem.Problem {
+	return problem.Problem{
+		Title:  "Bad Request",
+		Status: 400,
+		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
+		Detail: message,
+	}
 }
