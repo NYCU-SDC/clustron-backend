@@ -187,7 +187,7 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	userEmail, err := s.GetEmailByID(ctx, userID)
+	userEmail, err := s.GetEmailByID(traceCtx, userID)
 	if err != nil {
 		span.RecordError(err)
 		return "", err
@@ -200,7 +200,7 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	} else {
 		userRole = role.User.String()
 	}
-	err = s.UpdateRoleByID(ctx, userID, userRole)
+	err = s.UpdateRoleByID(traceCtx, userID, userRole)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user role")
 		span.RecordError(err)

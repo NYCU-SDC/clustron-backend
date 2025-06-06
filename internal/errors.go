@@ -12,6 +12,7 @@ var (
 	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
 	ErrPermissionDenied     = errors.New("permission denied")
+	ErrAlreadyOnboarded     = errors.New("user already onboarded")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -30,6 +31,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid callback info")
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
+	case errors.Is(err, ErrAlreadyOnboarded):
+		return problem.NewForbiddenProblem("user already onboarded")
 	}
 	return problem.Problem{}
 }
