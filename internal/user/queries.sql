@@ -4,6 +4,9 @@ SELECT * FROM users WHERE id = $1;
 -- name: GetByEmail :one
 SELECT * FROM users WHERE email = $1;
 
+-- name: GetEmailByID :one
+SELECT email FROM users WHERE id = $1;
+
 -- name: GetRoleByID :one
 SELECT role FROM users WHERE id = $1;
 
@@ -28,3 +31,6 @@ SELECT id FROM users WHERE email = $1;
 
 -- name: GetIdByStudentId :one
 SELECT id FROM users WHERE student_id = $1;
+
+-- name: UpdateRole :one
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING *;

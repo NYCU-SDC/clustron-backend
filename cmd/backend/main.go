@@ -126,6 +126,7 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService)
+	settingService := setting.NewService(logger, dbPool, userService)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
@@ -164,6 +165,7 @@ func main() {
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 
 	// Settings
+	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
 

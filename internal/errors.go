@@ -13,6 +13,7 @@ var (
 	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
 	ErrPermissionDenied     = errors.New("permission denied")
+  ErrAlreadyOnboarded     = errors.New("user already onboarded")
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
@@ -36,6 +37,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewForbiddenProblem("permission denied")
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewBadRequestProblem("database conflict")
+	case errors.Is(err, ErrAlreadyOnboarded):
+		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")
 	}
