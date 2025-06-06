@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/cors"
 	"clustron-backend/internal/group"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
@@ -139,6 +140,7 @@ func main() {
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
+	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
 	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
 
@@ -193,9 +195,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// CORS Middleware
+	entrypoint := corsMiddleware.HandlerFunc(mux.ServeHTTP)
+
 	srv := &http.Server{
 		Addr:    cfg.Host + ":" + cfg.Port,
-		Handler: mux,
+		Handler: entrypoint,
 	}
 
 	go func() {

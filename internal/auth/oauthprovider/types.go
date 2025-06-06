@@ -1,4 +1,4 @@
-package oauthProvider
+package oauthprovider
 
 type UserInfo struct {
 	ID        string
