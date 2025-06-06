@@ -7,6 +7,9 @@ nycu_oauth_client_id:
 nycu_oauth_client_secret:
 casbin_model_source:
 casbin_policy_source:
+allow_origins:
+  - origin1
+  - origin2
 preset_user:
   'YOUR_EMAIL':
     role: admin
