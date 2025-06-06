@@ -3,10 +3,12 @@
 package mocks
 
 import (
-	setting "clustron-backend/internal/setting"
 	context "context"
 
+	pgtype "github.com/jackc/pgx/v5/pgtype"
 	mock "github.com/stretchr/testify/mock"
+
+	setting "clustron-backend/internal/setting"
 
 	uuid "github.com/google/uuid"
 )
@@ -146,6 +148,24 @@ func (_m *Store) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (sett
 	}
 
 	return r0, r1
+}
+
+// OnboardUser provides a mock function with given fields: ctx, userRole, userID, username
+func (_m *Store) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error {
+	ret := _m.Called(ctx, userRole, userID, username)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OnboardUser")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, uuid.UUID, pgtype.Text) error); ok {
+		r0 = rf(ctx, userRole, userID, username)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
 
 // UpdateSetting provides a mock function with given fields: ctx, userID, _a2
