@@ -199,9 +199,10 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	q := r.URL.Query()
-	short := true // default true: frontend usually only needs short public key
-	if q.Has("short") {
-		short, err = strconv.ParseBool(q.Get("short"))
+	var length int64
+	length = 20 // default 20: frontend usually only needs short public key
+	if q.Has("length") {
+		length, err = strconv.ParseInt(q.Get("length"), 10, 64)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -209,25 +210,14 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := make([]PublicKeyResponse, len(publicKeys))
-	if short {
-		for i, publicKey := range publicKeys {
-			response[i] = PublicKeyResponse{
-				ID:        publicKey.ID.String(),
-				Title:     publicKey.Title,
-				PublicKey: publicKey.PublicKey[:10],
-			}
-		}
-		handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-		return
-	} else {
-		for i, publicKey := range publicKeys {
-			response[i] = PublicKeyResponse{
-				Title:     publicKey.Title,
-				PublicKey: publicKey.PublicKey,
-			}
+
+	for i, publicKey := range publicKeys {
+		response[i] = PublicKeyResponse{
+			ID:        publicKey.ID.String(),
+			Title:     publicKey.Title,
+			PublicKey: publicKey.PublicKey[:min(length, int64(len(publicKey.PublicKey)))],
 		}
 	}
-
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
