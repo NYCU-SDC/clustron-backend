@@ -145,16 +145,19 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
+		logger.Warn("Group role is owner, you cannot add the group owner")
 		return nil, handlerutil.ErrForbidden
 	}
 
 	// check if the user has access to the group (group owner or group admin)
 	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
 		return nil, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !s.canAssignRole(traceCtx, userId, groupId, role) {
+		logger.Warn("The user's access is not allowed to add this member")
 		return nil, handlerutil.ErrForbidden
 	}
 
@@ -308,20 +311,24 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
 		span.RecordError(err)
-		return handlerutil.ErrForbidden
+		return err
 	}
+
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
+		logger.Warn("Group role is owner, you cannot remove the group owner")
 		return handlerutil.ErrForbidden
 	}
 
 	// check if the user has access to the group (group owner or group admin)
 	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
 		return handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !s.canAssignRole(traceCtx, userId, groupId, membership.RoleID) {
+		logger.Warn("The user's access is not allowed to remove this member")
 		return handlerutil.ErrForbidden
 	}
 
@@ -351,16 +358,19 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
+		logger.Warn("Group role is owner, you cannot update the group owner")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
 	// check if the user has access to the group (group owner or group admin)
 	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
 	if !s.canAssignRole(traceCtx, userId, groupId, role) {
+		logger.Warn("The user's access is not allowed to update this member")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
