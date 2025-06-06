@@ -58,15 +58,10 @@ type Response struct {
 	} `json:"me"`
 }
 
-type AddMemberRequest struct {
-	Member string    `json:"member"` // email or student id
-	Role   uuid.UUID `json:"role"`
-}
-
 type CreateRequest struct {
-	Title       string             `json:"title" validate:"required"`
-	Description string             `json:"description" validate:"required"`
-	Members     []AddMemberRequest `json:"members"`
+	Title       string                        `json:"title" validate:"required"`
+	Description string                        `json:"description" validate:"required"`
+	Members     []membership.AddMemberRequest `json:"members"`
 }
 
 type Handler struct {
