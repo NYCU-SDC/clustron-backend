@@ -141,9 +141,15 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Add")
 	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the role is group owner (it should never be allowed to add another group owner)
 	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return nil, err
+	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return nil, handlerutil.ErrForbidden
@@ -162,7 +168,7 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	// get user id by email or student id
 	userExists, err := s.userStore.ExistsByIdentifier(traceCtx, memberIdentifier)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, s.logger, "failed to check if user exists")
+		err = databaseutil.WrapDBError(err, logger, "failed to check if user exists")
 		span.RecordError(err)
 		return nil, err
 	}
@@ -306,6 +312,11 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	// check if the role is group owner (it should never be allowed to remove the group owner)
 	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, membership.RoleID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return handlerutil.ErrForbidden
+	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return handlerutil.ErrForbidden
@@ -340,6 +351,11 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	// check if the role is group owner (it should never be allowed to update to group owner)
 	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return MemberResponse{}, err
+	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
 		return MemberResponse{}, handlerutil.ErrForbidden
