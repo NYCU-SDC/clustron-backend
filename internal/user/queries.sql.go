@@ -129,6 +129,17 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const getEmailByID = `-- name: GetEmailByID :one
+SELECT email FROM users WHERE id = $1
+`
+
+func (q *Queries) GetEmailByID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getEmailByID, id)
+	var email string
+	err := row.Scan(&email)
+	return email, err
+}
+
 const getIdByEmail = `-- name: GetIdByEmail :one
 SELECT id FROM users WHERE email = $1
 `
@@ -149,17 +160,6 @@ func (q *Queries) GetIdByStudentId(ctx context.Context, studentID pgtype.Text) (
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
-}
-
-const getEmailByID = `-- name: GetEmailByID :one
-SELECT email FROM users WHERE id = $1
-`
-
-func (q *Queries) GetEmailByID(ctx context.Context, id uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getEmailByID, id)
-	var email string
-	err := row.Scan(&email)
-	return email, err
 }
 
 const getRoleByID = `-- name: GetRoleByID :one
