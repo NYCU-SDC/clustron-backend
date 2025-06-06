@@ -35,11 +35,6 @@ type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
 }
 
-//go:generate mockery --name=MembershipStore
-//type MembershipStore interface {
-//	JoinPending(ctx context.Context, params AddOrUpdatePendingParams) (PendingMemberResponse, error)
-//}
-
 type Service struct {
 	logger  *zap.Logger
 	tracer  trace.Tracer
@@ -48,7 +43,6 @@ type Service struct {
 	userStore      UserStore
 	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
-	//membershipStore MembershipStore
 }
 
 func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore) *Service {
@@ -59,7 +53,6 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore
 		userStore:      userStore,
 		groupRoleStore: groupRoleStore,
 		settingStore:   settingStore,
-		//membershipStore: membershipStore,
 	}
 }
 
