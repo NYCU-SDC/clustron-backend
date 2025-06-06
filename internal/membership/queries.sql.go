@@ -39,7 +39,7 @@ func (q *Queries) AddOrUpdate(ctx context.Context, arg AddOrUpdateParams) (Membe
 }
 
 const addOrUpdatePending = `-- name: AddOrUpdatePending :one
-INSERT INTO pending_group_members (user_identifier, group_id, role_id)
+INSERT INTO pending_memberships (user_identifier, group_id, role_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (user_identifier, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
 RETURNING id, user_identifier, group_id, role_id, created_at, updated_at
@@ -51,9 +51,9 @@ type AddOrUpdatePendingParams struct {
 	RoleID         uuid.UUID
 }
 
-func (q *Queries) AddOrUpdatePending(ctx context.Context, arg AddOrUpdatePendingParams) (PendingGroupMember, error) {
+func (q *Queries) AddOrUpdatePending(ctx context.Context, arg AddOrUpdatePendingParams) (PendingMembership, error) {
 	row := q.db.QueryRow(ctx, addOrUpdatePending, arg.UserIdentifier, arg.GroupID, arg.RoleID)
-	var i PendingGroupMember
+	var i PendingMembership
 	err := row.Scan(
 		&i.ID,
 		&i.UserIdentifier,
@@ -136,7 +136,7 @@ func (q *Queries) ExistsByIdentifier(ctx context.Context, arg ExistsByIdentifier
 const existsPendingByIdentifier = `-- name: ExistsPendingByIdentifier :one
 SELECT EXISTS (
     SELECT 1
-    FROM pending_group_members
+    FROM pending_memberships
     WHERE group_id = $1 AND user_identifier = $2
 ) AS exists
 `
@@ -196,7 +196,7 @@ func (q *Queries) GetMembershipByUser(ctx context.Context, arg GetMembershipByUs
 
 const getPendingByIdentifier = `-- name: GetPendingByIdentifier :one
 SELECT id, user_identifier, group_id, role_id, created_at, updated_at
-FROM pending_group_members
+FROM pending_memberships
 WHERE group_id = $1 AND user_identifier = $2
 `
 
@@ -205,9 +205,9 @@ type GetPendingByIdentifierParams struct {
 	UserIdentifier string
 }
 
-func (q *Queries) GetPendingByIdentifier(ctx context.Context, arg GetPendingByIdentifierParams) (PendingGroupMember, error) {
+func (q *Queries) GetPendingByIdentifier(ctx context.Context, arg GetPendingByIdentifierParams) (PendingMembership, error) {
 	row := q.db.QueryRow(ctx, getPendingByIdentifier, arg.GroupID, arg.UserIdentifier)
-	var i PendingGroupMember
+	var i PendingMembership
 	err := row.Scan(
 		&i.ID,
 		&i.UserIdentifier,
@@ -388,7 +388,7 @@ func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembership
 }
 
 const updatePending = `-- name: UpdatePending :one
-UPDATE pending_group_members
+UPDATE pending_memberships
 SET role_id = $1
 WHERE group_id = $2 AND user_identifier = $3
 RETURNING id, user_identifier, group_id, role_id, created_at, updated_at
@@ -400,9 +400,9 @@ type UpdatePendingParams struct {
 	UserIdentifier string
 }
 
-func (q *Queries) UpdatePending(ctx context.Context, arg UpdatePendingParams) (PendingGroupMember, error) {
+func (q *Queries) UpdatePending(ctx context.Context, arg UpdatePendingParams) (PendingMembership, error) {
 	row := q.db.QueryRow(ctx, updatePending, arg.RoleID, arg.GroupID, arg.UserIdentifier)
-	var i PendingGroupMember
+	var i PendingMembership
 	err := row.Scan(
 		&i.ID,
 		&i.UserIdentifier,

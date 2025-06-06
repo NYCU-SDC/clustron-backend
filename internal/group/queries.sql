@@ -123,11 +123,11 @@ WHERE group_id = $1 AND user_id = $2;
 
 -- name: GetPendingGroupMember :one
 SELECT *
-FROM pending_group_members
+FROM pending_memberships
 WHERE user_identifier = $1 AND group_id = $2;
 
 -- name: DeletePendingGroupMember :exec
-DELETE FROM pending_group_members
+DELETE FROM pending_memberships
 WHERE user_identifier = $1 AND group_id = $2;
 
 -- name: CreateRole :one

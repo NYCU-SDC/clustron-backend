@@ -211,7 +211,7 @@ func (s *Service) JoinPending(ctx context.Context, params AddOrUpdatePendingPara
 		RoleID:         params.RoleID,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "pending_group_members", "user_identifier/group_id/role_id", fmt.Sprintf("%s/%s/%s", params.UserIdentifier, params.GroupID.String(), params.RoleID.String()), logger, "failed to add pending member")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "pending_memberships", "user_identifier/group_id/role_id", fmt.Sprintf("%s/%s/%s", params.UserIdentifier, params.GroupID.String(), params.RoleID.String()), logger, "failed to add pending member")
 		span.RecordError(err)
 		return PendingMemberResponse{}, err
 	}

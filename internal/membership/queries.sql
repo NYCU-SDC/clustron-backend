@@ -68,7 +68,7 @@ SELECT COUNT(*) FROM memberships
 WHERE group_id = $1;
 
 -- name: AddOrUpdatePending :one
-INSERT INTO pending_group_members (user_identifier, group_id, role_id)
+INSERT INTO pending_memberships (user_identifier, group_id, role_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (user_identifier, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
 RETURNING *;
@@ -76,17 +76,17 @@ RETURNING *;
 -- name: ExistsPendingByIdentifier :one
 SELECT EXISTS (
     SELECT 1
-    FROM pending_group_members
+    FROM pending_memberships
     WHERE group_id = $1 AND user_identifier = $2
 ) AS exists;
 
 -- name: GetPendingByIdentifier :one
 SELECT *
-FROM pending_group_members
+FROM pending_memberships
 WHERE group_id = $1 AND user_identifier = $2;
 
 -- name: UpdatePending :one
-UPDATE pending_group_members
+UPDATE pending_memberships
 SET role_id = $1
 WHERE group_id = $2 AND user_identifier = $3
 RETURNING *;

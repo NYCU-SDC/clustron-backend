@@ -32,7 +32,7 @@ type Membership struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
-type PendingGroupMember struct {
+type PendingMembership struct {
 	ID             uuid.UUID
 	UserIdentifier string
 	GroupID        uuid.UUID

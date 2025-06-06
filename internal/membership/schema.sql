@@ -9,8 +9,7 @@ CREATE TABLE IF NOT EXISTS memberships (
     UNIQUE(user_id, group_id)
 );
 
--- TODO: Rename to pending_membership
-CREATE TABLE IF NOT EXISTS pending_group_members (
+CREATE TABLE IF NOT EXISTS pending_memberships (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_identifier TEXT NOT NULL,
     group_id UUID NOT NULL REFERENCES groups(id),

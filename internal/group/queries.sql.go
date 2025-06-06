@@ -143,7 +143,7 @@ func (q *Queries) CreateWithID(ctx context.Context, arg CreateWithIDParams) (Gro
 }
 
 const deletePendingGroupMember = `-- name: DeletePendingGroupMember :exec
-DELETE FROM pending_group_members
+DELETE FROM pending_memberships
 WHERE user_identifier = $1 AND group_id = $2
 `
 
@@ -238,7 +238,7 @@ func (q *Queries) GetMembershipByUser(ctx context.Context, arg GetMembershipByUs
 
 const getPendingGroupMember = `-- name: GetPendingGroupMember :one
 SELECT id, user_identifier, group_id, role_id, created_at, updated_at
-FROM pending_group_members
+FROM pending_memberships
 WHERE user_identifier = $1 AND group_id = $2
 `
 
@@ -247,9 +247,9 @@ type GetPendingGroupMemberParams struct {
 	GroupID        uuid.UUID
 }
 
-func (q *Queries) GetPendingGroupMember(ctx context.Context, arg GetPendingGroupMemberParams) (PendingGroupMember, error) {
+func (q *Queries) GetPendingGroupMember(ctx context.Context, arg GetPendingGroupMemberParams) (PendingMembership, error) {
 	row := q.db.QueryRow(ctx, getPendingGroupMember, arg.UserIdentifier, arg.GroupID)
-	var i PendingGroupMember
+	var i PendingMembership
 	err := row.Scan(
 		&i.ID,
 		&i.UserIdentifier,
