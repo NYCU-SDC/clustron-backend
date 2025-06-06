@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"github.com/NYCU-SDC/summer/pkg/problem"
+	"strconv"
 )
 
 var (
@@ -30,6 +31,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid callback info")
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
+	case errors.Is(err, strconv.ErrSyntax):
+		return problem.NewValidateProblem("invalid syntax")
 	}
 	return problem.Problem{}
 }
