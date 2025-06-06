@@ -135,11 +135,11 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	err = h.store.Remove(traceCtx, groupUUID, removedUserUUID)
 	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		if errors.Is(err, handlerutil.ErrForbidden) {
 			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 			return
 		}
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
