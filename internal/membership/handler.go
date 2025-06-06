@@ -4,7 +4,6 @@ import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"context"
-	"errors"
 	"net/http"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -104,10 +103,6 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 
 	member, err := h.store.Add(traceCtx, user.ID, groupUUID, req.Member, req.Role)
 	if err != nil {
-		if errors.Is(err, handlerutil.ErrForbidden) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -136,14 +131,10 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 	err = h.store.Remove(traceCtx, groupUUID, removedUserUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		if errors.Is(err, handlerutil.ErrForbidden) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }
 
 func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
@@ -172,10 +163,6 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	member, err := h.store.Update(traceCtx, groupUUID, userUUID, req.Role)
 	if err != nil {
-		if errors.Is(err, handlerutil.ErrForbidden) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -210,14 +197,6 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		pageRequest.SortBy,
 	)
 	if err != nil {
-		if errors.As(err, &handlerutil.NotFoundError{}) {
-			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
-			return
-		}
-		if errors.Is(err, handlerutil.ErrForbidden) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
