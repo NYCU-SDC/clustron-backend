@@ -354,7 +354,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
 		span.RecordError(err)
-
+		return MemberResponse{}, err
 	}
 	isOwner := s.isGroupOwner(roleInfo)
 	if isOwner {
