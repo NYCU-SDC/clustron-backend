@@ -77,7 +77,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 			GroupID: groupId,
 			Sortby:  sortBy,
 			Size:    int32(size),
-			Page:    int32(page),
+			Skip:    int32(page) * int32(size),
 		}
 		res, err := s.queries.ListGroupMembersDescPaged(traceCtx, params)
 		if err != nil {
@@ -104,7 +104,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 			GroupID: groupId,
 			Sortby:  sortBy,
 			Size:    int32(size),
-			Page:    int32(page),
+			Skip:    int32(page) * int32(size),
 		}
 		res, err := s.queries.ListGroupMembersAscPaged(traceCtx, params)
 		if err != nil {

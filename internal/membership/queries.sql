@@ -14,7 +14,7 @@ JOIN users AS u ON u.id = m.user_id
 JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
 ORDER BY @SortBy::text DESC
-LIMIT @Size OFFSET @page;
+LIMIT @Size OFFSET @Skip;
 
 -- name: ListGroupMembersAscPaged :many
 SELECT
@@ -32,7 +32,7 @@ JOIN users AS u ON u.id = m.user_id
 JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
 ORDER BY @SortBy::text ASC
-LIMIT @Size OFFSET @page;
+LIMIT @Size OFFSET @Skip;
 
 -- name: ExistsByIdentifier :one
 SELECT EXISTS (
