@@ -21,7 +21,7 @@ import (
 
 //go:generate mockery --name=MemberStore
 type MemberStore interface {
-	Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (membership.JoinResult, error)
+	Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (membership.JoinResult, error)
 	Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
@@ -237,7 +237,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = h.memberStore.Add(traceCtx, user.ID, group.ID, m.Member, m.Role)
+		_, err = h.memberStore.Add(traceCtx, group.ID, m.Member, m.Role)
 		if err != nil {
 			// h.problemWriter.WriteError(traceCtx, w, err, logger)
 			continue
