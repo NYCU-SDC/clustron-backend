@@ -201,6 +201,20 @@ func (q *Queries) ListUidNumbers(ctx context.Context) ([]pgtype.Int4, error) {
 	return items, nil
 }
 
+const setUidNumber = `-- name: SetUidNumber :exec
+UPDATE users SET uid_number = $2 WHERE id = $1
+`
+
+type SetUidNumberParams struct {
+	ID        uuid.UUID
+	UidNumber pgtype.Int4
+}
+
+func (q *Queries) SetUidNumber(ctx context.Context, arg SetUidNumberParams) error {
+	_, err := q.db.Exec(ctx, setUidNumber, arg.ID, arg.UidNumber)
+	return err
+}
+
 const updateRole = `-- name: UpdateRole :one
 UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING id, email, role, student_id, uid_number, created_at, updated_at
 `

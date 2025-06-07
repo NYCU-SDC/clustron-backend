@@ -137,3 +137,6 @@ RETURNING *;
 
 -- name: ListGidNumbers :many
 SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;
+
+-- name: SetGidNumber :exec
+UPDATE groups SET gid_number = $2 WHERE id = $1;

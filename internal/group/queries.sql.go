@@ -681,6 +681,20 @@ func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberPa
 	return err
 }
 
+const setGidNumber = `-- name: SetGidNumber :exec
+UPDATE groups SET gid_number = $2 WHERE id = $1
+`
+
+type SetGidNumberParams struct {
+	ID        uuid.UUID
+	GidNumber pgtype.Int4
+}
+
+func (q *Queries) SetGidNumber(ctx context.Context, arg SetGidNumberParams) error {
+	_, err := q.db.Exec(ctx, setGidNumber, arg.ID, arg.GidNumber)
+	return err
+}
+
 const unarchive = `-- name: Unarchive :one
 UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
