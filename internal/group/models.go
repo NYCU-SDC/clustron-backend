@@ -14,6 +14,7 @@ type Group struct {
 	Title       string
 	Description pgtype.Text
 	IsArchived  pgtype.Bool
+	GidNumber   pgtype.Int4
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
@@ -66,6 +67,7 @@ type User struct {
 	Email     string
 	Role      string
 	StudentID pgtype.Text
+	UidNumber pgtype.Int4
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }

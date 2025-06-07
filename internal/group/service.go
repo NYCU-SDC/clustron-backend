@@ -3,19 +3,24 @@ package group
 import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
 	"fmt"
+	"strconv"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+const StartGidNumber = 10000
 
 type RoleStore interface {
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -39,9 +44,10 @@ type Service struct {
 	userStore    UserStore
 	roleStore    RoleStore
 	settingStore SettingStore
+	ldapClient   ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:       logger,
 		tracer:       otel.Tracer("group/service"),
@@ -49,6 +55,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore S
 		userStore:    userStore,
 		roleStore:    roleStore,
 		settingStore: settingStore,
+		ldapClient:   ldapClient,
 	}
 }
 
@@ -364,6 +371,27 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 		return Group{}, err
 	}
 
+	// Create LDAP group
+	groupName := newGroup.ID.String()
+	gidNumber, err := s.GetAvailableGidNumber(ctx)
+	logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
+	if err != nil {
+		logger.Warn("get available gid number failed", zap.Error(err))
+	} else {
+		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
+		if err != nil {
+			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+		} else {
+			err = s.queries.SetGidNumber(ctx, SetGidNumberParams{
+				ID:        newGroup.ID,
+				GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
+			})
+			if err != nil {
+				logger.Warn("set gid number failed", zap.Error(err))
+			}
+		}
+	}
+
 	return newGroup, nil
 }
 
@@ -476,4 +504,34 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	}
 
 	return groupRole, roleType, nil
+}
+
+/*
+To find the lowest unused gidNumber >= StartGidNumber for LDAP groups.
+It queries all used gidNumbers, builds a set, and returns the first available one.
+*/
+func (s *Service) GetAvailableGidNumber(ctx context.Context) (int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAvailableGidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	usedGidNumbers, err := s.queries.ListGidNumbers(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get available gid number")
+		span.RecordError(err)
+		return 0, err
+	}
+
+	next := StartGidNumber
+	usedSet := make(map[int32]struct{}, len(usedGidNumbers))
+	for _, n := range usedGidNumbers {
+		usedSet[int32(n.Int32)] = struct{}{}
+	}
+
+	for {
+		if _, ok := usedSet[int32(next)]; !ok {
+			return int(next), nil
+		}
+		next++
+	}
 }

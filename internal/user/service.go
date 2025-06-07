@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -14,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+const StartUidNumber = 10000
 
 type Service struct {
 	queries   *Queries
@@ -251,4 +254,52 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	}
 
 	return userRole, nil
+}
+
+/*
+To find the lowest unused uidNumber >= StartUidNumber for LDAP users.
+It queries all used uidNumbers, builds a set, and returns the first available one.
+*/
+func (s *Service) GetAvailableUidNumber(ctx context.Context) (int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAvailableUidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	usedUidNumbers, err := s.queries.ListUidNumbers(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get available uid number")
+		span.RecordError(err)
+		return 0, err
+	}
+
+	next := StartUidNumber
+	usedSet := make(map[int32]struct{}, len(usedUidNumbers))
+	for _, n := range usedUidNumbers {
+		usedSet[int32(n.Int32)] = struct{}{}
+	}
+
+	for {
+		if _, ok := usedSet[int32(next)]; !ok {
+			return int(next), nil
+		}
+		next++
+	}
+}
+
+func (s *Service) SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error {
+	traceCtx, span := s.tracer.Start(ctx, "SetUidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
+		ID:        id,
+		UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: true},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
