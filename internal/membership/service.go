@@ -305,8 +305,6 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userId)
 			if err != nil {
 				logger.Warn("get public key failed", zap.Error(err))
-			} else {
-				logger.Info("public key", zap.Any("publicKeys", publicKeys))
 			}
 			// create LDAP user
 			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
