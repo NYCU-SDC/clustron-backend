@@ -194,6 +194,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 
 func FromFlags(config *Config) (*Config, error) {
 	flagConfig := &Config{}
+	flagConfig.LDAP = &ldap.Config{}
 
 	flag.BoolVar(&flagConfig.Debug, "debug", false, "debug mode")
 	flag.StringVar(&flagConfig.Host, "host", "", "host")
