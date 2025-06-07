@@ -119,6 +119,20 @@ func (s *Service) UpdateSetting(ctx context.Context, userID uuid.UUID, setting S
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// check if the linux username is used
+	isLinuxUsernameExists, err := s.query.LinuxUsernameExists(ctx, setting.LinuxUsername)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
+		span.RecordError(err)
+		return Setting{}, err
+	}
+	if isLinuxUsernameExists {
+		err = internal.ErrDatabaseConflict
+		logger.Warn(err.Error(), zap.String("linuxUsername", setting.LinuxUsername.String), zap.String("userID", userID.String()))
+		span.RecordError(err)
+		return Setting{}, err
+	}
+
 	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "update setting")
