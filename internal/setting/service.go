@@ -119,20 +119,6 @@ func (s *Service) UpdateSetting(ctx context.Context, userID uuid.UUID, setting S
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// check if the linux username is used
-	isLinuxUsernameExists, err := s.query.LinuxUsernameExists(ctx, setting.LinuxUsername)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
-		span.RecordError(err)
-		return Setting{}, err
-	}
-	if isLinuxUsernameExists {
-		err = internal.ErrDatabaseConflict
-		logger.Warn(err.Error(), zap.String("linuxUsername", setting.LinuxUsername.String), zap.String("userID", userID.String()))
-		span.RecordError(err)
-		return Setting{}, err
-	}
-
 	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "update setting")
@@ -201,4 +187,19 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "IsLinuxUsernameExists")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.query.LinuxUsernameExists(ctx, pgtype.Text{String: linuxUsername, Valid: true})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
 }
