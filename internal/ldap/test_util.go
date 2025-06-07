@@ -5,14 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"strings"
-	"testing"
-	"time"
 )
 
 func newTestClient(t *testing.T) (*Client, func()) {
@@ -68,7 +70,7 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		LDAPBindPwd: "admin",
 	}
 
-	client, err := NewClient(cfg, logger)
+	client, err := NewClient(cfg, logger, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
