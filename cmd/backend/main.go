@@ -128,7 +128,7 @@ func main() {
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
-	settingService := setting.NewService(logger, dbPool, userService)
+	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
