@@ -153,6 +153,12 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -160,10 +166,22 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	setting := Setting{
-		UserID:        user.ID,
-		Username:      pgtype.Text{String: request.Username, Valid: true},
-		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
+	var setting Setting
+	// if the linux username is already set, we keep it
+	if oldSetting.LinuxUsername.String != "" {
+		setting = Setting{
+			UserID:        user.ID,
+			Username:      pgtype.Text{String: request.Username, Valid: true},
+			LinuxUsername: oldSetting.LinuxUsername,
+		}
+	} else {
+		// else we update the linux username as well
+		setting = Setting{
+			UserID:        user.ID,
+			Username:      pgtype.Text{String: request.Username, Valid: true},
+			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+		}
 	}
 
 	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
