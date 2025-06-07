@@ -301,10 +301,10 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			logger.Warn("get available uid number failed", zap.Error(err))
 		} else {
 			// create LDAP user
-			err = s.ldapClient.CreateUser(userSetting.Username.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
 			if err != nil {
 				if errors.Is(err, ldap.ErrUserExists) {
-					logger.Info("user already exists", zap.String("uid", u.ID.String()))
+					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
 				} else {
 					logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
 				}
@@ -314,15 +314,15 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					logger.Warn("set uid number failed", zap.Error(err))
 				}
 			}
-			userInfo, err := s.ldapClient.GetUserInfo(u.ID.String())
+			userInfo, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
 			if err != nil {
-				logger.Debug("GetUserInfo before create", zap.String("uid", u.ID.String()), zap.Error(err))
+				logger.Debug("GetUserInfo before create", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
 			} else {
-				logger.Debug("GetUserInfo before create", zap.String("uid", u.ID.String()), zap.Any("entry", userInfo))
+				logger.Debug("GetUserInfo before create", zap.String("uid", userSetting.LinuxUsername.String), zap.Any("entry", userInfo))
 			}
 			// add user to LDAP group
 			if groupName != "" && uidNumber != 0 {
-				err = s.ldapClient.AddUserToGroup(groupName, strconv.Itoa(uidNumber))
+				err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
 				if err != nil {
 					logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
 				}
