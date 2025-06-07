@@ -8,7 +8,10 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"clustron-backend/internal/ldap"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -43,9 +46,10 @@ type Service struct {
 	userStore      UserStore
 	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
+	ldapClient     *ldap.Client
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, ldapClient *ldap.Client) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("membership/service"),
@@ -53,6 +57,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore
 		userStore:      userStore,
 		groupRoleStore: groupRoleStore,
 		settingStore:   settingStore,
+		ldapClient:     ldapClient,
 	}
 }
 
@@ -282,6 +287,26 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			logger,
 			"failed to get group role",
 		)
+	}
+
+	// Add user to LDAP group
+	if s.ldapClient != nil {
+		groupName := groupId.String()
+		memberUid, err := s.ldapClient.GetAvailableUidNumber(ctx)
+		if err != nil {
+			logger.Warn("get available uid number failed", zap.Error(err))
+		}
+		if groupName != "" && memberUid != 0 {
+			err = s.ldapClient.AddUserToGroup(groupName, strconv.Itoa(int(memberUid)))
+			if err != nil {
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int32("uid", memberUid), zap.Error(err))
+			} else {
+				err = s.ldapClient.InsertUidNumber(ctx, memberUid)
+				if err != nil {
+					logger.Warn("insert uid number failed", zap.Error(err))
+				}
+			}
+		}
 	}
 
 	return MemberResponse{
