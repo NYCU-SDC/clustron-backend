@@ -19,6 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const StartGidNumber = 10000
+
 type RoleStore interface {
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
@@ -371,19 +373,14 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 	// Create LDAP group
 	if s.ldapClient != nil {
 		groupName := newGroup.ID.String()
-		gidNumber, err := s.ldapClient.GetAvailableGidNumber(ctx)
-		logger.Info("gidNumber", zap.Int32("gidNumber", gidNumber))
+		gidNumber, err := s.GetAvailableGidNumber(ctx)
+		logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
 		if err != nil {
 			logger.Warn("get available gid number failed", zap.Error(err))
 		}
-		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(int(gidNumber)), []string{})
+		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
 		if err != nil {
 			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
-		} else {
-			err = s.ldapClient.InsertGidNumber(ctx, gidNumber)
-			if err != nil {
-				logger.Warn("insert gid number failed", zap.Error(err))
-			}
 		}
 	}
 
@@ -499,4 +496,30 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	}
 
 	return groupRole, roleType, nil
+}
+
+func (s *Service) GetAvailableGidNumber(ctx context.Context) (int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAvailableGidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	usedGidNumbers, err := s.queries.ListGidNumbers(ctx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get available gid number")
+		span.RecordError(err)
+		return 0, err
+	}
+
+	next := StartGidNumber
+	usedSet := make(map[int32]struct{}, len(usedGidNumbers))
+	for _, n := range usedGidNumbers {
+		usedSet[int32(n.Int32)] = struct{}{}
+	}
+
+	for {
+		if _, ok := usedSet[int32(next)]; !ok {
+			return int(next), nil
+		}
+		next++
+	}
 }
