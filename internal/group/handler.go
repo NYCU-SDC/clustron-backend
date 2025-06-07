@@ -31,7 +31,7 @@ type MemberStore interface {
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error)
-	Create(ctx context.Context, group CreateParams) (Group, error)
+	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -208,7 +208,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.Create(traceCtx, CreateParams{
+	group, err := h.store.Create(traceCtx, user.ID, CreateParams{
 		Title:       request.Title,
 		Description: pgtype.Text{String: request.Description, Valid: true},
 	})

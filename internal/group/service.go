@@ -8,6 +8,7 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -31,10 +32,13 @@ type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
+	GetAvailableUidNumber(ctx context.Context) (int, error)
+	SetUidNumber(ctx context.Context, userID uuid.UUID, uidNumber int) error
 }
 
 type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
+	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
 }
 
 type Service struct {
@@ -359,7 +363,7 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 	return group, nil
 }
 
-func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error) {
+func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -371,9 +375,20 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 		return Group{}, err
 	}
 
+	userSetting, err := s.settingStore.GetSettingByUserID(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
+		span.RecordError(err)
+		return Group{}, err
+	}
+
 	// Create LDAP group
 	groupName := newGroup.ID.String()
 	gidNumber, err := s.GetAvailableGidNumber(ctx)
+	if err != nil {
+		logger.Warn("get available gid number failed", zap.Error(err))
+	}
+	uidNumber, err := s.userStore.GetAvailableUidNumber(ctx)
 	logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
 	if err != nil {
 		logger.Warn("get available gid number failed", zap.Error(err))
@@ -388,6 +403,40 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 			})
 			if err != nil {
 				logger.Warn("set gid number failed", zap.Error(err))
+			}
+		}
+
+		// get public key
+		publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userID)
+		if err != nil {
+			logger.Warn("get public key failed", zap.Error(err))
+		}
+		// create LDAP user
+		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+		// add public key to LDAP user
+		for _, publicKey := range publicKeys {
+			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+			if err != nil {
+				logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+			}
+		}
+		if err != nil {
+			if errors.Is(err, ldap.ErrUserExists) {
+				logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
+			} else {
+				logger.Warn("create LDAP user failed", zap.String("userID", userID.String()), zap.Int("uid", uidNumber), zap.Error(err))
+			}
+		} else {
+			err = s.userStore.SetUidNumber(ctx, userID, uidNumber)
+			if err != nil {
+				logger.Warn("set uid number failed", zap.Error(err))
+			}
+		}
+		// add user to LDAP group
+		if groupName != "" && uidNumber != 0 {
+			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+			if err != nil {
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
 			}
 		}
 	}
