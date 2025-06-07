@@ -175,12 +175,19 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams
 		return PublicKey{}, err
 	}
 
+	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
+		span.RecordError(err)
+		return PublicKey{}, err
+	}
+
 	// check if the user LDAP user exists, if exists, add the public key to the user
-	user, err := s.ldapClient.GetUserInfo(publicKey.UserID.String())
+	user, err := s.ldapClient.GetUserInfo(settings.LinuxUsername.String)
 	if err != nil {
 		logger.Warn("get user by id failed", zap.Error(err))
 	} else if user != nil {
-		err = s.ldapClient.AddSSHPublicKey(publicKey.UserID.String(), publicKey.PublicKey)
+		err = s.ldapClient.AddSSHPublicKey(settings.LinuxUsername.String, publicKey.PublicKey)
 		if err != nil {
 			logger.Warn("add public key to LDAP user failed", zap.Error(err))
 		}
