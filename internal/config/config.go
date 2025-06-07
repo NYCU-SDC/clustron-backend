@@ -41,7 +41,7 @@ type Config struct {
 	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
 	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
-	LDAP                    *ldap.Config              `yaml:"ldap"`
+	LDAP                    ldap.Config               `yaml:"ldap"`
 }
 
 type LogBuffer struct {
