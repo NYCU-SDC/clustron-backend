@@ -19,7 +19,8 @@ import (
 )
 
 type OnboardingRequest struct {
-	Username string `json:"username" validate:"required"`
+	Username      string `json:"username" validate:"required"`
+	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
 }
 
 type UpdateSettingRequest struct {
@@ -55,7 +56,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error
 }
 
 type Handler struct {
@@ -104,7 +105,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -152,6 +153,12 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -159,10 +166,22 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	setting := Setting{
-		UserID:        user.ID,
-		Username:      pgtype.Text{String: request.Username, Valid: true},
-		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
+	var setting Setting
+	// if the linux username is already set, we keep it
+	if oldSetting.LinuxUsername.String != "" {
+		setting = Setting{
+			UserID:        user.ID,
+			Username:      pgtype.Text{String: request.Username, Valid: true},
+			LinuxUsername: oldSetting.LinuxUsername,
+		}
+	} else {
+		// else we update the linux username as well
+		setting = Setting{
+			UserID:        user.ID,
+			Username:      pgtype.Text{String: request.Username, Valid: true},
+			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+		}
 	}
 
 	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
