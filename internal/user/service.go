@@ -281,3 +281,21 @@ func (s *Service) GetAvailableUidNumber(ctx context.Context) (int, error) {
 		next++
 	}
 }
+
+func (s *Service) SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error {
+	traceCtx, span := s.tracer.Start(ctx, "SetUidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
+		ID:        id,
+		UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: true},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
