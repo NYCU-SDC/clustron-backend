@@ -326,9 +326,9 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
+	traceCtx, span := h.tracer.Start(r.Context(), "UnarchiveHandler")
 	defer span.End()
-	logger := h.logger.With(zap.String("handler", "ArchiveHandler"))
+	logger := h.logger.With(zap.String("handler", "UnarchiveHandler"))
 
 	groupID := r.PathValue("group_id")
 	groupUUID, err := uuid.Parse(groupID)
