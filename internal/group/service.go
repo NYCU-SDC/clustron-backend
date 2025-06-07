@@ -508,6 +508,10 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	return groupRole, roleType, nil
 }
 
+/*
+To find the lowest unused gidNumber >= StartGidNumber for LDAP groups.
+It queries all used gidNumbers, builds a set, and returns the first available one.
+*/
 func (s *Service) GetAvailableGidNumber(ctx context.Context) (int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAvailableGidNumber")
 	defer span.End()

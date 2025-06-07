@@ -256,6 +256,10 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	return userRole, nil
 }
 
+/*
+To find the lowest unused uidNumber >= StartUidNumber for LDAP users.
+It queries all used uidNumbers, builds a set, and returns the first available one.
+*/
 func (s *Service) GetAvailableUidNumber(ctx context.Context) (int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAvailableUidNumber")
 	defer span.End()
