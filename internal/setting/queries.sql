@@ -4,6 +4,9 @@ SELECT * FROM settings WHERE user_id = $1;
 -- name: SettingExists :one
 SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists;
 
+-- name: LinuxUsernameExists :one
+SELECT EXISTS (SELECT 1 FROM settings WHERE linux_username = $1) AS exists;
+
 -- name: CreateSetting :one
 INSERT INTO settings (user_id, username, linux_username) VALUES ($1, $2, '') RETURNING *;
 

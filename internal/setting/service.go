@@ -38,7 +38,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient lda
 	}
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text) error {
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -52,8 +52,9 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 
 	// update user's setting
 	_, err := s.UpdateSetting(traceCtx, userID, Setting{
-		UserID:   userID,
-		Username: username,
+		UserID:        userID,
+		Username:      username,
+		LinuxUsername: linuxUsername,
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -209,4 +210,19 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "IsLinuxUsernameExists")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.query.LinuxUsernameExists(ctx, pgtype.Text{String: linuxUsername, Valid: true})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
 }
