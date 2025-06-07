@@ -9,6 +9,7 @@ import (
 	"clustron-backend/internal/group"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
@@ -111,6 +112,12 @@ func main() {
 	}
 	defer dbPool.Close()
 
+	ldapQueries := ldap.New(dbPool)
+	ldapClient, err := ldap.NewClient(cfg.LDAP, logger, ldapQueries)
+	if err != nil {
+		logger.Fatal("Failed to initialize LDAP client", zap.Error(err))
+	}
+
 	shutdown, err := initOpenTelemetry(AppName, Version, BuildTime, CommitHash, cfg.OtelCollectorUrl)
 	if err != nil {
 		logger.Fatal("Failed to initialize OpenTelemetry", zap.Error(err))
@@ -124,8 +131,8 @@ func main() {
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	settingService := setting.NewService(logger, dbPool, userService)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
-	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService)
-	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
+	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
