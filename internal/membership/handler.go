@@ -18,7 +18,7 @@ import (
 
 //go:generate mockery --name=Store
 type Store interface {
-	Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
+	Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error)
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
@@ -112,7 +112,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
 		}
-		member, err := h.store.Add(traceCtx, user.ID, groupUUID, m.Member, m.Role)
+		member, err := h.store.Add(traceCtx, groupUUID, m.Member, m.Role)
 		if err != nil {
 			// h.problemWriter.WriteError(traceCtx, w, err, logger)
 			continue
