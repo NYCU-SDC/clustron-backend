@@ -24,6 +24,11 @@ type GroupRole struct {
 	AccessLevel string
 }
 
+type LdapNumber struct {
+	Number int32
+	Type   string
+}
+
 type Membership struct {
 	UserID    uuid.UUID
 	GroupID   uuid.UUID
