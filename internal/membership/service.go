@@ -62,12 +62,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	jwtUser, err := jwt.GetUserFromContext(traceCtx)
-	if err != nil {
-		logger.Error("failed to get user from context", zap.Error(err))
-		return nil, err
-	}
-	if !s.hasGroupControlAccess(traceCtx, jwtUser.ID, groupId) {
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
 		return nil, handlerutil.ErrForbidden
 	}
 
@@ -131,7 +126,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	return members, nil
 }
 
-func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
+func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Add")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -150,13 +145,13 @@ func (s *Service) Add(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, 
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return nil, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, userId, groupId, role) {
+	if !s.canAssignRole(traceCtx, groupId, role) {
 		logger.Warn("The user's access is not allowed to add this member")
 		return nil, handlerutil.ErrForbidden
 	}
@@ -321,13 +316,13 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, userId, groupId, membership.RoleID) {
+	if !s.canAssignRole(traceCtx, groupId, membership.RoleID) {
 		logger.Warn("The user's access is not allowed to remove this member")
 		return handlerutil.ErrForbidden
 	}
@@ -363,13 +358,13 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, userId, groupId) {
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
 	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, userId, groupId, role) {
+	if !s.canAssignRole(traceCtx, groupId, role) {
 		logger.Warn("The user's access is not allowed to update this member")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
@@ -472,7 +467,7 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID,
 	return membership.AccessLevel, nil
 }
 
-func (s *Service) canAssignRole(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, roleId uuid.UUID) bool {
+func (s *Service) canAssignRole(ctx context.Context, groupId uuid.UUID, roleId uuid.UUID) bool {
 	traceCtx, span := s.tracer.Start(ctx, "CanAssignRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -487,7 +482,7 @@ func (s *Service) canAssignRole(ctx context.Context, userId uuid.UUID, groupId u
 		return true
 	}
 
-	accessLevel, err := s.GetUserGroupAccessLevel(traceCtx, userId, groupId)
+	accessLevel, err := s.GetUserGroupAccessLevel(traceCtx, jwtUser.ID, groupId)
 	if err != nil {
 		logger.Error("failed to get user group access level", zap.Error(err))
 		return false
@@ -500,7 +495,7 @@ func (s *Service) canAssignRole(ctx context.Context, userId uuid.UUID, groupId u
 	return grouprole.AccessLevelRank[accessLevel] > grouprole.AccessLevelRank[targetRole.AccessLevel]
 }
 
-func (s *Service) hasGroupControlAccess(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) bool {
+func (s *Service) hasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool {
 	traceCtx, span := s.tracer.Start(ctx, "HasGroupControlAccess")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -515,7 +510,7 @@ func (s *Service) hasGroupControlAccess(ctx context.Context, userId uuid.UUID, g
 		return true
 	}
 
-	accessLevel, err := s.GetUserGroupAccessLevel(traceCtx, userId, groupId)
+	accessLevel, err := s.GetUserGroupAccessLevel(traceCtx, jwtUser.ID, groupId)
 	if err != nil {
 		logger.Error("failed to get user group access level", zap.Error(err))
 		return false
