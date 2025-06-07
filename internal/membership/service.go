@@ -7,6 +7,7 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -298,12 +299,23 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
 		if err != nil {
 			logger.Warn("get available uid number failed", zap.Error(err))
-		}
-		if groupName != "" && uidNumber != 0 {
-			err = s.userStore.SetUidNumber(ctx, userId, uidNumber)
+		} else {
+			// create LDAP user
+			err = s.ldapClient.CreateUser(u.ID.String(), userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
 			if err != nil {
-				logger.Warn("set uid number failed", zap.Error(err))
+				if errors.Is(err, ldap.ErrUserExists) {
+					logger.Info("user already exists", zap.String("uid", u.ID.String()))
+				} else {
+					logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
+				}
 			} else {
+				err = s.userStore.SetUidNumber(ctx, userId, uidNumber)
+				if err != nil {
+					logger.Warn("set uid number failed", zap.Error(err))
+				}
+			}
+			// add user to LDAP group
+			if groupName != "" && uidNumber != 0 {
 				err = s.ldapClient.AddUserToGroup(groupName, strconv.Itoa(uidNumber))
 				if err != nil {
 					logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))

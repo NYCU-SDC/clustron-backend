@@ -379,16 +379,16 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 		if err != nil {
 			logger.Warn("get available gid number failed", zap.Error(err))
 		} else {
-			err = s.queries.SetGidNumber(ctx, SetGidNumberParams{
-				ID:        newGroup.ID,
-				GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
-			})
+			err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
 			if err != nil {
-				logger.Warn("set gid number failed", zap.Error(err))
+				logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
 			} else {
-				err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
+				err = s.queries.SetGidNumber(ctx, SetGidNumberParams{
+					ID:        newGroup.ID,
+					GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
+				})
 				if err != nil {
-					logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+					logger.Warn("set gid number failed", zap.Error(err))
 				}
 			}
 		}
