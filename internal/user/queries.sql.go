@@ -13,7 +13,7 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, email, role, student_id, created_at, updated_at
+INSERT INTO users (email, role, student_id, updated_at) VALUES ($1, $2, $3, now()) RETURNING id, email, role, student_id, uid_number, created_at, updated_at
 `
 
 type CreateParams struct {
@@ -30,6 +30,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 		&i.Email,
 		&i.Role,
 		&i.StudentID,
+		&i.UidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -39,7 +40,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 const createWithID = `-- name: CreateWithID :one
 INSERT INTO users (id, email, role, student_id, updated_at)
 VALUES ($1, $2, $3, $4, now())
-RETURNING id, email, role, student_id, created_at, updated_at
+RETURNING id, email, role, student_id, uid_number, created_at, updated_at
 `
 
 type CreateWithIDParams struct {
@@ -62,6 +63,7 @@ func (q *Queries) CreateWithID(ctx context.Context, arg CreateWithIDParams) (Use
 		&i.Email,
 		&i.Role,
 		&i.StudentID,
+		&i.UidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -94,7 +96,7 @@ func (q *Queries) ExistsByIdentifier(ctx context.Context, email string) (bool, e
 }
 
 const getByEmail = `-- name: GetByEmail :one
-SELECT id, email, role, student_id, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, role, student_id, uid_number, created_at, updated_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
@@ -105,6 +107,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 		&i.Email,
 		&i.Role,
 		&i.StudentID,
+		&i.UidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -112,7 +115,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (User, error) {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, email, role, student_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, role, student_id, uid_number, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -123,6 +126,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Email,
 		&i.Role,
 		&i.StudentID,
+		&i.UidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -173,8 +177,32 @@ func (q *Queries) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error)
 	return role, err
 }
 
+const listUidNumbers = `-- name: ListUidNumbers :many
+SELECT uid_number FROM users WHERE uid_number IS NOT NULL ORDER BY uid_number
+`
+
+func (q *Queries) ListUidNumbers(ctx context.Context) ([]pgtype.Int4, error) {
+	rows, err := q.db.Query(ctx, listUidNumbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Int4
+	for rows.Next() {
+		var uid_number pgtype.Int4
+		if err := rows.Scan(&uid_number); err != nil {
+			return nil, err
+		}
+		items = append(items, uid_number)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRole = `-- name: UpdateRole :one
-UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING id, email, role, student_id, created_at, updated_at
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING id, email, role, student_id, uid_number, created_at, updated_at
 `
 
 type UpdateRoleParams struct {
@@ -190,6 +218,7 @@ func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) (User, e
 		&i.Email,
 		&i.Role,
 		&i.StudentID,
+		&i.UidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

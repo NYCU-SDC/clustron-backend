@@ -14,6 +14,7 @@ type Group struct {
 	Title       string
 	Description pgtype.Text
 	IsArchived  pgtype.Bool
+	GidNumber   pgtype.Int4
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
@@ -22,11 +23,6 @@ type GroupRole struct {
 	ID          uuid.UUID
 	Role        string
 	AccessLevel string
-}
-
-type LdapNumber struct {
-	Number int32
-	Type   string
 }
 
 type Membership struct {
@@ -71,6 +67,7 @@ type User struct {
 	Email     string
 	Role      string
 	StudentID pgtype.Text
+	UidNumber pgtype.Int4
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }

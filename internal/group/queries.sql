@@ -134,3 +134,6 @@ WHERE user_identifier = $1 AND group_id = $2;
 INSERT INTO group_role (role, access_level)
 VALUES ($1, $2)
 RETURNING *;
+
+-- name: ListGidNumbers :many
+SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;

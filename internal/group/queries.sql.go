@@ -38,7 +38,7 @@ func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) 
 }
 
 const archive = `-- name: Archive :one
-UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
 
 func (q *Queries) Archive(ctx context.Context, id uuid.UUID) (Group, error) {
@@ -49,6 +49,7 @@ func (q *Queries) Archive(ctx context.Context, id uuid.UUID) (Group, error) {
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -78,7 +79,7 @@ func (q *Queries) CountByUser(ctx context.Context, userID uuid.UUID) (int64, err
 }
 
 const create = `-- name: Create :one
-INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING id, title, description, is_archived, created_at, updated_at
+INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
 
 type CreateParams struct {
@@ -94,6 +95,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Group, error) {
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -119,7 +121,7 @@ func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) (GroupRo
 }
 
 const createWithID = `-- name: CreateWithID :one
-INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING id, title, description, is_archived, created_at, updated_at
+INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
 
 type CreateWithIDParams struct {
@@ -136,6 +138,7 @@ func (q *Queries) CreateWithID(ctx context.Context, arg CreateWithIDParams) (Gro
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -158,7 +161,7 @@ func (q *Queries) DeletePendingGroupMember(ctx context.Context, arg DeletePendin
 }
 
 const get = `-- name: Get :one
-SELECT id, title, description, is_archived, created_at, updated_at FROM groups WHERE id = $1
+SELECT id, title, description, is_archived, gid_number, created_at, updated_at FROM groups WHERE id = $1
 `
 
 func (q *Queries) Get(ctx context.Context, id uuid.UUID) (Group, error) {
@@ -169,6 +172,7 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (Group, error) {
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -176,7 +180,7 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (Group, error) {
 }
 
 const getIfMember = `-- name: GetIfMember :one
-SELECT g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2
+SELECT g.id, g.title, g.description, g.is_archived, g.gid_number, g.created_at, g.updated_at FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2
 `
 
 type GetIfMemberParams struct {
@@ -192,6 +196,7 @@ func (q *Queries) GetIfMember(ctx context.Context, arg GetIfMemberParams) (Group
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -280,7 +285,7 @@ func (q *Queries) GetRoleIdByGroupAndUser(ctx context.Context, arg GetRoleIdByGr
 }
 
 const listAscPaged = `-- name: ListAscPaged :many
-SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text ASC LIMIT $3 OFFSET $2
+SELECT id, title, description, is_archived, gid_number, created_at, updated_at FROM groups ORDER BY $1::text ASC LIMIT $3 OFFSET $2
 `
 
 type ListAscPagedParams struct {
@@ -303,6 +308,7 @@ func (q *Queries) ListAscPaged(ctx context.Context, arg ListAscPagedParams) ([]G
 			&i.Title,
 			&i.Description,
 			&i.IsArchived,
+			&i.GidNumber,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -317,7 +323,7 @@ func (q *Queries) ListAscPaged(ctx context.Context, arg ListAscPagedParams) ([]G
 }
 
 const listDescPaged = `-- name: ListDescPaged :many
-SELECT id, title, description, is_archived, created_at, updated_at FROM groups ORDER BY $1::text DESC LIMIT $3 OFFSET $2
+SELECT id, title, description, is_archived, gid_number, created_at, updated_at FROM groups ORDER BY $1::text DESC LIMIT $3 OFFSET $2
 `
 
 type ListDescPagedParams struct {
@@ -340,12 +346,37 @@ func (q *Queries) ListDescPaged(ctx context.Context, arg ListDescPagedParams) ([
 			&i.Title,
 			&i.Description,
 			&i.IsArchived,
+			&i.GidNumber,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGidNumbers = `-- name: ListGidNumbers :many
+SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number
+`
+
+func (q *Queries) ListGidNumbers(ctx context.Context) ([]pgtype.Int4, error) {
+	rows, err := q.db.Query(ctx, listGidNumbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Int4
+	for rows.Next() {
+		var gid_number pgtype.Int4
+		if err := rows.Scan(&gid_number); err != nil {
+			return nil, err
+		}
+		items = append(items, gid_number)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -447,7 +478,7 @@ func (q *Queries) ListGroupMembersDescPaged(ctx context.Context, arg ListGroupMe
 
 const listIfMemberAscPaged = `-- name: ListIfMemberAscPaged :many
 SELECT
-    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    g.id, g.title, g.description, g.is_archived, g.gid_number, g.created_at, g.updated_at,
     gr.id, gr.role, gr.access_level
 FROM
     groups AS g
@@ -473,6 +504,7 @@ type ListIfMemberAscPagedRow struct {
 	Title       string
 	Description pgtype.Text
 	IsArchived  pgtype.Bool
+	GidNumber   pgtype.Int4
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 	ID_2        uuid.UUID
@@ -499,6 +531,7 @@ func (q *Queries) ListIfMemberAscPaged(ctx context.Context, arg ListIfMemberAscP
 			&i.Title,
 			&i.Description,
 			&i.IsArchived,
+			&i.GidNumber,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ID_2,
@@ -517,7 +550,7 @@ func (q *Queries) ListIfMemberAscPaged(ctx context.Context, arg ListIfMemberAscP
 
 const listIfMemberDescPaged = `-- name: ListIfMemberDescPaged :many
 SELECT
-    g.id, g.title, g.description, g.is_archived, g.created_at, g.updated_at,
+    g.id, g.title, g.description, g.is_archived, g.gid_number, g.created_at, g.updated_at,
     gr.id, gr.role, gr.access_level
 FROM
     groups AS g
@@ -543,6 +576,7 @@ type ListIfMemberDescPagedRow struct {
 	Title       string
 	Description pgtype.Text
 	IsArchived  pgtype.Bool
+	GidNumber   pgtype.Int4
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 	ID_2        uuid.UUID
@@ -569,6 +603,7 @@ func (q *Queries) ListIfMemberDescPaged(ctx context.Context, arg ListIfMemberDes
 			&i.Title,
 			&i.Description,
 			&i.IsArchived,
+			&i.GidNumber,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ID_2,
@@ -647,7 +682,7 @@ func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberPa
 }
 
 const unarchive = `-- name: Unarchive :one
-UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
 
 func (q *Queries) Unarchive(ctx context.Context, id uuid.UUID) (Group, error) {
@@ -658,6 +693,7 @@ func (q *Queries) Unarchive(ctx context.Context, id uuid.UUID) (Group, error) {
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -665,7 +701,7 @@ func (q *Queries) Unarchive(ctx context.Context, id uuid.UUID) (Group, error) {
 }
 
 const update = `-- name: Update :one
-UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, created_at, updated_at
+UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, title, description, is_archived, gid_number, created_at, updated_at
 `
 
 type UpdateParams struct {
@@ -682,6 +718,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Group, error) {
 		&i.Title,
 		&i.Description,
 		&i.IsArchived,
+		&i.GidNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
