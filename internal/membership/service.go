@@ -32,6 +32,7 @@ type UserStore interface {
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 	ExistsByIdentifier(ctx context.Context, identifier string) (bool, error)
+	GetAvailableUidNumber(ctx context.Context) (int, error)
 }
 
 type SettingStore interface {
@@ -292,20 +293,15 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	// Add user to LDAP group
 	if s.ldapClient != nil {
 		groupName := groupId.String()
-		memberUid, err := s.ldapClient.GetAvailableUidNumber(ctx)
-		logger.Info("memberUid", zap.Int32("memberUid", memberUid))
+		memberUid, err := s.userStore.GetAvailableUidNumber(ctx)
+		logger.Info("memberUid", zap.Int("memberUid", memberUid))
 		if err != nil {
 			logger.Warn("get available uid number failed", zap.Error(err))
 		}
 		if groupName != "" && memberUid != 0 {
-			err = s.ldapClient.AddUserToGroup(groupName, strconv.Itoa(int(memberUid)))
+			err = s.ldapClient.AddUserToGroup(groupName, strconv.Itoa(memberUid))
 			if err != nil {
-				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int32("uid", memberUid), zap.Error(err))
-			} else {
-				err = s.ldapClient.InsertUidNumber(ctx, memberUid)
-				if err != nil {
-					logger.Warn("insert uid number failed", zap.Error(err))
-				}
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", memberUid), zap.Error(err))
 			}
 		}
 	}
