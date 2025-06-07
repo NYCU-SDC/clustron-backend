@@ -14,13 +14,6 @@ type Client struct {
 }
 
 func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
-	logger.Info("LDAP config", zap.Any("config", cfg))
-	logger.Info("LDAP host", zap.String("host", cfg.LDAPHost))
-	logger.Info("LDAP port", zap.String("port", cfg.LDAPPort))
-	logger.Info("LDAP base DN", zap.String("base_dn", cfg.LDAPBaseDN))
-	logger.Info("LDAP bind DN", zap.String("bind_dn", cfg.LDAPBindDN))
-	logger.Info("LDAP bind pwd", zap.String("bind_pwd", cfg.LDAPBindPwd))
-
 	conn, err := ldap.DialURL(fmt.Sprintf("ldap://%s:%s", cfg.LDAPHost, cfg.LDAPPort))
 	if err != nil {
 		logger.Error("Failed to connect to LDAP server", zap.Error(err))
