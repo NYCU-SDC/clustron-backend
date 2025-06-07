@@ -39,6 +39,7 @@ type UserStore interface {
 
 type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
+	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
 }
 
 type Service struct {
@@ -300,8 +301,22 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		if err != nil {
 			logger.Warn("get available uid number failed", zap.Error(err))
 		} else {
+			// get public key
+			publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userId)
+			if err != nil {
+				logger.Warn("get public key failed", zap.Error(err))
+			} else {
+				logger.Info("public key", zap.Any("publicKeys", publicKeys))
+			}
 			// create LDAP user
 			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+			// add public key to LDAP user
+			for _, publicKey := range publicKeys {
+				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+				if err != nil {
+					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+				}
+			}
 			if err != nil {
 				if errors.Is(err, ldap.ErrUserExists) {
 					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
