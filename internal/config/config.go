@@ -1,14 +1,16 @@
 package config
 
 import (
+	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/user/role"
 	"errors"
 	"flag"
+	"os"
+
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-	"os"
 )
 
 const DefaultSecret = "default-secret"
@@ -39,6 +41,7 @@ type Config struct {
 	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
 	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
+	LDAP                    *ldap.Config              `yaml:"ldap"               envconfig:"LDAP"`
 }
 
 type LogBuffer struct {
@@ -102,6 +105,14 @@ func Load() (Config, *LogBuffer) {
 		OtelCollectorUrl:        "",
 		GoogleOauthClientID:     "",
 		GoogleOauthClientSecret: "",
+		LDAP: &ldap.Config{
+			Debug:       false,
+			LDAPHost:    "",
+			LDAPPort:    "",
+			LDAPBaseDN:  "",
+			LDAPBindDN:  "",
+			LDAPBindPwd: "",
+		},
 	}
 
 	var err error
@@ -168,6 +179,14 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		GoogleOauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
+		LDAP: &ldap.Config{
+			Debug:       os.Getenv("LDAP_DEBUG") == "true",
+			LDAPHost:    os.Getenv("LDAP_HOST"),
+			LDAPPort:    os.Getenv("LDAP_PORT"),
+			LDAPBaseDN:  os.Getenv("LDAP_BASE_DN"),
+			LDAPBindDN:  os.Getenv("LDAP_BIND_DN"),
+			LDAPBindPwd: os.Getenv("LDAP_BIND_PWD"),
+		},
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -190,6 +209,12 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")
 	flag.StringVar(&flagConfig.NYCUOauthClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
 	flag.StringVar(&flagConfig.NYCUOauthClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
+	flag.StringVar(&flagConfig.LDAP.LDAPHost, "ldap_host", "", "LDAP host")
+	flag.StringVar(&flagConfig.LDAP.LDAPPort, "ldap_port", "", "LDAP port")
+	flag.StringVar(&flagConfig.LDAP.LDAPBaseDN, "ldap_base_dn", "", "LDAP base DN")
+	flag.StringVar(&flagConfig.LDAP.LDAPBindDN, "ldap_bind_dn", "", "LDAP bind DN")
+	flag.StringVar(&flagConfig.LDAP.LDAPBindPwd, "ldap_bind_pwd", "", "LDAP bind password")
+	flag.BoolVar(&flagConfig.LDAP.Debug, "ldap_debug", false, "LDAP debug")
 
 	flag.Parse()
 
