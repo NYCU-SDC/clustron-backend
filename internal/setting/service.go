@@ -2,10 +2,12 @@ package setting
 
 import (
 	"clustron-backend/internal"
+	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/user/role"
 	"context"
-	"github.com/NYCU-SDC/summer/pkg/database"
-	"github.com/NYCU-SDC/summer/pkg/log"
+
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
@@ -21,16 +23,18 @@ type Service struct {
 	tracer trace.Tracer
 	query  *Queries
 
-	userStore UserStore
+	userStore  UserStore
+	ldapClient ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
 		query:  New(db),
 
-		userStore: userStore,
+		userStore:  userStore,
+		ldapClient: ldapClient,
 	}
 }
 
@@ -169,6 +173,25 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
 		span.RecordError(err)
 		return PublicKey{}, err
+	}
+
+	// check if the user LDAP user exists, if exists, add the public key to the user
+	user, err := s.ldapClient.GetUserInfo(publicKey.UserID.String())
+	if err != nil {
+		logger.Warn("get user by id failed", zap.Error(err))
+	} else if user != nil {
+		err = s.ldapClient.AddSSHPublicKey(publicKey.UserID.String(), publicKey.PublicKey)
+		if err != nil {
+			logger.Warn("add public key to LDAP user failed", zap.Error(err))
+		}
+		// get public key
+		publicKeys, err := s.GetPublicKeysByUserID(ctx, publicKey.UserID)
+		if err != nil {
+			logger.Warn("get public key failed", zap.Error(err))
+		}
+		logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+		logger.Info("public keys", zap.Any("publicKeys", publicKeys))
+
 	}
 
 	return addedPublicKey, nil

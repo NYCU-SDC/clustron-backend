@@ -7,8 +7,12 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"clustron-backend/internal/ldap"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -29,10 +33,13 @@ type UserStore interface {
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 	ExistsByIdentifier(ctx context.Context, identifier string) (bool, error)
+	GetAvailableUidNumber(ctx context.Context) (int, error)
+	SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error
 }
 
 type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
+	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
 }
 
 type Service struct {
@@ -43,9 +50,10 @@ type Service struct {
 	userStore      UserStore
 	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
+	ldapClient     ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("membership/service"),
@@ -53,6 +61,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore
 		userStore:      userStore,
 		groupRoleStore: groupRoleStore,
 		settingStore:   settingStore,
+		ldapClient:     ldapClient,
 	}
 }
 
@@ -277,6 +286,48 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			logger,
 			"failed to get group role",
 		)
+	}
+
+	// Add user to LDAP group
+	groupName := groupId.String()
+	uidNumber, err := s.userStore.GetAvailableUidNumber(ctx)
+	logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
+	if err != nil {
+		logger.Warn("get available uid number failed", zap.Error(err))
+	} else {
+		// get public key
+		publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userId)
+		if err != nil {
+			logger.Warn("get public key failed", zap.Error(err))
+		}
+		// create LDAP user
+		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+		// add public key to LDAP user
+		for _, publicKey := range publicKeys {
+			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+			if err != nil {
+				logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+			}
+		}
+		if err != nil {
+			if errors.Is(err, ldap.ErrUserExists) {
+				logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
+			} else {
+				logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
+			}
+		} else {
+			err = s.userStore.SetUidNumber(ctx, userId, uidNumber)
+			if err != nil {
+				logger.Warn("set uid number failed", zap.Error(err))
+			}
+		}
+		// add user to LDAP group
+		if groupName != "" && uidNumber != 0 {
+			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+			if err != nil {
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
+			}
+		}
 	}
 
 	return MemberResponse{
