@@ -20,8 +20,9 @@ CREATE TABLE IF NOT EXISTS groups (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE TABLE ldap_numbers (
-    number INTEGER PRIMARY KEY,
-    type VARCHAR(10) NOT NULL -- 'user' or 'group'
+    number INTEGER NOT NULL,
+    type VARCHAR(10) NOT NULL, -- 'user' or 'group'
+    PRIMARY KEY (type, number)
 );
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

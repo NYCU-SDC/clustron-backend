@@ -293,6 +293,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	if s.ldapClient != nil {
 		groupName := groupId.String()
 		memberUid, err := s.ldapClient.GetAvailableUidNumber(ctx)
+		logger.Info("memberUid", zap.Int32("memberUid", memberUid))
 		if err != nil {
 			logger.Warn("get available uid number failed", zap.Error(err))
 		}

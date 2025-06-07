@@ -372,6 +372,7 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 	if s.ldapClient != nil {
 		groupName := newGroup.ID.String()
 		gidNumber, err := s.ldapClient.GetAvailableGidNumber(ctx)
+		logger.Info("gidNumber", zap.Int32("gidNumber", gidNumber))
 		if err != nil {
 			logger.Warn("get available gid number failed", zap.Error(err))
 		}
