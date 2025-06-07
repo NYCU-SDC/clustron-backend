@@ -14,6 +14,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -377,10 +378,19 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 		logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
 		if err != nil {
 			logger.Warn("get available gid number failed", zap.Error(err))
-		}
-		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
-		if err != nil {
-			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+		} else {
+			err = s.queries.SetGidNumber(ctx, SetGidNumberParams{
+				ID:        newGroup.ID,
+				GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
+			})
+			if err != nil {
+				logger.Warn("set gid number failed", zap.Error(err))
+			} else {
+				err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
+				if err != nil {
+					logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+				}
+			}
 		}
 	}
 
