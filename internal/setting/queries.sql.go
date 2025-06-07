@@ -115,6 +115,17 @@ func (q *Queries) GetSetting(ctx context.Context, userID uuid.UUID) (Setting, er
 	return i, err
 }
 
+const linuxUsernameExists = `-- name: LinuxUsernameExists :one
+SELECT EXISTS (SELECT 1 FROM settings WHERE linux_username = $1) AS exists
+`
+
+func (q *Queries) LinuxUsernameExists(ctx context.Context, linuxUsername pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, linuxUsernameExists, linuxUsername)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const settingExists = `-- name: SettingExists :one
 SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists
 `

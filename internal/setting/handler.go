@@ -1,6 +1,7 @@
 package setting
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
@@ -57,6 +58,7 @@ type Store interface {
 	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error
+	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
 
 type Handler struct {
@@ -100,6 +102,13 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 
 	var request OnboardingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the linux username is valid first
+	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -177,6 +186,12 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		}
 	} else {
 		// else we update the linux username as well
+		// check if the linux username is valid first
+		err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
 		setting = Setting{
 			UserID:        user.ID,
 			Username:      pgtype.Text{String: request.Username, Valid: true},
@@ -330,4 +345,31 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string) error {
+	if len(linuxUsername) == 0 {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot be empty",
+		}
+	}
+
+	if linuxUsername == "root" || linuxUsername == "admin" || linuxUsername == "administrator" {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username contain reserved keywords",
+		}
+	}
+
+	isLinuxUsernameExists, err := h.settingStore.IsLinuxUsernameExists(ctx, linuxUsername)
+	if err != nil {
+		h.logger.Error("Failed to check if linux username exists", zap.Error(err))
+		return err
+	}
+
+	if isLinuxUsernameExists {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username already exists",
+		}
+	}
+	return nil
 }
