@@ -44,10 +44,10 @@ type Service struct {
 	userStore    UserStore
 	roleStore    RoleStore
 	settingStore SettingStore
-	ldapClient   *ldap.Client
+	ldapClient   ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, ldapClient *ldap.Client) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:       logger,
 		tracer:       otel.Tracer("group/service"),

@@ -50,10 +50,10 @@ type Service struct {
 	userStore      UserStore
 	groupRoleStore GroupRoleStore
 	settingStore   SettingStore
-	ldapClient     *ldap.Client
+	ldapClient     ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, ldapClient *ldap.Client) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("membership/service"),
@@ -327,24 +327,12 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					logger.Warn("set uid number failed", zap.Error(err))
 				}
 			}
-			userInfo, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
-			if err != nil {
-				logger.Debug("GetUserInfo", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
-			} else {
-				logger.Debug("GetUserInfo", zap.String("uid", userSetting.LinuxUsername.String), zap.Any("entry", userInfo))
-			}
 			// add user to LDAP group
 			if groupName != "" && uidNumber != 0 {
 				err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
 				if err != nil {
 					logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
 				}
-			}
-			groupInfo, err := s.ldapClient.GetGroupInfo(groupName)
-			if err != nil {
-				logger.Debug("GetGroupInfo", zap.String("group", groupName), zap.Error(err))
-			} else {
-				logger.Debug("GetGroupInfo", zap.String("group", groupName), zap.Any("entry", groupInfo))
 			}
 		}
 	}

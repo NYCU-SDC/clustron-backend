@@ -7,6 +7,15 @@ import (
 	"go.uber.org/zap"
 )
 
+type LDAPClient interface {
+	CreateGroup(groupName, gidNumber string, memberUids []string) error
+	AddUserToGroup(groupName, memberUid string) error
+	CreateUser(uid, cn, sn, sshPublicKey, uidNumber string) error
+	AddSSHPublicKey(uid, publicKey string) error
+	GetUserInfo(uid string) (*ldap.Entry, error)
+	GetGroupInfo(groupName string) (*ldap.Entry, error)
+}
+
 type Client struct {
 	Conn   *ldap.Conn
 	Config *Config

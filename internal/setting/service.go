@@ -24,10 +24,10 @@ type Service struct {
 	query  *Queries
 
 	userStore  UserStore
-	ldapClient *ldap.Client
+	ldapClient ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient *ldap.Client) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
