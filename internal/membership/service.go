@@ -331,9 +331,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			}
 			userInfo, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
 			if err != nil {
-				logger.Debug("GetUserInfo before create", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
+				logger.Debug("GetUserInfo", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
 			} else {
-				logger.Debug("GetUserInfo before create", zap.String("uid", userSetting.LinuxUsername.String), zap.Any("entry", userInfo))
+				logger.Debug("GetUserInfo", zap.String("uid", userSetting.LinuxUsername.String), zap.Any("entry", userInfo))
 			}
 			// add user to LDAP group
 			if groupName != "" && uidNumber != 0 {
@@ -344,9 +344,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			}
 			groupInfo, err := s.ldapClient.GetGroupInfo(groupName)
 			if err != nil {
-				logger.Debug("GetGroupInfo before add", zap.String("group", groupName), zap.Error(err))
+				logger.Debug("GetGroupInfo", zap.String("group", groupName), zap.Error(err))
 			} else {
-				logger.Debug("GetGroupInfo before add", zap.String("group", groupName), zap.Any("entry", groupInfo))
+				logger.Debug("GetGroupInfo", zap.String("group", groupName), zap.Any("entry", groupInfo))
 			}
 		}
 	}
