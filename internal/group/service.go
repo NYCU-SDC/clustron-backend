@@ -3,11 +3,13 @@ package group
 import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
 	"fmt"
+	"strconv"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -39,9 +41,10 @@ type Service struct {
 	userStore    UserStore
 	roleStore    RoleStore
 	settingStore SettingStore
+	ldapClient   *ldap.Client
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, ldapClient *ldap.Client) *Service {
 	return &Service{
 		logger:       logger,
 		tracer:       otel.Tracer("group/service"),
@@ -49,6 +52,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore S
 		userStore:    userStore,
 		roleStore:    roleStore,
 		settingStore: settingStore,
+		ldapClient:   ldapClient,
 	}
 }
 
@@ -362,6 +366,24 @@ func (s *Service) Create(ctx context.Context, group CreateParams) (Group, error)
 		err = databaseutil.WrapDBError(err, logger, "failed to create group")
 		span.RecordError(err)
 		return Group{}, err
+	}
+
+	// Create LDAP group
+	if s.ldapClient != nil {
+		groupName := newGroup.ID.String()
+		gidNumber, err := s.ldapClient.GetAvailableGidNumber(ctx)
+		if err != nil {
+			logger.Warn("get available gid number failed", zap.Error(err))
+		}
+		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(int(gidNumber)), []string{})
+		if err != nil {
+			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+		} else {
+			err = s.ldapClient.InsertGidNumber(ctx, gidNumber)
+			if err != nil {
+				logger.Warn("insert gid number failed", zap.Error(err))
+			}
+		}
 	}
 
 	return newGroup, nil
