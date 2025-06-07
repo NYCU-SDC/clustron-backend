@@ -204,14 +204,14 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 		params := ListDescPagedParams{
 			Sortby: sortBy,
 			Size:   int32(size),
-			Page:   int32(page),
+			Skip:   int32(page) * int32(size),
 		}
 		groups, err = s.queries.ListDescPaged(ctx, params)
 	} else {
 		params := ListAscPagedParams{
 			Sortby: sortBy,
 			Size:   int32(size),
-			Page:   int32(page),
+			Skip:   int32(page) * int32(size),
 		}
 		groups, err = s.queries.ListAscPaged(ctx, params)
 	}
@@ -275,7 +275,7 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			UserID: userID,
 			Sortby: sortBy,
 			Size:   int32(size),
-			Page:   int32(page),
+			Skip:   int32(page) * int32(size),
 		}
 		res, err := s.queries.ListIfMemberDescPaged(ctx, params)
 		if err != nil {
@@ -307,7 +307,7 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			UserID: userID,
 			Sortby: sortBy,
 			Size:   int32(size),
-			Page:   int32(page),
+			Skip:   int32(page) * int32(size),
 		}
 		res, err := s.queries.ListIfMemberAscPaged(ctx, params)
 		if err != nil {
