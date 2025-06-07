@@ -294,45 +294,43 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	}
 
 	// Add user to LDAP group
-	if s.ldapClient != nil {
-		groupName := groupId.String()
-		uidNumber, err := s.userStore.GetAvailableUidNumber(ctx)
-		logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
+	groupName := groupId.String()
+	uidNumber, err := s.userStore.GetAvailableUidNumber(ctx)
+	logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
+	if err != nil {
+		logger.Warn("get available uid number failed", zap.Error(err))
+	} else {
+		// get public key
+		publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userId)
 		if err != nil {
-			logger.Warn("get available uid number failed", zap.Error(err))
-		} else {
-			// get public key
-			publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userId)
+			logger.Warn("get public key failed", zap.Error(err))
+		}
+		// create LDAP user
+		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+		// add public key to LDAP user
+		for _, publicKey := range publicKeys {
+			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
 			if err != nil {
-				logger.Warn("get public key failed", zap.Error(err))
+				logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
 			}
-			// create LDAP user
-			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
-			// add public key to LDAP user
-			for _, publicKey := range publicKeys {
-				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
-				}
-			}
-			if err != nil {
-				if errors.Is(err, ldap.ErrUserExists) {
-					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
-				} else {
-					logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
-				}
+		}
+		if err != nil {
+			if errors.Is(err, ldap.ErrUserExists) {
+				logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
 			} else {
-				err = s.userStore.SetUidNumber(ctx, userId, uidNumber)
-				if err != nil {
-					logger.Warn("set uid number failed", zap.Error(err))
-				}
+				logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
 			}
-			// add user to LDAP group
-			if groupName != "" && uidNumber != 0 {
-				err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
-				if err != nil {
-					logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
-				}
+		} else {
+			err = s.userStore.SetUidNumber(ctx, userId, uidNumber)
+			if err != nil {
+				logger.Warn("set uid number failed", zap.Error(err))
+			}
+		}
+		// add user to LDAP group
+		if groupName != "" && uidNumber != 0 {
+			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+			if err != nil {
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
 			}
 		}
 	}
