@@ -112,8 +112,7 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	ldapQueries := ldap.New(dbPool)
-	ldapClient, err := ldap.NewClient(cfg.LDAP, logger, ldapQueries)
+	ldapClient, err := ldap.NewClient(cfg.LDAP, logger)
 	if err != nil {
 		logger.Fatal("Failed to initialize LDAP client", zap.Error(err))
 	}

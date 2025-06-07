@@ -70,7 +70,7 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		LDAPBindPwd: "admin",
 	}
 
-	client, err := NewClient(cfg, logger, nil)
+	client, err := NewClient(cfg, logger)
 	require.NoError(t, err)
 
 	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
