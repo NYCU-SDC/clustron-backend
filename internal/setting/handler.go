@@ -55,7 +55,7 @@ type Store interface {
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
-	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
+	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
@@ -281,7 +281,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	publicKey := AddPublicKeyParams{
+	publicKey := CreatePublicKeyParams{
 		UserID:    userID,
 		Title:     request.Title,
 		PublicKey: request.PublicKey,

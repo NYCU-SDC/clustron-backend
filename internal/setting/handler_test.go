@@ -69,7 +69,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 	}
 
 	store := mocks.NewStore(t)
-	store.On("AddPublicKey", mock.Anything, setting.AddPublicKeyParams{
+	store.On("AddPublicKey", mock.Anything, setting.CreatePublicKeyParams{
 		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 		Title:     "Test Title",
 		PublicKey: exampleValidKey,
