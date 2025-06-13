@@ -87,56 +87,8 @@ JOIN
 WHERE
     user_id = $1 AND group_id = $2;
 
--- name: ListGroupMembersAscPaged :many
-SELECT *
-FROM memberships
-WHERE group_id = $1
-ORDER BY @SortBy::text ASC
-LIMIT @Size OFFSET @Skip;
-
--- name: ListGroupMembersDescPaged :many
-SELECT *
-FROM memberships
-WHERE group_id = $1
-ORDER BY @SortBy::text DESC
-LIMIT @Size OFFSET @Skip;
-
--- name: AddGroupMember :one
-INSERT INTO memberships (group_id, user_id, role_id)
-VALUES ($1, $2, $3)
-RETURNING *;
-
--- name: RemoveGroupMember :exec
-DELETE FROM memberships
-WHERE group_id = $1 AND user_id = $2;
-
--- name: UpdateMembershipRole :one
-UPDATE memberships
-SET role_id = $1
-WHERE group_id = $2 AND user_id = $3
-RETURNING *;
-
--- name: GetRoleIdByGroupAndUser :one
-SELECT role_id
-FROM memberships
-WHERE group_id = $1 AND user_id = $2;
-
--- name: GetPendingGroupMember :one
-SELECT *
-FROM pending_memberships
-WHERE user_identifier = $1 AND group_id = $2;
-
--- name: DeletePendingGroupMember :exec
-DELETE FROM pending_memberships
-WHERE user_identifier = $1 AND group_id = $2;
-
--- name: CreateRole :one
-INSERT INTO group_role (role, access_level)
-VALUES ($1, $2)
-RETURNING *;
-
 -- name: ListGidNumbers :many
 SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;
 
--- name: SetGidNumber :exec
+-- name: UpdateGidNumber :exec
 UPDATE groups SET gid_number = $2 WHERE id = $1;
