@@ -1,0 +1,74 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS users
+(
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    role            VARCHAR(255) DEFAULT 'user',
+    student_id      VARCHAR(255) UNIQUE,
+    uid_number      INTEGER UNIQUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+    user_id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
+    username VARCHAR(255),
+    linux_username VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS public_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    public_key TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens
+(
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES users(id) NOT NULL,
+    is_active       BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_archived BOOLEAN DEFAULT FALSE,
+    gid_number    INTEGER UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS group_role (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role VARCHAR(50),
+    access_level VARCHAR(50) NOT NULL
+);
+
+INSERT INTO group_role (id, role, access_level) VALUES
+    ('e02311a8-5a17-444a-b5bb-5c04afa8fa88', 'group_owner', 'GROUP_OWNER'),
+    ('524db082-9d0d-4515-b70c-af3766414bd7', 'teacher_assistant', 'GROUP_ADMIN'),
+    ('de2ed988-a34f-40d3-af70-7e54fa266b37', 'student', 'USER'),
+    ('c5e8a9c9-0b71-434a-ae61-b66983736217', 'auditor', 'USER');
+
+CREATE TABLE IF NOT EXISTS memberships (
+    user_id UUID REFERENCES users(id) NOT NULL,
+    group_id UUID REFERENCES groups(id) NOT NULL,
+    role_id UUID REFERENCES group_role(id) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, group_id)
+);
+
+CREATE TABLE IF NOT EXISTS pending_memberships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_identifier TEXT NOT NULL,
+    group_id UUID NOT NULL REFERENCES groups(id),
+    role_id UUID NOT NULL REFERENCES group_role(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_identifier, group_id)
+);
