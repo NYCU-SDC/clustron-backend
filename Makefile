@@ -3,6 +3,8 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
+.PHONY: all prepare run build test gen
+
 all: build
 
 prepare:
