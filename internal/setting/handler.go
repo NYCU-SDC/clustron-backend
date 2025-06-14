@@ -16,7 +16,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
 type OnboardingRequest struct {
@@ -351,6 +353,33 @@ func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string
 	if len(linuxUsername) == 0 {
 		return internal.ErrInvalidLinuxUsername{
 			Reason: "Linux username cannot be empty",
+		}
+	}
+
+	if len(linuxUsername) > 32 {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot be longer than 32 characters",
+		}
+	}
+
+	if linuxUsername[0] == '-' {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot start with a hyphen",
+		}
+	}
+
+	if strings.ContainsAny(linuxUsername, " :/") {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot contain colon or slash",
+		}
+	}
+
+	// check if the linux username matches the pattern. source: https://www.unix.com/man_page/linux/8/useradd/
+	pattern := `^[a-z_][a-z0-9_-]*[$]?$`
+	regex := regexp.MustCompile(pattern)
+	if !regex.MatchString(linuxUsername) {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username must start with a lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens, and can end with a dollar sign",
 		}
 	}
 
