@@ -397,7 +397,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 		if err != nil {
 			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
 		} else {
-			err = s.queries.SetGidNumber(ctx, SetGidNumberParams{
+			err = s.queries.UpdateGidNumber(ctx, UpdateGidNumberParams{
 				ID:        newGroup.ID,
 				GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
 			})

@@ -13,11 +13,11 @@ UPDATE group_role SET role = $1, access_level = $2 WHERE id = $3 RETURNING *;
 -- name: Delete :exec
 DELETE FROM group_role WHERE id = $1;
 
--- name: GetGroupRoleByID :one
+-- name: GetByID :one
 SELECT * FROM group_role WHERE id = $1;
 
 -- name: GetUserGroupRole :one
 SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHERE m.user_id = $1 AND m.group_id = $2;
 
--- name: GetGroupRoleByName :one
+-- name: GetByName :one
 SELECT * FROM group_role WHERE role = $1;

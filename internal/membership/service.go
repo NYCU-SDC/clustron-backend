@@ -77,13 +77,13 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 
 	var members []Response
 	if sort == "desc" {
-		params := ListGroupMembersDescPagedParams{
+		params := ListDescPagedParams{
 			GroupID: groupId,
 			Sortby:  sortBy,
 			Size:    int32(size),
 			Skip:    int32(page) * int32(size),
 		}
-		res, err := s.queries.ListGroupMembersDescPaged(traceCtx, params)
+		res, err := s.queries.ListDescPaged(traceCtx, params)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "failed to list group members")
 			span.RecordError(err)
@@ -104,13 +104,13 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 			}
 		}
 	} else {
-		params := ListGroupMembersAscPagedParams{
+		params := ListAscPagedParams{
 			GroupID: groupId,
 			Sortby:  sortBy,
 			Size:    int32(size),
 			Skip:    int32(page) * int32(size),
 		}
-		res, err := s.queries.ListGroupMembersAscPaged(traceCtx, params)
+		res, err := s.queries.ListAscPaged(traceCtx, params)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "failed to list group members")
 			span.RecordError(err)
@@ -174,7 +174,7 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 	}
 	// if the user does not exist, add them as a pending member
 	if !userExists {
-		pendingMember, err := s.JoinPending(traceCtx, AddOrUpdatePendingParams{
+		pendingMember, err := s.JoinPending(traceCtx, CreateOrUpdatePendingParams{
 			UserIdentifier: memberIdentifier,
 			GroupID:        groupId,
 			RoleID:         role,
@@ -207,12 +207,12 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 	return member, nil
 }
 
-func (s *Service) JoinPending(ctx context.Context, params AddOrUpdatePendingParams) (PendingMemberResponse, error) {
+func (s *Service) JoinPending(ctx context.Context, params CreateOrUpdatePendingParams) (PendingMemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "JoinPending")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	pendingMember, err := s.queries.AddOrUpdatePending(ctx, AddOrUpdatePendingParams{
+	pendingMember, err := s.queries.CreateOrUpdatePending(ctx, CreateOrUpdatePendingParams{
 		UserIdentifier: params.UserIdentifier,
 		GroupID:        params.GroupID,
 		RoleID:         params.RoleID,
@@ -236,7 +236,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	member, err := s.queries.AddOrUpdate(traceCtx, AddOrUpdateParams{
+	member, err := s.queries.CreateOrUpdate(traceCtx, CreateOrUpdateParams{
 		GroupID: groupId,
 		UserID:  userId,
 		RoleID:  role,
@@ -344,7 +344,7 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	membership, err := s.queries.GetMembershipByUser(traceCtx, GetMembershipByUserParams{
+	membership, err := s.queries.GetByUser(traceCtx, GetByUserParams{
 		UserID:  userId,
 		GroupID: groupId,
 	})
@@ -420,7 +420,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
 
-	updatedMembership, err := s.queries.UpdateMembershipRole(ctx, UpdateMembershipRoleParams{
+	updatedMembership, err := s.queries.UpdateRole(ctx, UpdateRoleParams{
 		GroupID: groupId,
 		UserID:  userId,
 		RoleID:  role,
@@ -505,7 +505,7 @@ func (s *Service) GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	membership, err := s.queries.GetMembershipByUser(traceCtx, GetMembershipByUserParams{
+	membership, err := s.queries.GetByUser(traceCtx, GetByUserParams{
 		UserID:  userID,
 		GroupID: groupID,
 	})
