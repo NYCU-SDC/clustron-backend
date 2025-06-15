@@ -209,6 +209,11 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// default sortBy to "created_at" if not provided
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+
 	var groups []Group
 	var err error
 	if sort == "desc" {
@@ -280,6 +285,11 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	traceCtx, span := s.tracer.Start(ctx, "listByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// default sortBy to "created_at" if not provided
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
 
 	if sort == "desc" {
 		params := ListIfMemberDescPagedParams{
