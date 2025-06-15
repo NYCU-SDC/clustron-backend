@@ -353,7 +353,7 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.Get(ctx, groupID)
+	group, err := s.queries.GetByID(ctx, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get group by id")
 		span.RecordError(err)

@@ -40,7 +40,7 @@ WHERE
 ORDER BY
     @SortBy::text DESC LIMIT @Size OFFSET @Skip;
 
--- name: Get :one
+-- name: GetByID :one
 SELECT * FROM groups WHERE id = $1;
 
 -- name: GetIfMember :one
