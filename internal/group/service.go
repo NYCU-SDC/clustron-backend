@@ -154,11 +154,7 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 			}
 			role := roles[i]
 			response[i].Me.Type = "membership"
-			response[i].Me.Role = grouprole.Role{
-				ID:          role.ID,
-				Role:        role.Role,
-				AccessLevel: role.AccessLevel,
-			}
+			response[i].Me.Role = grouprole.Role(role)
 		}
 	}
 
@@ -170,7 +166,7 @@ func buildRoleGroupIDMap(roles []ListMembershipsByUserRow) map[uuid.UUID]groupro
 	for _, r := range roles {
 		m[r.GroupID] = grouprole.Role{
 			ID:          r.RoleID,
-			Role:        r.Role,
+			RoleName:    r.RoleName,
 			AccessLevel: r.AccessLevel,
 		}
 	}
@@ -308,7 +304,7 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			}
 			roles[i] = GroupRole{
 				ID:          r.ID_2,
-				Role:        r.Role,
+				RoleName:    r.RoleName,
 				AccessLevel: r.AccessLevel,
 			}
 		}
@@ -340,7 +336,7 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			}
 			roles[i] = GroupRole{
 				ID:          r.ID_2,
-				Role:        r.Role,
+				RoleName:    r.RoleName,
 				AccessLevel: r.AccessLevel,
 			}
 		}

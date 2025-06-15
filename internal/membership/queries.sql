@@ -6,7 +6,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -24,7 +24,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -54,7 +54,7 @@ SELECT
     m.user_id,
     m.group_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM
     memberships AS m
