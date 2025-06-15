@@ -12,7 +12,7 @@ package group_test
 //		{
 //			name: "Should create group for admin",
 //			user: jwt.User{
-//				RoleName: pgtype.Text{String: "admin", Valid: true},
+//				Role: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
@@ -38,7 +38,7 @@ package group_test
 //		{
 //			name: "Should create group for organizer",
 //			user: jwt.User{
-//				RoleName: pgtype.Text{String: "organizer", Valid: true},
+//				Role: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
@@ -65,7 +65,7 @@ package group_test
 //		{
 //			name: "Should not create group for user",
 //			user: jwt.User{
-//				RoleName: pgtype.Text{String: "user", Valid: true},
+//				Role: pgtype.Text{String: "user", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
