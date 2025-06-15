@@ -1,10 +1,10 @@
 -- name: GetSetting :one
 SELECT * FROM settings WHERE user_id = $1;
 
--- name: SettingExists :one
+-- name: ExistByUserID :one
 SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists;
 
--- name: LinuxUsernameExists :one
+-- name: ExistByLinuxUsername :one
 SELECT EXISTS (SELECT 1 FROM settings WHERE linux_username = $1) AS exists;
 
 -- name: CreateSetting :one
@@ -19,7 +19,7 @@ SELECT * FROM public_keys WHERE user_id = $1;
 -- name: GetPublicKey :one
 SELECT * FROM public_keys WHERE id = $1;
 
--- name: AddPublicKey :one
+-- name: CreatePublicKey :one
 INSERT INTO public_keys (user_id, title, public_key) VALUES ($1, $2, $3) RETURNING *;
 
 -- name: DeletePublicKey :exec
