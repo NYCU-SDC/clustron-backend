@@ -50,20 +50,20 @@ type UserScope struct {
 
 type Role struct {
 	ID          uuid.UUID
-	Role        string
+	RoleName    string
 	AccessLevel string
 }
 
 type RoleResponse struct {
 	ID          string `json:"id"`
-	Role        string `json:"role"`
+	RoleName    string `json:"roleName"`
 	AccessLevel string `json:"accessLevel"`
 }
 
 func (r Role) ToResponse() RoleResponse {
 	return RoleResponse{
 		ID:          r.ID.String(),
-		Role:        r.Role,
+		RoleName:    r.RoleName,
 		AccessLevel: r.AccessLevel,
 	}
 }

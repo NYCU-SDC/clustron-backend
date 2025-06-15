@@ -12,7 +12,7 @@ package group_test
 //		{
 //			name: "Should create group for admin",
 //			user: jwt.User{
-//				Role: pgtype.Text{String: "admin", Valid: true},
+//				RoleName: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
@@ -29,7 +29,7 @@ package group_test
 //				}, nil)
 //				store.On("GetGroupRoleByID", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
 //					ID:          uuid.MustParse(string(group.RoleOwner)),
-//					Role:        pgtype.Text{String: "group_owner", Valid: true},
+//					RoleName:        pgtype.Text{String: "group_owner", Valid: true},
 //					AccessLevel: "GROUP_OWNER",
 //				}, nil)
 //			},
@@ -38,7 +38,7 @@ package group_test
 //		{
 //			name: "Should create group for organizer",
 //			user: jwt.User{
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
@@ -55,7 +55,7 @@ package group_test
 //				}, nil)
 //				store.On("GetGroupRoleByID", mock.Anything, uuid.MustParse(string(group.RoleOwner))).Return(group.GroupRole{
 //					ID:          uuid.MustParse(string(group.RoleOwner)),
-//					Role:        pgtype.Text{String: "group_owner", Valid: true},
+//					RoleName:        pgtype.Text{String: "group_owner", Valid: true},
 //					AccessLevel: "GROUP_OWNER",
 //				}, nil)
 //			},
@@ -65,7 +65,7 @@ package group_test
 //		{
 //			name: "Should not create group for user",
 //			user: jwt.User{
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			body: group.CreateRequest{
 //				Title:       "Test Group",
@@ -136,12 +136,12 @@ package group_test
 //	groupRoles := []group.GroupRole{
 //		{
 //			ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734a"),
-//			Role:        pgtype.Text{String: "organizer", Valid: true},
+//			RoleName:        pgtype.Text{String: "organizer", Valid: true},
 //			AccessLevel: "organizer",
 //		},
 //		{
 //			ID:          uuid.MustParse("bd1a0054-88f5-4e30-92ac-eb4eb7ac734b"),
-//			Role:        pgtype.Text{String: "user", Valid: true},
+//			RoleName:        pgtype.Text{String: "user", Valid: true},
 //			AccessLevel: "user",
 //		},
 //	}
@@ -157,12 +157,12 @@ package group_test
 //			name: "Should get all groups for admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
-//				Role: pgtype.Text{String: "admin", Valid: true},
+//				RoleName: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("ListWithUserScope", mock.Anything, jwt.User{
 //					ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
-//					Role: pgtype.Text{String: "admin", Valid: true},
+//					RoleName: pgtype.Text{String: "admin", Valid: true},
 //				}, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
 //				//store.On("ListPaged", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups, nil)
 //				//store.On("GetAllGroupCount", mock.Anything).Return(len(groups), nil)
@@ -179,7 +179,7 @@ package group_test
 //			name: "Should get limited groups for organizer",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("listByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:2],
@@ -196,7 +196,7 @@ package group_test
 //			name: "Should get limited groups for user",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("listByUserID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(groups[0:1],
@@ -257,7 +257,7 @@ package group_test
 //			name: "Should get group for admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
-//				Role: pgtype.Text{String: "admin", Valid: true},
+//				RoleName: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("Get", mock.Anything, groupID).Return(group.Group{
@@ -274,7 +274,7 @@ package group_test
 //			name: "Should get group for organizer in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.Group{
@@ -283,7 +283,7 @@ package group_test
 //				}, nil)
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(group.GroupRole{
 //					ID:          uuid.MustParse(string(group.RoleOwner)),
-//					Role:        pgtype.Text{String: "organizer", Valid: true},
+//					RoleName:        pgtype.Text{String: "organizer", Valid: true},
 //					AccessLevel: string(group.AccessLevelOwner),
 //				}, nil)
 //			},
@@ -293,7 +293,7 @@ package group_test
 //			name: "Should not get group for organizer not in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e8"), groupID).Return(group.Group{},
@@ -306,7 +306,7 @@ package group_test
 //			name: "Should get group for user in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.Group{
@@ -315,7 +315,7 @@ package group_test
 //				}, nil)
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(group.GroupRole{
 //					ID:          uuid.MustParse(string(group.RoleStudent)),
-//					Role:        pgtype.Text{String: "user", Valid: true},
+//					RoleName:        pgtype.Text{String: "user", Valid: true},
 //					AccessLevel: string(group.AccessLevelUser),
 //				}, nil)
 //			},
@@ -325,7 +325,7 @@ package group_test
 //			name: "Should not get group for user not in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store) {
 //				store.On("GetUserGroupByID", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(group.Group{},
@@ -374,7 +374,7 @@ package group_test
 //			name: "Should archive group for admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
-//				Role: pgtype.Text{String: "admin", Valid: true},
+//				RoleName: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupID).Return(
@@ -392,7 +392,7 @@ package group_test
 //			name: "Should archive group for organizer",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
@@ -400,7 +400,7 @@ package group_test
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 //					group.GroupRole{
 //						ID:          uuid.MustParse(string(group.RoleOwner)),
-//						Role:        pgtype.Text{String: "group_owner", Valid: true},
+//						RoleName:        pgtype.Text{String: "group_owner", Valid: true},
 //						AccessLevel: string(group.AccessLevelOwner),
 //					}, nil,
 //				)
@@ -415,7 +415,7 @@ package group_test
 //			name: "Should not archive group for organizer not in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(
@@ -427,7 +427,7 @@ package group_test
 //			name: "Should not archive group for group-admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(
@@ -439,7 +439,7 @@ package group_test
 //			name: "Should not archive group for user",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(
@@ -488,7 +488,7 @@ package group_test
 //			name: "Should unarchive group for admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
-//				Role: pgtype.Text{String: "admin", Valid: true},
+//				RoleName: pgtype.Text{String: "admin", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), groupID).Return(
@@ -506,7 +506,7 @@ package group_test
 //			name: "Should unarchive group for group owner",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"),
-//				Role: pgtype.Text{String: "organizer", Valid: true},
+//				RoleName: pgtype.Text{String: "organizer", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
@@ -514,7 +514,7 @@ package group_test
 //				store.On("GetUserGroupRole", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e3"), groupID).Return(
 //					group.GroupRole{
 //						ID:          uuid.MustParse(string(group.RoleOwner)),
-//						Role:        pgtype.Text{String: "group_owner", Valid: true},
+//						RoleName:        pgtype.Text{String: "group_owner", Valid: true},
 //						AccessLevel: string(group.AccessLevelOwner),
 //					},
 //					nil)
@@ -529,7 +529,7 @@ package group_test
 //			name: "Should not unarchive group for organizer not in this group",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e5"), groupID).Return(
@@ -541,7 +541,7 @@ package group_test
 //			name: "Should not unarchive group for group-admin",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e7"), groupID).Return(
@@ -553,7 +553,7 @@ package group_test
 //			name: "Should not unarchive group for user",
 //			user: jwt.User{
 //				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"),
-//				Role: pgtype.Text{String: "user", Valid: true},
+//				RoleName: pgtype.Text{String: "user", Valid: true},
 //			},
 //			setupMocks: func(store *mocks.Store, auth *mocks.Auth) {
 //				auth.On("GetUserGroupAccessLevel", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e2"), groupID).Return(

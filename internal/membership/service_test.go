@@ -38,7 +38,7 @@ package membership_test
 // 			mockSetup: func() {
 // 				// Mock user info & setting & group role
 // 				userStore.On("GetByID", mock.Anything, mock.Anything).Return(
-// 					user.User{ID: mockUserId, Email: "test@gmail.com", Role: role.User.String()}, nil, nil, nil)
+// 					user.User{ID: mockUserId, Email: "test@gmail.com", RoleName: role.User.String()}, nil, nil, nil)
 // 				// u, err := s.userStore.GetByID(traceCtx, userId)
 // 				// setting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
 // 				// roleResponse, err := s.groupRoleStore.GetByID(traceCtx, member.RoleID)

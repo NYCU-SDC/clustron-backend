@@ -154,7 +154,7 @@ func main() {
 	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	basicMiddleware = basicMiddleware.Append(traceMiddleware.TraceMiddleWare)
 
-	// Auth Middleware (JWT and Role filtering)
+	// Auth Middleware (JWT and RoleName filtering)
 	authMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	authMiddleware = authMiddleware.Append(traceMiddleware.TraceMiddleWare)
 	authMiddleware = authMiddleware.Append(jwtMiddleware.HandlerFunc)

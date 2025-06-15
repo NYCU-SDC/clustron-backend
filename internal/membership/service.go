@@ -98,7 +98,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				StudentID: member.StudentID.String,
 				Role: grouprole.Role{
 					ID:          member.RoleID,
-					Role:        member.Role,
+					RoleName:    member.Role,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -125,7 +125,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				StudentID: member.StudentID.String,
 				Role: grouprole.Role{
 					ID:          member.RoleID,
-					Role:        member.Role,
+					RoleName:    member.Role,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -335,7 +335,11 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		Username:  userSetting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.Role{
+			ID:          roleResponse.ID,
+			RoleName:    roleResponse.Role,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 
@@ -481,7 +485,11 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		Username:  userSetting.Username.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.Role{
+			ID:          roleResponse.ID,
+			RoleName:    roleResponse.Role,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 

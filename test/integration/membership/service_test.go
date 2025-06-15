@@ -57,7 +57,7 @@ package membership
 //				contextUser := jwt.User{
 //					ID:        operator.ID,
 //					Email:     operator.Email,
-//					Role:      operator.Role,
+//					RoleName:      operator.RoleName,
 //					StudentID: operator.StudentID,
 //					CreatedAt: operator.CreatedAt,
 //					UpdatedAt: operator.UpdatedAt,
