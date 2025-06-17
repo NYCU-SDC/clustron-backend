@@ -281,15 +281,9 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// default sortBy to "created_at" if not provided
-	if sortBy == "" {
-		sortBy = "created_at"
-	}
-
 	if sort == "asc" {
 		params := ListIfMemberAscPagedParams{
 			UserID: userID,
-			Sortby: sortBy,
 			Size:   int32(size),
 			Skip:   int32(page) * int32(size),
 		}
@@ -321,7 +315,6 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	} else {
 		params := ListIfMemberDescPagedParams{
 			UserID: userID,
-			Sortby: sortBy,
 			Size:   int32(size),
 			Skip:   int32(page) * int32(size),
 		}
