@@ -208,13 +208,6 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.query.DeletePublicKey(ctx, id)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
-		span.RecordError(err)
-		return err
-	}
-
 	publicKey, err := s.GetPublicKeyByID(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "get public key by id")
@@ -238,6 +231,13 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			logger.Warn("delete the public key from LDAP user failed", zap.Error(err))
 		}
+	}
+
+	err = s.query.DeletePublicKey(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
+		span.RecordError(err)
+		return err
 	}
 
 	return nil
