@@ -22,9 +22,9 @@ func (b GroupRoleBuilder) Queries() *grouprole.Queries {
 	return grouprole.New(b.db)
 }
 
-func (b GroupRoleBuilder) Create(role, accessLevel string) (grouprole.GroupRole, error) {
+func (b GroupRoleBuilder) Create(roleName, accessLevel string) (grouprole.GroupRole, error) {
 	params := grouprole.CreateParams{
-		Role:        role,
+		RoleName:    roleName,
 		AccessLevel: accessLevel,
 	}
 
