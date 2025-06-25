@@ -32,11 +32,11 @@ type UserService interface {
 }
 
 type Response struct {
-	ID        uuid.UUID              `json:"id"`
-	Username  string                 `json:"username"`
-	Email     string                 `json:"email"`
-	StudentID string                 `json:"studentId"`
-	Role      grouprole.RoleResponse `json:"role"`
+	ID        uuid.UUID      `json:"id"`
+	Username  string         `json:"username"`
+	Email     string         `json:"email"`
+	StudentID string         `json:"studentId"`
+	Role      grouprole.Role `json:"role"`
 }
 
 type AddMembersRequest struct {
