@@ -96,9 +96,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				Username:  member.Username.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.RoleResponse{
-					ID:          member.RoleID.String(),
-					RoleName:    member.RoleName,
+				Role: grouprole.Role{
+					ID:          member.RoleID,
+					Role:        member.Role,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -123,9 +123,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				Username:  member.Username.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.RoleResponse{
-					ID:          member.RoleID.String(),
-					RoleName:    member.RoleName,
+				Role: grouprole.Role{
+					ID:          member.RoleID,
+					Role:        member.Role,
 					AccessLevel: member.AccessLevel,
 				},
 			}

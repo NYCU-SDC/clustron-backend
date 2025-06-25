@@ -39,6 +39,12 @@ type Store interface {
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 }
 
+type RoleResponse struct {
+	ID          string `json:"id"`
+	Role        string `json:"role"`
+	AccessLevel string `json:"accessLevel"`
+}
+
 type Response struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
@@ -47,8 +53,8 @@ type Response struct {
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 	Me          struct {
-		Type string                 `json:"type"` // will be "membership" or "adminOverride"
-		Role grouprole.RoleResponse `json:"role"`
+		Type string       `json:"type"` // will be "membership" or "adminOverride"
+		Role RoleResponse `json:"role"`
 	} `json:"me"`
 }
 
@@ -126,7 +132,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
 		groupResponse[i].Me.Type = group.Me.Type
-		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
+		groupResponse[i].Me.Role = RoleResponse(group.Me.Role.ToResponse())
 	}
 
 	pageResponse := h.paginationFactory.NewResponse(groupResponse, totalCount, pageRequest.Page, pageRequest.Size)
@@ -173,7 +179,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = userScopeResponse.Me.Type
-	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
+	groupResponse.Me.Role = RoleResponse(userScopeResponse.Me.Role.ToResponse())
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
@@ -247,9 +253,9 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = "membership"
-	groupResponse.Me.Role = grouprole.RoleResponse{
+	groupResponse.Me.Role = RoleResponse{
 		ID:          roleOwner.ID.String(),
-		RoleName:    roleOwner.RoleName,
+		Role:        roleOwner.Role,
 		AccessLevel: roleOwner.AccessLevel,
 	}
 
@@ -309,9 +315,9 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = grouprole.RoleResponse{
+		groupResponse.Me.Role = RoleResponse{
 			ID:          role.ID.String(),
-			RoleName:    role.RoleName,
+			Role:        role.Role,
 			AccessLevel: role.AccessLevel,
 		}
 	}
@@ -372,9 +378,9 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	groupResponse.Me.Type = roleType
 	if roleType == "membership" {
-		groupResponse.Me.Role = grouprole.RoleResponse{
+		groupResponse.Me.Role = RoleResponse{
 			ID:          role.ID.String(),
-			RoleName:    role.RoleName,
+			Role:        role.Role,
 			AccessLevel: role.AccessLevel,
 		}
 	}

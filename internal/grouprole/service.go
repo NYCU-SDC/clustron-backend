@@ -56,7 +56,7 @@ func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, err
 
 	createdRole, err := s.queries.Create(ctx, role)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role.RoleName, logger, "create group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role.Role, logger, "create group role")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
@@ -154,7 +154,11 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	}
 	// if roleResponse hasn't been set, it means the user is a member of the group
 	if roleResponse == (GroupRole{}) && roleType != "adminOverride" {
-		roleResponse = groupRole
+		roleResponse = GroupRole{
+			ID:          groupRole.ID,
+			Role:        groupRole.Role,
+			AccessLevel: groupRole.AccessLevel,
+		}
 	}
 
 	return roleResponse, roleType, nil

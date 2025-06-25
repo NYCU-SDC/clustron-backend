@@ -65,7 +65,7 @@ UPDATE groups SET is_archived = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id =
 SELECT
     m.group_id,
     m.role_id,
-    gr.role_name,
+    gr.role,
     gr.access_level
 FROM
     memberships AS m
@@ -78,7 +78,7 @@ WHERE
 SELECT
     m.group_id,
     m.role_id,
-    gr.role_name,
+    gr.role,
     gr.access_level
 FROM
     memberships AS m
