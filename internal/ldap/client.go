@@ -36,10 +36,6 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 	}
 
 	client := &Client{Conn: conn, Config: cfg, Logger: logger}
-	if err := client.ClearAllPeopleAndGroups(); err != nil {
-		logger.Error("Failed to clear all people and groups", zap.Error(err))
-		return nil, fmt.Errorf("failed to clear all people and groups: %w", err)
-	}
 
 	logger.Info("LDAP connection established and bound successfully")
 	return client, nil
@@ -51,41 +47,4 @@ func (c *Client) Close() {
 	} else {
 		c.Logger.Info("LDAP connection closed successfully")
 	}
-}
-
-func (c *Client) ClearAllPeopleAndGroups() error {
-	bases := []struct {
-		ou     string
-		baseDN string
-	}{
-		{"People", fmt.Sprintf("ou=People,%s", c.Config.LDAPBaseDN)},
-		{"Groups", fmt.Sprintf("ou=Groups,%s", c.Config.LDAPBaseDN)},
-	}
-	for _, b := range bases {
-		searchReq := ldap.NewSearchRequest(
-			b.baseDN,
-			ldap.ScopeSingleLevel,
-			ldap.NeverDerefAliases,
-			0, 0, false,
-			"(objectClass=*)",
-			[]string{"dn"},
-			nil,
-		)
-		res, err := c.Conn.Search(searchReq)
-		if err != nil {
-			c.Logger.Error("LDAP search failed", zap.String("base", b.baseDN), zap.Error(err))
-			return err
-		}
-		for _, entry := range res.Entries {
-			// skip ou=People, ou=Groups itself
-			if entry.DN == b.baseDN {
-				continue
-			}
-			delReq := ldap.NewDelRequest(entry.DN, nil)
-			if err := c.Conn.Del(delReq); err != nil {
-				c.Logger.Warn("Failed to delete entry", zap.String("dn", entry.DN), zap.Error(err))
-			}
-		}
-	}
-	return nil
 }

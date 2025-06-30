@@ -91,7 +91,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exist, err := s.query.SettingExists(ctx, userID)
+	exist, err := s.query.ExistByUserID(ctx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "check setting exists")
 		span.RecordError(err)
@@ -163,12 +163,12 @@ func (s *Service) GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey
 	return publicKey, nil
 }
 
-func (s *Service) AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error) {
+func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddPublicKey")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	addedPublicKey, err := s.query.AddPublicKey(ctx, publicKey)
+	addedPublicKey, err := s.query.CreatePublicKey(ctx, publicKey)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
 		span.RecordError(err)
@@ -248,7 +248,7 @@ func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.query.LinuxUsernameExists(ctx, pgtype.Text{String: linuxUsername, Valid: true})
+	exists, err := s.query.ExistByLinuxUsername(ctx, pgtype.Text{String: linuxUsername, Valid: true})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
 		span.RecordError(err)

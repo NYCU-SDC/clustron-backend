@@ -1,0 +1,9 @@
+DROP EXTENSION IF EXISTS "pgcrypto";
+DROP TABLE IF EXISTS pending_memberships;
+DROP TABLE IF EXISTS memberships CASCADE;
+DROP TABLE IF EXISTS group_role;
+DROP TABLE IF EXISTS groups;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS public_keys;
+DROP TABLE IF EXISTS settings;
+DROP TABLE IF EXISTS users;

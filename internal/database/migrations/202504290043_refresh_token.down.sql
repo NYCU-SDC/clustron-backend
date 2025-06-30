@@ -1,2 +1,0 @@
-DROP EXTENSION IF EXISTS "pgcrypto";
-DROP TABLE IF EXISTS refresh_tokens;

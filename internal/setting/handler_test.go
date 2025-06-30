@@ -69,7 +69,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 	}
 
 	store := mocks.NewStore(t)
-	store.On("AddPublicKey", mock.Anything, setting.AddPublicKeyParams{
+	store.On("AddPublicKey", mock.Anything, setting.CreatePublicKeyParams{
 		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 		Title:     "Test Title",
 		PublicKey: exampleValidKey,
@@ -217,6 +217,11 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 		Username: pgtype.Text{String: "testuser", Valid: true},
 	}, nil)
+	store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
+		UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+		Username:      pgtype.Text{String: "testuser", Valid: true},
+		LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
+	}, nil)
 
 	h := setting.NewHandler(logger, validator.New(), problem.New(), store)
 
@@ -234,6 +239,137 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			h.UpdateUserSettingHandler(w, r)
+
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
+
+func TestHandler_OnboardingHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           setting.OnboardingRequest
+		setupMock      func(store *mocks.Store)
+		expectedStatus int
+	}{
+		{
+			name: "Should complete onboarding",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("OnboardUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, nil).Once()
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should block linux username with reserved word",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "root",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username with over 32 characters",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "12345678901234567890123456789012345678901234567890",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username with space",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "test user",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username start with number",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "1testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username start with hyphen",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "-testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username contain ':'",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "test:user",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username contain '/'",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "test/user",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username contain uppercase letters",
+			body: setting.OnboardingRequest{
+				Username:      "testuser",
+				LinuxUsername: "TestUser",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock the dependencies
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+			tc.setupMock(store)
+
+			h := setting.NewHandler(logger, validator.New(), problem.NewWithMapping(internal.ErrorHandler), store)
+
+			requestBody, err := json.Marshal(tc.body)
+			if err != nil {
+				t.Fatalf("failed to marshal request body: %v", err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/api/setting/onboarding", bytes.NewReader(requestBody))
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
+				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Role: role.User.String(),
+			}))
+			w := httptest.NewRecorder()
+
+			h.OnboardingHandler(w, r)
 
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})

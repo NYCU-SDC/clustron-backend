@@ -99,7 +99,7 @@ func (s *Service) GetByID(ctx context.Context, roleID uuid.UUID) (GroupRole, err
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	role, err := s.queries.GetGroupRoleByID(ctx, roleID)
+	role, err := s.queries.GetByID(ctx, roleID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleID.String(), logger, "get group role by id")
 		span.RecordError(err)
