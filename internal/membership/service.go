@@ -691,7 +691,7 @@ func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingI
 
 	if pendingMember.GroupID != groupId {
 		logger.Warn("Pending member does not belong to the specified group")
-		return PendingMemberResponse{}, errors.New("pending member does not belong to group")
+		return PendingMemberResponse{}, handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
 	}
 
 	updatedPending, err := s.queries.UpdatePendingByID(ctx, UpdatePendingByIDParams{
@@ -739,7 +739,7 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 
 	if pendingMember.GroupID != groupId {
 		logger.Warn("Pending member does not belong to the specified group")
-		return errors.New("pending member does not belong to group")
+		return handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
 	}
 
 	// check if the user's access_level is bigger than the target access_level
