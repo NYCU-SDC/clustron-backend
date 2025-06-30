@@ -1,4 +1,4 @@
--- name: ListGroupMembersDescPaged :many
+-- name: ListDescPaged :many
 SELECT
     m.group_id,
     m.user_id,
@@ -16,7 +16,7 @@ WHERE group_id = $1
 ORDER BY @SortBy::text DESC
 LIMIT @Size OFFSET @Skip;
 
--- name: ListGroupMembersAscPaged :many
+-- name: ListAscPaged :many
 SELECT
     m.group_id,
     m.user_id,
@@ -49,7 +49,7 @@ SELECT EXISTS (
     WHERE group_id = $1 AND user_id = $2
 ) AS exists;
 
--- name: GetMembershipByUser :one
+-- name: GetByUser :one
 SELECT
     m.user_id,
     m.group_id,
@@ -67,7 +67,7 @@ WHERE
 SELECT COUNT(*) FROM memberships
 WHERE group_id = $1;
 
--- name: AddOrUpdatePending :one
+-- name: CreateOrUpdatePending :one
 INSERT INTO pending_memberships (user_identifier, group_id, role_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (user_identifier, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
@@ -145,7 +145,7 @@ RETURNING *;
 DELETE FROM pending_memberships
 WHERE id = $1;
 
--- name: AddOrUpdate :one
+-- name: CreateOrUpdate :one
 INSERT INTO memberships (group_id, user_id, role_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (user_id, group_id) DO UPDATE SET role_id = EXCLUDED.role_id
@@ -155,7 +155,7 @@ RETURNING *;
 DELETE FROM memberships
 WHERE group_id = $1 AND user_id = $2;
 
--- name: UpdateMembershipRole :one
+-- name: UpdateRole :one
 UPDATE memberships
 SET role_id = $1
 WHERE group_id = $2 AND user_id = $3
