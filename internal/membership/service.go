@@ -135,6 +135,29 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	return members, nil
 }
 
+func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (grouprole.GroupRole, error) {
+	traceCtx, span := otel.Tracer("membership/service").Start(ctx, "GetRoleByUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, zap.L())
+
+	// Get user role
+	membership, err := s.queries.GetByUser(traceCtx, GetByUserParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get user role")
+		span.RecordError(err)
+		return grouprole.GroupRole{}, err
+	}
+
+	return grouprole.GroupRole{
+		ID:          membership.RoleID,
+		Role:        membership.Role,
+		AccessLevel: membership.AccessLevel,
+	}, nil
+}
+
 func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Add")
 	defer span.End()
@@ -483,6 +506,43 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		StudentID: u.StudentID.String,
 		Role:      grouprole.Role(roleResponse),
 	}, nil
+}
+
+func (s *Service) UpdateRole(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateRole")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return handlerutil.ErrForbidden
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, groupId, role) {
+		logger.Warn("The user's access is not allowed to update this member")
+		return handlerutil.ErrForbidden
+	}
+
+	_, err := s.queries.UpdateRole(ctx, UpdateRoleParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  role,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"memberships",
+			"group_id/user_id",
+			fmt.Sprintf("%s/%s", groupId, userId),
+			logger,
+			"failed to update membership",
+		)
+	}
+
+	return err
 }
 
 func (s *Service) CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error) {

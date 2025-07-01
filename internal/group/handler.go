@@ -37,6 +37,7 @@ type Store interface {
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
 	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
+	TransferOwner(ctx context.Context, groupID uuid.UUID, newOwnerIdentifier string, user jwt.User) (grouprole.UserScope, error)
 }
 
 type RoleResponse struct {
@@ -62,6 +63,10 @@ type CreateRequest struct {
 	Title       string                        `json:"title" validate:"required"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
+}
+
+type TransferOwnerRequest struct {
+	Identifier string `json:"identifier"`
 }
 
 type Handler struct {
@@ -384,6 +389,53 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 			AccessLevel: role.AccessLevel,
 		}
 	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) TransferGroupOwnerHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "TransferGroupOwnerHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "TransferGroupOwnerHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request TransferOwnerRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Change role of old owner of the group
+	userScopeResponse, err := h.store.TransferOwner(traceCtx, groupUUID, request.Identifier, user)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		ID:          userScopeResponse.ID.String(),
+		Title:       userScopeResponse.Title,
+		Description: userScopeResponse.Description.String,
+		IsArchived:  userScopeResponse.IsArchived.Bool,
+		CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	groupResponse.Me.Type = userScopeResponse.Me.Type
+	groupResponse.Me.Role = RoleResponse(userScopeResponse.Me.Role.ToResponse())
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
