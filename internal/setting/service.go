@@ -18,13 +18,17 @@ import (
 type UserStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 }
-type Service struct {
-	logger *zap.Logger
-	tracer trace.Tracer
-	query  *Queries
 
-	userStore  UserStore
-	ldapClient ldap.LDAPClient
+type MembershipService interface {
+	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
+}
+type Service struct {
+	logger            *zap.Logger
+	tracer            trace.Tracer
+	query             *Queries
+	userStore         UserStore
+	membershipService MembershipService
+	ldapClient        ldap.LDAPClient
 }
 
 func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
@@ -38,7 +42,11 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient lda
 	}
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) SetMembershipService(membershipService MembershipService) {
+	s.membershipService = membershipService
+}
+
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, username pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -66,6 +74,16 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	if err != nil {
 		span.RecordError(err)
 		return err
+	}
+
+	// Process pending memberships after user onboarding
+	err = s.membershipService.ProcessPendingMemberships(traceCtx, userID, email, studentID)
+	if err != nil {
+		logger.Warn("failed to process pending memberships for onboarded user",
+			zap.String("userID", userID.String()),
+			zap.String("email", email),
+			zap.String("student_id", studentID),
+			zap.Error(err))
 	}
 
 	return nil

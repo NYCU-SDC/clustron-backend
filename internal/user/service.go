@@ -18,16 +18,11 @@ import (
 
 const StartUidNumber = 10000
 
-type MembershipService interface {
-	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
-}
-
 type Service struct {
-	queries           *Queries
-	logger            *zap.Logger
-	presetMap         map[string]config.PresetUserInfo
-	tracer            trace.Tracer
-	membershipService MembershipService
+	queries   *Queries
+	logger    *zap.Logger
+	presetMap map[string]config.PresetUserInfo
+	tracer    trace.Tracer
 }
 
 type ServiceInterface interface {
@@ -43,10 +38,6 @@ func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, 
 		presetMap: presetMap,
 		tracer:    otel.Tracer("user/service"),
 	}
-}
-
-func (s *Service) SetMembershipService(membershipService MembershipService) {
-	s.membershipService = membershipService
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -148,15 +139,6 @@ func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (Us
 			err = databaseutil.WrapDBError(err, logger, "create user")
 			span.RecordError(err)
 			return User{}, err
-		}
-
-		// Process pending memberships for new user
-		err = s.membershipService.ProcessPendingMemberships(traceCtx, jwtUser.ID, email, studentID)
-		if err != nil {
-			logger.Warn("failed to process pending memberships for new user",
-				zap.String("email", email),
-				zap.String("student_id", studentID),
-				zap.Error(err))
 		}
 	} else {
 		jwtUser, err = s.GetByEmail(traceCtx, email)
