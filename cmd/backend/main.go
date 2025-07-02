@@ -133,6 +133,9 @@ func main() {
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 
+	// Set memberService in settingService after all dependencies are created
+	settingService.SetMembershipService(memberService)
+
 	// Handler
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)

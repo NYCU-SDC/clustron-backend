@@ -573,3 +573,51 @@ func (s *Service) hasGroupControlAccess(ctx context.Context, groupId uuid.UUID) 
 func (s *Service) isGroupOwner(role grouprole.GroupRole) bool {
 	return role.AccessLevel == string(grouprole.AccessLevelOwner)
 }
+
+func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessPendingMemberships")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get all pending memberships for this user identifier
+	pendingMemberships, err := s.queries.GetPendingByUserIdentifier(traceCtx, GetPendingByUserIdentifierParams{
+		Email:     email,
+		StudentID: studentID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get pending memberships")
+		span.RecordError(err)
+		return err
+	}
+
+	// Process each pending membership
+	for _, pending := range pendingMemberships {
+		// Add user to group with the specified role
+		_, err := s.Join(traceCtx, userID, pending.GroupID, pending.RoleID)
+		if err != nil {
+			logger.Warn("failed to join user to group from pending membership",
+				zap.String("email", email),
+				zap.String("studentID", studentID),
+				zap.String("groupID", pending.GroupID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Remove the pending membership after successful join
+		// TODO: change to reomovePending after pending membership is merged
+		err = s.queries.DeletePendingByID(traceCtx, pending.ID)
+		if err != nil {
+			logger.Warn("failed to delete pending membership after join",
+				zap.String("pendingID", pending.ID.String()),
+				zap.Error(err))
+		}
+
+		logger.Info("successfully processed pending membership",
+			zap.String("email", email),
+			zap.String("studentID", studentID),
+			zap.String("groupID", pending.GroupID.String()),
+			zap.String("role", pending.Role))
+	}
+
+	return nil
+}

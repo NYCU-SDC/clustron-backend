@@ -91,6 +91,22 @@ SET role_id = $1
 WHERE group_id = $2 AND user_identifier = $3
 RETURNING *;
 
+-- name: DeletePendingByID :exec
+DELETE FROM pending_memberships
+WHERE id = $1;
+
+-- name: GetPendingByUserIdentifier :many
+SELECT
+    pm.id,
+    pm.user_identifier,
+    pm.group_id,
+    pm.role_id,
+    gr.role,
+    gr.access_level
+FROM pending_memberships AS pm
+JOIN group_role AS gr ON gr.id = pm.role_id
+WHERE pm.user_identifier = @email OR pm.user_identifier = @student_id;
+
 -- name: CreateOrUpdate :one
 INSERT INTO memberships (group_id, user_id, role_id)
 VALUES ($1, $2, $3)
