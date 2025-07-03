@@ -93,7 +93,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		for i, member := range res {
 			members[i] = Response{
 				ID:        member.UserID,
-				Username:  member.Username.String,
+				Username:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
 				Role: grouprole.Role{
@@ -120,7 +120,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		for i, member := range res {
 			members[i] = Response{
 				ID:        member.UserID,
-				Username:  member.Username.String,
+				Username:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
 				Role: grouprole.Role{
@@ -301,7 +301,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			logger.Warn("get public key failed", zap.Error(err))
 		}
 		// create LDAP user
-		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
 		// add public key to LDAP user
 		for _, publicKey := range publicKeys {
 			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
@@ -332,7 +332,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  userSetting.Username.String,
+		Username:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role:      grouprole.Role(roleResponse),
@@ -478,7 +478,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  userSetting.Username.String,
+		Username:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role:      grouprole.Role(roleResponse),

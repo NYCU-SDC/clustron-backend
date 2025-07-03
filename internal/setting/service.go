@@ -38,7 +38,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient lda
 	}
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -53,7 +53,7 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	// update user's setting
 	_, err := s.UpdateSetting(traceCtx, userID, Setting{
 		UserID:        userID,
-		Username:      username,
+		FullName:      fullName,
 		LinuxUsername: linuxUsername,
 	})
 	if err != nil {

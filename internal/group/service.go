@@ -412,7 +412,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 			logger.Warn("get public key failed", zap.Error(err))
 		}
 		// create LDAP user
-		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.Username.String, userSetting.Username.String, "", strconv.Itoa(uidNumber))
+		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
 		// add public key to LDAP user
 		for _, publicKey := range publicKeys {
 			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
