@@ -14,13 +14,14 @@ type Group struct {
 	Title       string
 	Description pgtype.Text
 	IsArchived  pgtype.Bool
+	GidNumber   pgtype.Int4
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
 
 type GroupRole struct {
 	ID          uuid.UUID
-	Role        pgtype.Text
+	Role        string
 	AccessLevel string
 }
 
@@ -30,6 +31,15 @@ type Membership struct {
 	RoleID    uuid.UUID
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type PendingMembership struct {
+	ID             uuid.UUID
+	UserIdentifier string
+	GroupID        uuid.UUID
+	RoleID         uuid.UUID
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type PublicKey struct {
@@ -53,11 +63,11 @@ type Setting struct {
 }
 
 type User struct {
-	ID         uuid.UUID
-	Email      string
-	Role       pgtype.Text
-	Department pgtype.Text
-	StudentID  pgtype.Text
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID        uuid.UUID
+	Email     string
+	Role      string
+	StudentID pgtype.Text
+	UidNumber pgtype.Int4
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }

@@ -1,6 +1,7 @@
 package setting
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
@@ -15,8 +16,15 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 )
+
+type OnboardingRequest struct {
+	Username      string `json:"username" validate:"required"`
+	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
+}
 
 type UpdateSettingRequest struct {
 	FullName      string `json:"fullName" validate:"required"`
@@ -49,8 +57,10 @@ type Store interface {
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
-	AddPublicKey(ctx context.Context, publicKey AddPublicKeyParams) (PublicKey, error)
+	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error
+	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
 
 type Handler struct {
@@ -78,6 +88,41 @@ func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *proble
 		problemWriter: problemWriter,
 		settingStore:  store,
 	}
+}
+
+func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "OnboardingHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request OnboardingRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// check if the linux username is valid first
+	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }
 
 func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +164,11 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID := user.ID
+	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
 	var request UpdateSettingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
@@ -128,13 +177,31 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	setting := Setting{
-		UserID:        userID,
-		FullName:      pgtype.Text{String: request.FullName, Valid: true},
-		LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
+	var setting Setting
+	// if the linux username is already set, we keep it
+	if oldSetting.LinuxUsername.String != "" {
+		setting = Setting{
+			UserID:        user.ID,
+			FullName:      pgtype.Text{String: request.FullName, Valid: true},
+			LinuxUsername: oldSetting.LinuxUsername,
+		}
+	} else {
+		// else we update the linux username as well
+		// check if the linux username is valid first
+		err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		setting = Setting{
+			UserID:        user.ID,
+			FullName:      pgtype.Text{String: request.FullName, Valid: true},
+			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+		}
 	}
 
-	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, userID, setting)
+	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -168,9 +235,10 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	q := r.URL.Query()
-	short := true // default true: frontend usually only needs short public key
-	if q.Has("short") {
-		short, err = strconv.ParseBool(q.Get("short"))
+	var length int64
+	length = 20 // default 20: frontend usually only needs short public key
+	if q.Has("length") {
+		length, err = strconv.ParseInt(q.Get("length"), 10, 64)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -178,25 +246,14 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := make([]PublicKeyResponse, len(publicKeys))
-	if short {
-		for i, publicKey := range publicKeys {
-			response[i] = PublicKeyResponse{
-				ID:        publicKey.ID.String(),
-				Title:     publicKey.Title,
-				PublicKey: publicKey.PublicKey[:10],
-			}
-		}
-		handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-		return
-	} else {
-		for i, publicKey := range publicKeys {
-			response[i] = PublicKeyResponse{
-				Title:     publicKey.Title,
-				PublicKey: publicKey.PublicKey,
-			}
+
+	for i, publicKey := range publicKeys {
+		response[i] = PublicKeyResponse{
+			ID:        publicKey.ID.String(),
+			Title:     publicKey.Title,
+			PublicKey: publicKey.PublicKey[:min(length, int64(len(publicKey.PublicKey)))],
 		}
 	}
-
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -226,7 +283,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	publicKey := AddPublicKeyParams{
+	publicKey := CreatePublicKeyParams{
 		UserID:    userID,
 		Title:     request.Title,
 		PublicKey: request.PublicKey,
@@ -290,4 +347,58 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string) error {
+	if len(linuxUsername) == 0 {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot be empty",
+		}
+	}
+
+	if len(linuxUsername) > 32 {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot be longer than 32 characters",
+		}
+	}
+
+	if linuxUsername[0] == '-' {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot start with a hyphen",
+		}
+	}
+
+	if strings.ContainsAny(linuxUsername, " :/") {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username cannot contain colon or slash",
+		}
+	}
+
+	// check if the linux username matches the pattern. source: https://www.unix.com/man_page/linux/8/useradd/
+	pattern := `^[a-z_][a-z0-9_-]*[$]?$`
+	regex := regexp.MustCompile(pattern)
+	if !regex.MatchString(linuxUsername) {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username must start with a lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens, and can end with a dollar sign",
+		}
+	}
+
+	if linuxUsername == "root" || linuxUsername == "admin" || linuxUsername == "administrator" {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username contain reserved keywords",
+		}
+	}
+
+	isLinuxUsernameExists, err := h.settingStore.IsLinuxUsernameExists(ctx, linuxUsername)
+	if err != nil {
+		h.logger.Error("Failed to check if linux username exists", zap.Error(err))
+		return err
+	}
+
+	if isLinuxUsernameExists {
+		return internal.ErrInvalidLinuxUsername{
+			Reason: "Linux username already exists",
+		}
+	}
+	return nil
 }

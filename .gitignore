@@ -1,5 +1,15 @@
 .idea
 bin
 
+# setting files
 .env
 config.yaml
+
+# generated files
+mocks/
+db.go
+models.go
+queries.sql.go
+sqlc.yaml
+full_schema.sql
+full_policy.csv

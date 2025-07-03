@@ -2,9 +2,19 @@ package ldap
 
 import (
 	"fmt"
+
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
 )
+
+type LDAPClient interface {
+	CreateGroup(groupName, gidNumber string, memberUids []string) error
+	AddUserToGroup(groupName, memberUid string) error
+	CreateUser(uid, cn, sn, sshPublicKey, uidNumber string) error
+	AddSSHPublicKey(uid, publicKey string) error
+	GetUserInfo(uid string) (*ldap.Entry, error)
+	GetGroupInfo(groupName string) (*ldap.Entry, error)
+}
 
 type Client struct {
 	Conn   *ldap.Conn
@@ -24,8 +34,10 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to bind LDAP: %w", err)
 	}
 
+	client := &Client{Conn: conn, Config: cfg, Logger: logger}
+
 	logger.Info("LDAP connection established and bound successfully")
-	return &Client{Conn: conn, Config: cfg, Logger: logger}, nil
+	return client, nil
 }
 
 func (c *Client) Close() {

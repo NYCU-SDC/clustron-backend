@@ -2,7 +2,7 @@ package auth
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/auth/oauthProvider"
+	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
@@ -23,6 +23,7 @@ import (
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type JWTIssuer interface {
@@ -31,9 +32,13 @@ type JWTIssuer interface {
 	GenerateRefreshToken(ctx context.Context, user jwt.User) (jwt.RefreshToken, error)
 }
 
+type JWTStore interface {
+	InactivateRefreshTokensByUserID(ctx context.Context, userID uuid.UUID) error
+}
+
 type UserStore interface {
 	Create(ctx context.Context, email string, studentID string) (user.User, error)
-	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	ExistsByIdentifier(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
 	FindOrCreate(ctx context.Context, email string, studentID string) (user.User, error)
 }
@@ -46,7 +51,7 @@ type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
-	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthProvider.UserInfo, error)
+	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfo, error)
 }
 
 type callBackInfo struct {
@@ -66,6 +71,7 @@ type Handler struct {
 
 	userStore    UserStore
 	jwtIssuer    JWTIssuer
+	jwtStore     JWTStore
 	settingStore SettingStore
 	provider     map[string]OAuthProvider
 }
@@ -77,14 +83,15 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
+	jwtStore JWTStore,
 	settingStore SettingStore) *Handler {
 
-	googleProvider := oauthProvider.NewGoogleConfig(
+	googleProvider := oauthprovider.NewGoogleConfig(
 		config.GoogleOauthClientID,
 		config.GoogleOauthClientSecret,
 		fmt.Sprintf("%s/api/oauth/google/callback", config.BaseURL))
 
-	nycuProvider := oauthProvider.NewNYCUConfig(
+	nycuProvider := oauthprovider.NewNYCUConfig(
 		config.NYCUOauthClientID,
 		config.NYCUOauthClientSecret,
 		fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
@@ -99,6 +106,7 @@ func NewHandler(
 
 		userStore:    userStore,
 		jwtIssuer:    jwtIssuer,
+		jwtStore:     jwtStore,
 		settingStore: settingStore,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
@@ -268,6 +276,7 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
 		return callBackInfo{}, err
 	}
 
+	// Clear the query parameters from the callback URL, due to "?" symbol in original URL
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
 
@@ -277,5 +286,46 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
 		callback:   *callback,
 		redirectTo: redirectTo,
 	}, nil
+}
 
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Logout")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	jwtUser, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Invalidate the refresh token associated with the user
+	err = h.jwtStore.InactivateRefreshTokensByUserID(traceCtx, jwtUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Clean the client side cookie
+	accessTokenCookie := &http.Cookie{
+		Name:     "accessToken",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	}
+	refreshTokenCookie := &http.Cookie{
+		Name:     "refreshToken",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, accessTokenCookie)
+	http.SetCookie(w, refreshTokenCookie)
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }

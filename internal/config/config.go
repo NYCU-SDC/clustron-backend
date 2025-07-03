@@ -1,32 +1,47 @@
 package config
 
 import (
+	"clustron-backend/internal/ldap"
+	"clustron-backend/internal/user/role"
 	"errors"
 	"flag"
+	"os"
+
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-	"os"
 )
 
 const DefaultSecret = "default-secret"
 
-var ErrDatabaseURLRequired = errors.New("database_url is required")
+var (
+	ErrDatabaseURLRequired = errors.New("database_url is required")
+	ErrInvalidUserRole     = errors.New("invalid user role")
+)
+
+type PresetUserInfo struct {
+	Role string `yaml:"role"`
+}
 
 type Config struct {
-	Debug                   bool   `yaml:"debug"              envconfig:"DEBUG"`
-	Host                    string `yaml:"host"               envconfig:"HOST"`
-	Port                    string `yaml:"port"               envconfig:"PORT"`
-	BaseURL                 string `yaml:"base_url"          envconfig:"BASE_URL"`
-	Secret                  string `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL             string `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource         string `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	OtelCollectorUrl        string `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	GoogleOauthClientID     string `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
-	GoogleOauthClientSecret string `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
-	NYCUOauthClientID       string `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
-	NYCUOauthClientSecret   string `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	Debug                   bool                      `yaml:"debug"              envconfig:"DEBUG"`
+	Host                    string                    `yaml:"host"               envconfig:"HOST"`
+	Port                    string                    `yaml:"port"               envconfig:"PORT"`
+	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
+	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
+	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
+	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	NYCUOauthClientID       string                    `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
+	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
+	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
+	LDAP                    ldap.Config               `yaml:"ldap"`
 }
 
 type LogBuffer struct {
@@ -66,6 +81,12 @@ func (c *Config) Validate() error {
 		return ErrDatabaseURLRequired
 	}
 
+	for _, user := range c.PresetUser {
+		if !role.IsValidGlobalRole(user.Role) {
+			return ErrInvalidUserRole
+		}
+	}
+
 	return nil
 }
 
@@ -79,6 +100,8 @@ func Load() (Config, *LogBuffer) {
 		Secret:                  DefaultSecret,
 		DatabaseURL:             "",
 		MigrationSource:         "file://internal/database/migrations",
+		CasbinPolicySource:      "internal/casbin/full_policy.csv",
+		CasbinModelSource:       "internal/casbin/model.conf",
 		OtelCollectorUrl:        "",
 		GoogleOauthClientID:     "",
 		GoogleOauthClientSecret: "",
@@ -141,6 +164,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		Secret:                  os.Getenv("SECRET"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
+		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
+		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
 		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
 		GoogleOauthClientID:     os.Getenv("OAUTH_CLIENT_ID"),
 		GoogleOauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
@@ -161,6 +186,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
+	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")
+	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")

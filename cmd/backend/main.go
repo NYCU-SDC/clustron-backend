@@ -3,17 +3,29 @@ package main
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/auth"
+	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
+	"clustron-backend/internal/cors"
 	"clustron-backend/internal/group"
+	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/ldap"
+	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
-	"github.com/NYCU-SDC/summer/pkg/log"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/middleware"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5"
@@ -27,12 +39,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 var AppName = "no-app-name"
@@ -69,6 +75,11 @@ func main() {
 			message := "Please set the DATABASE_URL environment variable or provide a config file with the database_url key."
 			message = EarlyApplicationFailed(title, message)
 			log.Fatal(message)
+		} else if errors.Is(err, config.ErrInvalidUserRole) {
+			title := "Invalid user role"
+			message := "Please check the user role in the config file, it should be one of the following: admin, user, or guest."
+			message = EarlyApplicationFailed(title, message)
+			log.Fatal(message)
 		} else {
 			log.Fatalf("Failed to validate config: %v, exiting...", err)
 		}
@@ -101,6 +112,11 @@ func main() {
 	}
 	defer dbPool.Close()
 
+	ldapClient, err := ldap.NewClient(&cfg.LDAP, logger)
+	if err != nil {
+		logger.Fatal("Failed to initialize LDAP client", zap.Error(err))
+	}
+
 	shutdown, err := initOpenTelemetry(AppName, Version, BuildTime, CommitHash, cfg.OtelCollectorUrl)
 	if err != nil {
 		logger.Fatal("Failed to initialize OpenTelemetry", zap.Error(err))
@@ -110,52 +126,88 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 
 	// Service
-	userService := user.NewService(logger, dbPool)
+	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
-	settingService := setting.NewService(logger, dbPool)
-	groupService := group.NewService(logger, dbPool)
+	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
+	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
+	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
-	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, groupService)
+	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
+	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
+	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 
-	// Basic Middleware
+	// Components
+	enforcer := casbin.NewEnforcer(logger, cfg)
+
+	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
-	recovered := middleware.NewSet(traceMiddleware.RecoverMiddleware)
-	traced := recovered.Append(traceMiddleware.TraceMiddleWare)
-
-	// Auth Middleware
+	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
-	authMiddleware := traced.Append(jwtMiddleware.HandlerFunc)
+	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
+
+	// Basic Middleware (Tracing and Recover)
+	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
+	basicMiddleware = basicMiddleware.Append(traceMiddleware.TraceMiddleWare)
+
+	// Auth Middleware (JWT and Role filtering)
+	authMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
+	authMiddleware = authMiddleware.Append(traceMiddleware.TraceMiddleWare)
+	authMiddleware = authMiddleware.Append(jwtMiddleware.HandlerFunc)
+	authMiddleware = authMiddleware.Append(roleMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/login/oauth/{provider}", traced.HandlerFunc(authHandler.Oauth2Start))
-	mux.HandleFunc("GET /api/oauth/{provider}/callback", traced.HandlerFunc(authHandler.Callback))
-	mux.HandleFunc("GET /api/oauth/debug/token", traced.HandlerFunc(authHandler.DebugToken))
-	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", traced.HandlerFunc(jwtHandler.RefreshToken))
 
+	// Auth
+	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
+	mux.HandleFunc("GET /api/oauth/{provider}/callback", basicMiddleware.HandlerFunc(authHandler.Callback))
+	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
+	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
+
+	// Settings
+	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+
+	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
 	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
+	// Roles
+	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))
+	mux.HandleFunc("POST /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.CreateHandler))
+	mux.HandleFunc("PUT /api/roles/{role_id}", authMiddleware.HandlerFunc(groupRoleHandler.UpdateHandler))
+	mux.HandleFunc("DELETE /api/roles/{role_id}", authMiddleware.HandlerFunc(groupRoleHandler.DeleteHandler))
+
+	// Groups
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
 
+	// Members
+	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.ListGroupMembersPagedHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.AddGroupMemberHandler))
+	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.RemoveGroupMemberHandler))
+	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.UpdateGroupMemberHandler))
+
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// CORS Middleware
+	entrypoint := corsMiddleware.HandlerFunc(mux.ServeHTTP)
+
 	srv := &http.Server{
 		Addr:    cfg.Host + ":" + cfg.Port,
-		Handler: mux,
+		Handler: entrypoint,
 	}
 
 	go func() {

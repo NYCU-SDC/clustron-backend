@@ -5,10 +5,10 @@ SELECT COUNT(*) FROM groups;
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
 -- name: ListAscPaged :many
-SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @page;
+SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @Skip;
 
 -- name: ListDescPaged :many
-SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @page;
+SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberAscPaged :many
 SELECT
@@ -23,7 +23,7 @@ JOIN
 WHERE
     m.user_id = $1
 ORDER BY
-    @SortBy::text ASC LIMIT @Size OFFSET @page;
+    @SortBy::text ASC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberDescPaged :many
 SELECT
@@ -38,9 +38,9 @@ JOIN
 WHERE
     m.user_id = $1
 ORDER BY
-    @SortBy::text DESC LIMIT @Size OFFSET @page;
+    @SortBy::text DESC LIMIT @Size OFFSET @Skip;
 
--- name: Get :one
+-- name: GetByID :one
 SELECT * FROM groups WHERE id = $1;
 
 -- name: GetIfMember :one
@@ -48,6 +48,9 @@ SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.u
 
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
+
+-- name: CreateWithID :one
+INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING *;
 
 -- name: Update :one
 UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
@@ -71,7 +74,7 @@ JOIN
 WHERE
     user_id = $1;
 
--- name: GetMembershipsByUser :one
+-- name: GetMembershipByUser :one
 SELECT
     m.group_id,
     m.role_id,
@@ -84,8 +87,8 @@ JOIN
 WHERE
     user_id = $1 AND group_id = $2;
 
--- name: GetUserGroupRole :one
-SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHERE m.user_id = $1 AND m.group_id = $2;
+-- name: ListGidNumbers :many
+SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;
 
--- name: GetGroupRoleByID :one
-SELECT * FROM group_role WHERE id = $1;
+-- name: UpdateGidNumber :exec
+UPDATE groups SET gid_number = $2 WHERE id = $1;

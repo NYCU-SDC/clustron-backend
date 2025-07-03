@@ -12,18 +12,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addPublicKey = `-- name: AddPublicKey :one
+const createPublicKey = `-- name: CreatePublicKey :one
 INSERT INTO public_keys (user_id, title, public_key) VALUES ($1, $2, $3) RETURNING id, user_id, title, public_key
 `
 
-type AddPublicKeyParams struct {
+type CreatePublicKeyParams struct {
 	UserID    uuid.UUID
 	Title     string
 	PublicKey string
 }
 
-func (q *Queries) AddPublicKey(ctx context.Context, arg AddPublicKeyParams) (PublicKey, error) {
-	row := q.db.QueryRow(ctx, addPublicKey, arg.UserID, arg.Title, arg.PublicKey)
+func (q *Queries) CreatePublicKey(ctx context.Context, arg CreatePublicKeyParams) (PublicKey, error) {
+	row := q.db.QueryRow(ctx, createPublicKey, arg.UserID, arg.Title, arg.PublicKey)
 	var i PublicKey
 	err := row.Scan(
 		&i.ID,
@@ -57,6 +57,28 @@ DELETE FROM public_keys WHERE id = $1
 func (q *Queries) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deletePublicKey, id)
 	return err
+}
+
+const existByLinuxUsername = `-- name: ExistByLinuxUsername :one
+SELECT EXISTS (SELECT 1 FROM settings WHERE linux_username = $1) AS exists
+`
+
+func (q *Queries) ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, existByLinuxUsername, linuxUsername)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const existByUserID = `-- name: ExistByUserID :one
+SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists
+`
+
+func (q *Queries) ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, existByUserID, userID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getPublicKey = `-- name: GetPublicKey :one
@@ -113,17 +135,6 @@ func (q *Queries) GetSetting(ctx context.Context, userID uuid.UUID) (Setting, er
 	var i Setting
 	err := row.Scan(&i.UserID, &i.FullName, &i.LinuxUsername)
 	return i, err
-}
-
-const settingExists = `-- name: SettingExists :one
-SELECT EXISTS (SELECT 1 FROM settings WHERE user_id = $1) AS exists
-`
-
-func (q *Queries) SettingExists(ctx context.Context, userID uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, settingExists, userID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const updateSetting = `-- name: UpdateSetting :one
