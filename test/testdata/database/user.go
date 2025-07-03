@@ -14,12 +14,11 @@ import (
 )
 
 type UserFactoryParams struct {
-	ID         uuid.UUID
-	FullName   string
-	Email      string
-	Role       role.GlobalRole
-	Department string
-	StudentID  string
+	ID        uuid.UUID
+	FullName  string
+	Email     string
+	Role      role.GlobalRole
+	StudentID string
 }
 
 type UserOption func(*UserFactoryParams)
@@ -96,7 +95,7 @@ func (b UserBuilder) Create(opts ...UserOption) user.User {
 
 	_, err = settingQueries.CreateSetting(context.Background(), setting.CreateSettingParams{
 		UserID:   userRow.ID,
-		Username: pgtype.Text{String: p.FullName, Valid: true},
+		FullName: pgtype.Text{String: p.FullName, Valid: true},
 	})
 	require.NoError(b.t, err)
 

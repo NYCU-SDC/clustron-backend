@@ -2,7 +2,7 @@
 SELECT
     m.group_id,
     m.user_id,
-    s.username,
+    s.full_name,
     u.email,
     u.student_id,
     m.role_id,
@@ -20,7 +20,7 @@ LIMIT @Size OFFSET @Skip;
 SELECT
     m.group_id,
     m.user_id,
-    s.username,
+    s.full_name,
     u.email,
     u.student_id,
     m.role_id,
