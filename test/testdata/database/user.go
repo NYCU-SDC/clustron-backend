@@ -14,12 +14,11 @@ import (
 )
 
 type UserFactoryParams struct {
-	ID         uuid.UUID
-	FullName   string
-	Email      string
-	Role       role.GlobalRole
-	Department string
-	StudentID  string
+	ID        uuid.UUID
+	FullName  string
+	Email     string
+	Role      role.GlobalRole
+	StudentID string
 }
 
 type UserOption func(*UserFactoryParams)
