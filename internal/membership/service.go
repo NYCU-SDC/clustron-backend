@@ -223,11 +223,19 @@ func (s *Service) JoinPending(ctx context.Context, params CreateOrUpdatePendingP
 		return PendingMemberResponse{}, err
 	}
 
+	// get role information
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, pendingMember.RoleID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return PendingMemberResponse{}, err
+	}
+
 	return PendingMemberResponse{
 		ID:             pendingMember.ID,
 		UserIdentifier: pendingMember.UserIdentifier,
 		GroupID:        pendingMember.GroupID,
-		RoleID:         pendingMember.RoleID,
+		Role:           grouprole.Role(roleInfo),
 	}, nil
 }
 
@@ -572,4 +580,194 @@ func (s *Service) hasGroupControlAccess(ctx context.Context, groupId uuid.UUID) 
 
 func (s *Service) isGroupOwner(role grouprole.GroupRole) bool {
 	return role.AccessLevel == string(grouprole.AccessLevelOwner)
+}
+
+func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListPendingWithPaged")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return nil, handlerutil.ErrForbidden
+	}
+
+	var pendingMembers []PendingMemberResponse
+	if sort == "desc" {
+		params := ListPendingMembersDescPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Skip:    int32(page) * int32(size),
+		}
+		res, err := s.queries.ListPendingMembersDescPaged(traceCtx, params)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "failed to list pending group members")
+			span.RecordError(err)
+			return nil, err
+		}
+		pendingMembers = make([]PendingMemberResponse, len(res))
+		for i, member := range res {
+			pendingMembers[i] = PendingMemberResponse{
+				ID:             member.ID,
+				UserIdentifier: member.UserIdentifier,
+				GroupID:        member.GroupID,
+				Role: grouprole.Role{
+					ID:          member.RoleID,
+					Role:        member.Role,
+					AccessLevel: member.AccessLevel,
+				},
+			}
+		}
+	} else {
+		params := ListPendingMembersAscPagedParams{
+			GroupID: groupId,
+			Sortby:  sortBy,
+			Size:    int32(size),
+			Skip:    int32(page) * int32(size),
+		}
+		res, err := s.queries.ListPendingMembersAscPaged(traceCtx, params)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "failed to list pending group members")
+			span.RecordError(err)
+			return nil, err
+		}
+		pendingMembers = make([]PendingMemberResponse, len(res))
+		for i, member := range res {
+			pendingMembers[i] = PendingMemberResponse{
+				ID:             member.ID,
+				UserIdentifier: member.UserIdentifier,
+				GroupID:        member.GroupID,
+				Role: grouprole.Role{
+					ID:          member.RoleID,
+					Role:        member.Role,
+					AccessLevel: member.AccessLevel,
+				},
+			}
+		}
+	}
+
+	return pendingMembers, nil
+}
+
+func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingId uuid.UUID, role uuid.UUID) (PendingMemberResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdatePending")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the role is group owner (it should never be allowed to update to group owner)
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return PendingMemberResponse{}, err
+	}
+	isOwner := s.isGroupOwner(roleInfo)
+	if isOwner {
+		logger.Warn("Group role is owner, you cannot update to group owner")
+		return PendingMemberResponse{}, handlerutil.ErrForbidden
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return PendingMemberResponse{}, handlerutil.ErrForbidden
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, groupId, role) {
+		logger.Warn("The user's access is not allowed to update this pending member")
+		return PendingMemberResponse{}, handlerutil.ErrForbidden
+	}
+
+	// Get the pending member to verify it belongs to the correct group
+	pendingMember, err := s.queries.GetPendingByID(traceCtx, pendingId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "pending_memberships", "id", pendingId.String(), logger, "failed to get pending member")
+		span.RecordError(err)
+		return PendingMemberResponse{}, err
+	}
+
+	if pendingMember.GroupID != groupId {
+		logger.Warn("Pending member does not belong to the specified group")
+		return PendingMemberResponse{}, handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
+	}
+
+	updatedPending, err := s.queries.UpdatePendingByID(ctx, UpdatePendingByIDParams{
+		RoleID: role,
+		ID:     pendingId,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return PendingMemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"pending_memberships",
+			"id",
+			pendingId.String(),
+			logger,
+			"failed to update pending membership",
+		)
+	}
+
+	return PendingMemberResponse{
+		ID:             updatedPending.ID,
+		UserIdentifier: updatedPending.UserIdentifier,
+		GroupID:        updatedPending.GroupID,
+		Role:           grouprole.Role(roleInfo),
+	}, nil
+}
+
+func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingId uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "RemovePending")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return handlerutil.ErrForbidden
+	}
+
+	// Get the pending member to verify it belongs to the correct group and check permissions
+	pendingMember, err := s.queries.GetPendingByID(traceCtx, pendingId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "pending_memberships", "id", pendingId.String(), logger, "failed to get pending member")
+		span.RecordError(err)
+		return err
+	}
+
+	if pendingMember.GroupID != groupId {
+		logger.Warn("Pending member does not belong to the specified group")
+		return handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, groupId, pendingMember.RoleID) {
+		logger.Warn("The user's access is not allowed to remove this pending member")
+		return handlerutil.ErrForbidden
+	}
+
+	err = s.queries.DeletePendingByID(traceCtx, pendingId)
+	if err != nil {
+		span.RecordError(err)
+		return databaseutil.WrapDBErrorWithKeyValue(err, "pending_memberships", "id", pendingId.String(), logger, "failed to remove pending member")
+	}
+
+	return nil
+}
+
+func (s *Service) CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CountPendingByGroupID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	count, err := s.queries.CountPendingByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "pending_memberships", "group_id", groupID.String(), logger, "count pending memberships by group id")
+		span.RecordError(err)
+		return 0, err
+	}
+
+	return count, nil
 }

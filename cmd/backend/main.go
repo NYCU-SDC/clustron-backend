@@ -197,6 +197,9 @@ func main() {
 	mux.HandleFunc("POST /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.AddGroupMemberHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.RemoveGroupMemberHandler))
 	mux.HandleFunc("PUT /api/groups/{group_id}/members/{user_id}", authMiddleware.HandlerFunc(memberHandler.UpdateGroupMemberHandler))
+	mux.HandleFunc("GET /api/groups/{group_id}/pendingMembers", authMiddleware.HandlerFunc(memberHandler.ListPendingMembersPagedHandler))
+	mux.HandleFunc("DELETE /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.RemovePendingMemberHandler))
+	mux.HandleFunc("PUT /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.UpdatePendingMemberHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

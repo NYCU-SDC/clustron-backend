@@ -91,6 +91,60 @@ SET role_id = $1
 WHERE group_id = $2 AND user_identifier = $3
 RETURNING *;
 
+-- name: ListPendingMembersDescPaged :many
+SELECT
+    pm.id,
+    pm.user_identifier,
+    pm.group_id,
+    pm.role_id,
+    gr.role,
+    gr.access_level
+FROM pending_memberships AS pm
+JOIN group_role AS gr ON gr.id = pm.role_id
+WHERE pm.group_id = $1
+ORDER BY @SortBy::text DESC
+LIMIT @Size OFFSET @Skip;
+
+-- name: ListPendingMembersAscPaged :many
+SELECT
+    pm.id,
+    pm.user_identifier,
+    pm.group_id,
+    pm.role_id,
+    gr.role,
+    gr.access_level
+FROM pending_memberships AS pm
+JOIN group_role AS gr ON gr.id = pm.role_id
+WHERE pm.group_id = $1
+ORDER BY @SortBy::text ASC
+LIMIT @Size OFFSET @Skip;
+
+-- name: CountPendingByGroupID :one
+SELECT COUNT(*) FROM pending_memberships
+WHERE group_id = $1;
+
+-- name: GetPendingByID :one
+SELECT
+    pm.id,
+    pm.user_identifier,
+    pm.group_id,
+    pm.role_id,
+    gr.role,
+    gr.access_level
+FROM pending_memberships AS pm
+JOIN group_role AS gr ON gr.id = pm.role_id
+WHERE pm.id = $1;
+
+-- name: UpdatePendingByID :one
+UPDATE pending_memberships
+SET role_id = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: DeletePendingByID :exec
+DELETE FROM pending_memberships
+WHERE id = $1;
+
 -- name: CreateOrUpdate :one
 INSERT INTO memberships (group_id, user_id, role_id)
 VALUES ($1, $2, $3)

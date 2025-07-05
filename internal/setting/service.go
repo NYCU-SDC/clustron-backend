@@ -198,7 +198,6 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 		}
 		logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
 		logger.Info("public keys", zap.Any("publicKeys", publicKeys))
-
 	}
 
 	return addedPublicKey, nil
@@ -209,7 +208,32 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.query.DeletePublicKey(ctx, id)
+	publicKey, err := s.GetPublicKeyByID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "get public key by id")
+		span.RecordError(err)
+		return err
+	}
+
+	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
+		span.RecordError(err)
+		return err
+	}
+
+	// check if the user LDAP user exists, if exists, delete the public key to the user
+	user, err := s.ldapClient.GetUserInfo(settings.LinuxUsername.String)
+	if err != nil {
+		logger.Warn("get user by id failed", zap.Error(err))
+	} else if user != nil {
+		err = s.ldapClient.DeleteSSHPublicKey(settings.LinuxUsername.String, publicKey.PublicKey)
+		if err != nil {
+			logger.Warn("delete the public key from LDAP user failed", zap.Error(err))
+		}
+	}
+
+	err = s.query.DeletePublicKey(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
 		span.RecordError(err)

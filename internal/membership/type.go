@@ -2,6 +2,7 @@ package membership
 
 import (
 	"clustron-backend/internal/grouprole"
+
 	"github.com/google/uuid"
 )
 
@@ -14,10 +15,10 @@ type MemberResponse struct {
 }
 
 type PendingMemberResponse struct {
-	ID             uuid.UUID `json:"id"`
-	UserIdentifier string    `json:"userIdentifier"`
-	GroupID        uuid.UUID `json:"groupId"`
-	RoleID         uuid.UUID `json:"roleId"`
+	ID             uuid.UUID      `json:"id"`
+	UserIdentifier string         `json:"userIdentifier"`
+	GroupID        uuid.UUID      `json:"groupId"`
+	Role           grouprole.Role `json:"role"`
 }
 
 type JoinResult interface {
