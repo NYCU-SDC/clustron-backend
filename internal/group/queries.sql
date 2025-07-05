@@ -5,10 +5,10 @@ SELECT COUNT(*) FROM groups;
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
 -- name: ListAscPaged :many
-SELECT * FROM groups ORDER BY @SortBy::text ASC LIMIT @Size OFFSET @Skip;
+SELECT * FROM groups ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
 
 -- name: ListDescPaged :many
-SELECT * FROM groups ORDER BY @SortBy::text DESC LIMIT @Size OFFSET @Skip;
+SELECT * FROM groups ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberAscPaged :many
 SELECT
@@ -23,7 +23,7 @@ JOIN
 WHERE
     m.user_id = $1
 ORDER BY
-    @SortBy::text ASC LIMIT @Size OFFSET @Skip;
+    g.created_at ASC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberDescPaged :many
 SELECT
@@ -38,7 +38,7 @@ JOIN
 WHERE
     m.user_id = $1
 ORDER BY
-    @SortBy::text DESC LIMIT @Size OFFSET @Skip;
+    g.created_at DESC LIMIT @Size OFFSET @Skip;
 
 -- name: GetByID :one
 SELECT * FROM groups WHERE id = $1;

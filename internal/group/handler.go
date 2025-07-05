@@ -101,6 +101,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	pageRequest, err := h.paginationFactory.GetRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	// verify the role to determine how much data to return
