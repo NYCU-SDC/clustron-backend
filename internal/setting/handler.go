@@ -27,12 +27,12 @@ type OnboardingRequest struct {
 }
 
 type UpdateSettingRequest struct {
-	Username      string `json:"username" validate:"required"`
+	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
 }
 
 type BasicSettingResponse struct {
-	Username      string `json:"username"`
+	FullName      string `json:"fullName"`
 	LinuxUsername string `json:"linuxUsername"`
 }
 
@@ -59,7 +59,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
 
@@ -146,7 +146,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := BasicSettingResponse{
-		Username:      setting.Username.String,
+		FullName:      setting.FullName.String,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -183,7 +183,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	if oldSetting.LinuxUsername.String != "" {
 		setting = Setting{
 			UserID:        user.ID,
-			Username:      pgtype.Text{String: request.Username, Valid: true},
+			FullName:      pgtype.Text{String: request.FullName, Valid: true},
 			LinuxUsername: oldSetting.LinuxUsername,
 		}
 	} else {
@@ -196,7 +196,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		}
 		setting = Setting{
 			UserID:        user.ID,
-			Username:      pgtype.Text{String: request.Username, Valid: true},
+			FullName:      pgtype.Text{String: request.FullName, Valid: true},
 			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
 		}
 	}
@@ -208,7 +208,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := BasicSettingResponse{
-		Username:      updatedSetting.Username.String,
+		FullName:      updatedSetting.FullName.String,
 		LinuxUsername: updatedSetting.LinuxUsername.String,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

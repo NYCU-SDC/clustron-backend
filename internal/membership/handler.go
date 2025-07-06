@@ -23,6 +23,10 @@ type Store interface {
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
 	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
+	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error)
+	UpdatePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID, role uuid.UUID) (PendingMemberResponse, error)
+	RemovePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID) error
+	CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
 }
 
 //go:generate mockery --name=UserService
@@ -58,9 +62,10 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 	tracer        trace.Tracer
 
-	store             Store
-	userService       UserService
-	paginationFactory pagination.Factory[Response]
+	store                    Store
+	userService              UserService
+	paginationFactory        pagination.Factory[Response]
+	pendingPaginationFactory pagination.Factory[PendingMemberResponse]
 }
 
 func NewHandler(
@@ -71,13 +76,14 @@ func NewHandler(
 	userService UserService,
 ) *Handler {
 	return &Handler{
-		logger:            logger,
-		validator:         validator,
-		problemWriter:     problemWriter,
-		tracer:            otel.Tracer("member/handler"),
-		store:             store,
-		userService:       userService,
-		paginationFactory: pagination.NewFactory[Response](200, []string{"id"}),
+		logger:                   logger,
+		validator:                validator,
+		problemWriter:            problemWriter,
+		tracer:                   otel.Tracer("member/handler"),
+		store:                    store,
+		userService:              userService,
+		paginationFactory:        pagination.NewFactory[Response](200, []string{"id"}),
+		pendingPaginationFactory: pagination.NewFactory[PendingMemberResponse](200, []string{"id"}),
 	}
 }
 
@@ -222,4 +228,105 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 
 	pageResponse := h.paginationFactory.NewResponse(members, int(totalCount), pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
+}
+
+func (h *Handler) ListPendingMembersPagedHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListPendingMembersPagedHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "ListPendingMembersPagedHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	pageRequest, err := h.pendingPaginationFactory.GetRequest(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	pendingMembers, err := h.store.ListPendingWithPaged(
+		traceCtx,
+		groupUUID,
+		pageRequest.Page,
+		pageRequest.Size,
+		pageRequest.Sort,
+		pageRequest.SortBy,
+	)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	totalCount, err := h.store.CountPendingByGroupID(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	pageResponse := h.pendingPaginationFactory.NewResponse(pendingMembers, int(totalCount), pageRequest.Page, pageRequest.Size)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
+}
+
+func (h *Handler) UpdatePendingMemberHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdatePendingMemberHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdatePendingMemberHandler"))
+
+	groupID := r.PathValue("group_id")
+	pendingID := r.PathValue("pending_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	pendingUUID, err := uuid.Parse(pendingID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req UpdateMemberRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	pendingMember, err := h.store.UpdatePending(traceCtx, groupUUID, pendingUUID, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, pendingMember)
+}
+
+func (h *Handler) RemovePendingMemberHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "RemovePendingMemberHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "RemovePendingMemberHandler"))
+
+	groupID := r.PathValue("group_id")
+	pendingID := r.PathValue("pending_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	pendingUUID, err := uuid.Parse(pendingID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.RemovePending(traceCtx, groupUUID, pendingUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }

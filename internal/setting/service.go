@@ -38,7 +38,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient lda
 	}
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, username pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -53,7 +53,7 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	// update user's setting
 	_, err := s.UpdateSetting(traceCtx, userID, Setting{
 		UserID:        userID,
-		Username:      username,
+		FullName:      fullName,
 		LinuxUsername: linuxUsername,
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Set
 	return setting, nil
 }
 
-func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, username pgtype.Text) (Setting, error) {
+func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (Setting, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -100,7 +100,7 @@ func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, use
 
 	var setting Setting
 	if !exist {
-		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, Username: username})
+		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, FullName: fullName})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "create setting")
 			span.RecordError(err)
@@ -198,7 +198,6 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 		}
 		logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
 		logger.Info("public keys", zap.Any("publicKeys", publicKeys))
-
 	}
 
 	return addedPublicKey, nil
@@ -209,7 +208,32 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.query.DeletePublicKey(ctx, id)
+	publicKey, err := s.GetPublicKeyByID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "get public key by id")
+		span.RecordError(err)
+		return err
+	}
+
+	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
+		span.RecordError(err)
+		return err
+	}
+
+	// check if the user LDAP user exists, if exists, delete the public key to the user
+	user, err := s.ldapClient.GetUserInfo(settings.LinuxUsername.String)
+	if err != nil {
+		logger.Warn("get user by id failed", zap.Error(err))
+	} else if user != nil {
+		err = s.ldapClient.DeleteSSHPublicKey(settings.LinuxUsername.String, publicKey.PublicKey)
+		if err != nil {
+			logger.Warn("delete the public key from LDAP user failed", zap.Error(err))
+		}
+	}
+
+	err = s.query.DeletePublicKey(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
 		span.RecordError(err)
