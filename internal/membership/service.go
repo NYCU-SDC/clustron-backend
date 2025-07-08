@@ -798,8 +798,7 @@ func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUI
 		}
 
 		// Remove the pending membership after successful join
-		// TODO: change to reomovePending after pending membership is merged
-		err = s.queries.DeletePendingByID(traceCtx, pending.ID)
+		err = s.RemovePending(ctx, pending.GroupID, pending.RoleID)
 		if err != nil {
 			logger.Warn("failed to delete pending membership after join",
 				zap.String("pendingID", pending.ID.String()),
