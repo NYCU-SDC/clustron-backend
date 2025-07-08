@@ -46,7 +46,7 @@ func (s *Service) SetMembershipService(membershipService MembershipService) {
 	s.membershipService = membershipService
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, username pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
