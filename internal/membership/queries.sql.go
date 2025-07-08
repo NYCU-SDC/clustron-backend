@@ -277,11 +277,65 @@ func (q *Queries) GetPendingByIdentifier(ctx context.Context, arg GetPendingById
 	return i, err
 }
 
+const getPendingByUserIdentifier = `-- name: GetPendingByUserIdentifier :many
+SELECT
+    pm.id,
+    pm.user_identifier,
+    pm.group_id,
+    pm.role_id,
+    gr.role,
+    gr.access_level
+FROM pending_memberships AS pm
+JOIN group_role AS gr ON gr.id = pm.role_id
+WHERE pm.user_identifier = $1 OR pm.user_identifier = $2
+`
+
+type GetPendingByUserIdentifierParams struct {
+	Email     string
+	StudentID string
+}
+
+type GetPendingByUserIdentifierRow struct {
+	ID             uuid.UUID
+	UserIdentifier string
+	GroupID        uuid.UUID
+	RoleID         uuid.UUID
+	Role           string
+	AccessLevel    string
+}
+
+func (q *Queries) GetPendingByUserIdentifier(ctx context.Context, arg GetPendingByUserIdentifierParams) ([]GetPendingByUserIdentifierRow, error) {
+	rows, err := q.db.Query(ctx, getPendingByUserIdentifier, arg.Email, arg.StudentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPendingByUserIdentifierRow
+	for rows.Next() {
+		var i GetPendingByUserIdentifierRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserIdentifier,
+			&i.GroupID,
+			&i.RoleID,
+			&i.Role,
+			&i.AccessLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAscPaged = `-- name: ListAscPaged :many
 SELECT
     m.group_id,
     m.user_id,
-    s.username,
+    s.full_name,
     u.email,
     u.student_id,
     m.role_id,
@@ -306,7 +360,7 @@ type ListAscPagedParams struct {
 type ListAscPagedRow struct {
 	GroupID     uuid.UUID
 	UserID      uuid.UUID
-	Username    pgtype.Text
+	FullName    pgtype.Text
 	Email       string
 	StudentID   pgtype.Text
 	RoleID      uuid.UUID
@@ -331,7 +385,7 @@ func (q *Queries) ListAscPaged(ctx context.Context, arg ListAscPagedParams) ([]L
 		if err := rows.Scan(
 			&i.GroupID,
 			&i.UserID,
-			&i.Username,
+			&i.FullName,
 			&i.Email,
 			&i.StudentID,
 			&i.RoleID,
@@ -352,7 +406,7 @@ const listDescPaged = `-- name: ListDescPaged :many
 SELECT
     m.group_id,
     m.user_id,
-    s.username,
+    s.full_name,
     u.email,
     u.student_id,
     m.role_id,
@@ -377,7 +431,7 @@ type ListDescPagedParams struct {
 type ListDescPagedRow struct {
 	GroupID     uuid.UUID
 	UserID      uuid.UUID
-	Username    pgtype.Text
+	FullName    pgtype.Text
 	Email       string
 	StudentID   pgtype.Text
 	RoleID      uuid.UUID
@@ -402,7 +456,7 @@ func (q *Queries) ListDescPaged(ctx context.Context, arg ListDescPagedParams) ([
 		if err := rows.Scan(
 			&i.GroupID,
 			&i.UserID,
-			&i.Username,
+			&i.FullName,
 			&i.Email,
 			&i.StudentID,
 			&i.RoleID,

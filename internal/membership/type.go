@@ -17,7 +17,6 @@ type MemberResponse struct {
 type PendingMemberResponse struct {
 	ID             uuid.UUID      `json:"id"`
 	UserIdentifier string         `json:"userIdentifier"`
-	GroupID        uuid.UUID      `json:"groupId"`
 	Role           grouprole.Role `json:"role"`
 }
 
