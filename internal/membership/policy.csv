@@ -2,3 +2,7 @@ p, user, /api/groups/:groupId/members, GET
 p, user, /api/groups/:groupId/members, POST
 p, user, /api/groups/:groupId/members/:memberId, PUT
 p, user, /api/groups/:groupId/members/:memberId, DELETE
+
+p, user, /api/groups/:groupId/pendingMembers, GET
+p, user, /api/groups/:groupId/pendingMembers/:pendingId, PUT
+p, user, /api/groups/:groupId/pendingMembers/:pendingId, DELETE

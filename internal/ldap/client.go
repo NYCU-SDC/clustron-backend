@@ -12,6 +12,7 @@ type LDAPClient interface {
 	AddUserToGroup(groupName, memberUid string) error
 	CreateUser(uid, cn, sn, sshPublicKey, uidNumber string) error
 	AddSSHPublicKey(uid, publicKey string) error
+	DeleteSSHPublicKey(uid string, publicKey string) error
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	GetGroupInfo(groupName string) (*ldap.Entry, error)
 }
