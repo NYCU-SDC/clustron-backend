@@ -234,7 +234,6 @@ func (s *Service) JoinPending(ctx context.Context, params CreateOrUpdatePendingP
 	return PendingMemberResponse{
 		ID:             pendingMember.ID,
 		UserIdentifier: pendingMember.UserIdentifier,
-		GroupID:        pendingMember.GroupID,
 		Role:           grouprole.Role(roleInfo),
 	}, nil
 }
@@ -582,7 +581,6 @@ func (s *Service) isGroupOwner(role grouprole.GroupRole) bool {
 	return role.AccessLevel == string(grouprole.AccessLevelOwner)
 }
 
-
 func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListPendingWithPaged")
 	defer span.End()
@@ -613,7 +611,6 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 			pendingMembers[i] = PendingMemberResponse{
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
-				GroupID:        member.GroupID,
 				Role: grouprole.Role{
 					ID:          member.RoleID,
 					Role:        member.Role,
@@ -639,7 +636,6 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 			pendingMembers[i] = PendingMemberResponse{
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
-				GroupID:        member.GroupID,
 				Role: grouprole.Role{
 					ID:          member.RoleID,
 					Role:        member.Role,
@@ -714,7 +710,6 @@ func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingI
 	return PendingMemberResponse{
 		ID:             updatedPending.ID,
 		UserIdentifier: updatedPending.UserIdentifier,
-		GroupID:        updatedPending.GroupID,
 		Role:           grouprole.Role(roleInfo),
 	}, nil
 }
@@ -773,7 +768,6 @@ func (s *Service) CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) 
 	return count, nil
 }
 
-
 func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error {
 	traceCtx, span := s.tracer.Start(ctx, "ProcessPendingMemberships")
 	defer span.End()
@@ -821,4 +815,3 @@ func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUI
 
 	return nil
 }
-
