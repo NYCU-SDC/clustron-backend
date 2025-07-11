@@ -24,7 +24,7 @@ func (b GroupRoleBuilder) Queries() *grouprole.Queries {
 
 func (b GroupRoleBuilder) Create(role, accessLevel string) (grouprole.GroupRole, error) {
 	params := grouprole.CreateParams{
-		Role:        role,
+		RoleName:    role,
 		AccessLevel: accessLevel,
 	}
 
