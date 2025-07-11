@@ -180,7 +180,7 @@ SELECT
     m.user_id,
     m.group_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM
     memberships AS m
@@ -199,7 +199,7 @@ type GetByUserRow struct {
 	UserID      uuid.UUID
 	GroupID     uuid.UUID
 	RoleID      uuid.UUID
-	Role        string
+	RoleName    string
 	AccessLevel string
 }
 
@@ -210,7 +210,7 @@ func (q *Queries) GetByUser(ctx context.Context, arg GetByUserParams) (GetByUser
 		&i.UserID,
 		&i.GroupID,
 		&i.RoleID,
-		&i.Role,
+		&i.RoleName,
 		&i.AccessLevel,
 	)
 	return i, err
@@ -222,7 +222,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
@@ -234,7 +234,7 @@ type GetPendingByIDRow struct {
 	UserIdentifier string
 	GroupID        uuid.UUID
 	RoleID         uuid.UUID
-	Role           string
+	RoleName       string
 	AccessLevel    string
 }
 
@@ -246,7 +246,7 @@ func (q *Queries) GetPendingByID(ctx context.Context, id uuid.UUID) (GetPendingB
 		&i.UserIdentifier,
 		&i.GroupID,
 		&i.RoleID,
-		&i.Role,
+		&i.RoleName,
 		&i.AccessLevel,
 	)
 	return i, err
@@ -285,7 +285,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -310,7 +310,7 @@ type ListAscPagedRow struct {
 	Email       string
 	StudentID   pgtype.Text
 	RoleID      uuid.UUID
-	Role        string
+	RoleName    string
 	AccessLevel string
 }
 
@@ -335,7 +335,7 @@ func (q *Queries) ListAscPaged(ctx context.Context, arg ListAscPagedParams) ([]L
 			&i.Email,
 			&i.StudentID,
 			&i.RoleID,
-			&i.Role,
+			&i.RoleName,
 			&i.AccessLevel,
 		); err != nil {
 			return nil, err
@@ -356,7 +356,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -381,7 +381,7 @@ type ListDescPagedRow struct {
 	Email       string
 	StudentID   pgtype.Text
 	RoleID      uuid.UUID
-	Role        string
+	RoleName    string
 	AccessLevel string
 }
 
@@ -406,7 +406,7 @@ func (q *Queries) ListDescPaged(ctx context.Context, arg ListDescPagedParams) ([
 			&i.Email,
 			&i.StudentID,
 			&i.RoleID,
-			&i.Role,
+			&i.RoleName,
 			&i.AccessLevel,
 		); err != nil {
 			return nil, err
@@ -425,7 +425,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
@@ -446,7 +446,7 @@ type ListPendingMembersAscPagedRow struct {
 	UserIdentifier string
 	GroupID        uuid.UUID
 	RoleID         uuid.UUID
-	Role           string
+	RoleName       string
 	AccessLevel    string
 }
 
@@ -469,7 +469,7 @@ func (q *Queries) ListPendingMembersAscPaged(ctx context.Context, arg ListPendin
 			&i.UserIdentifier,
 			&i.GroupID,
 			&i.RoleID,
-			&i.Role,
+			&i.RoleName,
 			&i.AccessLevel,
 		); err != nil {
 			return nil, err
@@ -488,7 +488,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
@@ -509,7 +509,7 @@ type ListPendingMembersDescPagedRow struct {
 	UserIdentifier string
 	GroupID        uuid.UUID
 	RoleID         uuid.UUID
-	Role           string
+	RoleName       string
 	AccessLevel    string
 }
 
@@ -532,7 +532,7 @@ func (q *Queries) ListPendingMembersDescPaged(ctx context.Context, arg ListPendi
 			&i.UserIdentifier,
 			&i.GroupID,
 			&i.RoleID,
-			&i.Role,
+			&i.RoleName,
 			&i.AccessLevel,
 		); err != nil {
 			return nil, err

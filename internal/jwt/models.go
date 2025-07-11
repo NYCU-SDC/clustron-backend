@@ -21,7 +21,7 @@ type Group struct {
 
 type GroupRole struct {
 	ID          uuid.UUID
-	Role        string
+	RoleName    string
 	AccessLevel string
 }
 
