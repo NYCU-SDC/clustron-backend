@@ -91,10 +91,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdRole, err := h.store.Create(traceCtx, CreateParams{
-		RoleName:    req.RoleName,
-		AccessLevel: req.AccessLevel,
-	})
+	createdRole, err := h.store.Create(traceCtx, CreateParams(req))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
