@@ -22,9 +22,6 @@ type Store interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-type Response struct {
-}
-
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
@@ -47,6 +44,16 @@ func NewHandler(
 		tracer:        otel.Tracer("grouprole/handler"),
 		store:         store,
 	}
+}
+
+type CreateRequest struct {
+	RoleName    string `json:"roleName" validate:"required"`
+	AccessLevel string `json:"accessLevel" validate:"required,oneof=GROUP_OWNER GROUP_ADMIN USER"`
+}
+
+type UpdateRequest struct {
+	RoleName    string `json:"roleName" validate:"required"`
+	AccessLevel string `json:"accessLevel" validate:"required,oneof=GROUP_OWNER GROUP_ADMIN USER"`
 }
 
 func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,20 +84,29 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	var req CreateParams
+	var req CreateRequest
 	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	createdRole, err := h.store.Create(traceCtx, req)
+	createdRole, err := h.store.Create(traceCtx, CreateParams{
+		RoleName:    req.RoleName,
+		AccessLevel: req.AccessLevel,
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, createdRole)
+	createdRoleResponse := RoleResponse{
+		ID:          createdRole.ID.String(),
+		RoleName:    createdRole.RoleName,
+		AccessLevel: createdRole.AccessLevel,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, createdRoleResponse)
 }
 
 func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,16 +125,18 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req UpdateParams
+	var req UpdateRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	req.ID = roleID
-
-	updatedRole, err := h.store.Update(traceCtx, req)
+	updatedRole, err := h.store.Update(traceCtx, UpdateParams{
+		ID:          roleID,
+		RoleName:    req.RoleName,
+		AccessLevel: req.AccessLevel,
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
