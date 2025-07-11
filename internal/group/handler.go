@@ -249,7 +249,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	groupResponse.Me.Type = "membership"
 	groupResponse.Me.Role = grouprole.RoleResponse{
 		ID:          roleOwner.ID.String(),
-		RoleName:    roleOwner.Role,
+		RoleName:    roleOwner.RoleName,
 		AccessLevel: roleOwner.AccessLevel,
 	}
 
@@ -311,7 +311,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	if roleType == "membership" {
 		groupResponse.Me.Role = grouprole.RoleResponse{
 			ID:          role.ID.String(),
-			RoleName:    role.Role,
+			RoleName:    role.RoleName,
 			AccessLevel: role.AccessLevel,
 		}
 	}
@@ -374,7 +374,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	if roleType == "membership" {
 		groupResponse.Me.Role = grouprole.RoleResponse{
 			ID:          role.ID.String(),
-			RoleName:    role.Role,
+			RoleName:    role.RoleName,
 			AccessLevel: role.AccessLevel,
 		}
 	}
