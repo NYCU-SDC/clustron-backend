@@ -47,12 +47,12 @@ func NewHandler(
 }
 
 type CreateRequest struct {
-	RoleName    string `json:"roleName" validate:"required"`
+	RoleName    string `json:"role" validate:"required"`
 	AccessLevel string `json:"accessLevel" validate:"required,oneof=GROUP_OWNER GROUP_ADMIN USER"`
 }
 
 type UpdateRequest struct {
-	RoleName    string `json:"roleName" validate:"required"`
+	RoleName    string `json:"role" validate:"required"`
 	AccessLevel string `json:"accessLevel" validate:"required,oneof=GROUP_OWNER GROUP_ADMIN USER"`
 }
 
