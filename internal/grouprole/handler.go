@@ -60,7 +60,16 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, roles)
+	rolesResponse := make([]RoleResponse, len(roles))
+	for i, role := range roles {
+		rolesResponse[i] = RoleResponse{
+			ID:          role.ID.String(),
+			RoleName:    role.RoleName,
+			AccessLevel: role.AccessLevel,
+		}
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, rolesResponse)
 }
 
 func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
