@@ -206,7 +206,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		GoogleOauthClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
-		AllowOrigins:            strings.Split(os.Getenv("ALLOW_ORIGINS"), " "),
+		AllowOrigins:            strings.Split(os.Getenv("ALLOW_ORIGINS"), ","),
 		LDAP: ldap.Config{
 			Debug:       os.Getenv("LDAP_DEBUG") == "true",
 			LDAPHost:    os.Getenv("LDAP_HOST"),
