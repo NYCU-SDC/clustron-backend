@@ -17,6 +17,13 @@ services:
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.dev.clustron.sdc.nycu.club
       - MIGRATION_SOURCE=file://app/migrations
+      - ALLOW_ORIGINS=*
+      - LDAP_DEBUG=true
+      - LDAP_HOST=localhost
+      - LDAP_PORT=389
+      - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_PWD=password
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
