@@ -3,9 +3,12 @@ package config
 import (
 	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/user/role"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
+	"strings"
 
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
 	"github.com/joho/godotenv"
@@ -52,6 +55,11 @@ type logEntry struct {
 	msg  string
 	err  error
 	meta map[string]string
+}
+
+type PresetUserJson struct {
+	User string `json:"user"`
+	Role string `json:"role"`
 }
 
 func NewConfigLogger() *LogBuffer {
@@ -156,6 +164,33 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		}
 	}
 
+	// parse the preset user config from environment variable
+	var res []PresetUserJson
+	config.PresetUser = make(map[string]PresetUserInfo)
+
+	presetUserString := os.Getenv("PRESET_USER") // encode with base64
+
+	if presetUserString != "" {
+		decodeString, err := base64.StdEncoding.DecodeString(presetUserString)
+		if err != nil {
+			logger.Warn("Failed to decode PRESET_USER", err, map[string]string{"preset_user": presetUserString})
+			return config, err
+		}
+		err = json.Unmarshal(decodeString, &res)
+		if err != nil {
+			logger.Warn("Failed to unmarshal PRESET_USER", err, map[string]string{"preset_user": presetUserString})
+			return config, err
+		}
+
+		for _, user := range res {
+			if !role.IsValidGlobalRole(user.Role) {
+				logger.Warn("Invalid user role in PRESET_USER", ErrInvalidUserRole, map[string]string{"user": user.User, "role": user.Role})
+				return config, ErrInvalidUserRole
+			}
+			config.PresetUser[user.User] = PresetUserInfo{Role: user.Role}
+		}
+	}
+
 	envConfig := &Config{
 		Debug:                   os.Getenv("DEBUG") == "true",
 		Host:                    os.Getenv("HOST"),
@@ -167,10 +202,19 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
 		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
 		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
-		GoogleOauthClientID:     os.Getenv("OAUTH_CLIENT_ID"),
-		GoogleOauthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
+		GoogleOauthClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		GoogleOauthClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
+		AllowOrigins:            strings.Split(os.Getenv("ALLOW_ORIGINS"), ","),
+		LDAP: ldap.Config{
+			Debug:       os.Getenv("LDAP_DEBUG") == "true",
+			LDAPHost:    os.Getenv("LDAP_HOST"),
+			LDAPPort:    os.Getenv("LDAP_PORT"),
+			LDAPBaseDN:  os.Getenv("LDAP_BASE_DN"),
+			LDAPBindDN:  os.Getenv("LDAP_BIND_DN"),
+			LDAPBindPwd: os.Getenv("LDAP_BIND_PWD"),
+		},
 	}
 
 	return configutil.Merge[Config](config, envConfig)
