@@ -8,6 +8,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ldap:
+        condition: service_healthy
     environment:
       HOST: "0.0.0.0"
       DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
@@ -51,8 +53,6 @@ services:
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
     command: --copy-service --loglevel debug
-    ports:
-      - "389:389"
     networks:
       - clustron_dev
 
