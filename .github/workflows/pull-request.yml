@@ -103,7 +103,6 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/arm64
           push: true
           tags: |
             nycusdc/clustron-backend:pr-${{ github.event.number }}
