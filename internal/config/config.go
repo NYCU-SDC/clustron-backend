@@ -174,13 +174,11 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		decodeString, err := base64.StdEncoding.DecodeString(presetUserString)
 		if err != nil {
 			logger.Warn("Failed to decode PRESET_USER", err, map[string]string{"preset_user": presetUserString})
-			println(err.Error())
 			return config, err
 		}
 		err = json.Unmarshal(decodeString, &res)
 		if err != nil {
 			logger.Warn("Failed to unmarshal PRESET_USER", err, map[string]string{"preset_user": presetUserString})
-			println(err.Error())
 			return config, err
 		}
 
