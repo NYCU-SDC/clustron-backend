@@ -11,9 +11,11 @@ services:
       ldap:
         condition: service_healthy
     environment:
-      HOST: "0.0.0.0"
-      DATABASE_URL: postgres://postgres:password@postgres:5432/clustron?sslmode=disable
-      MIGRATION_SOURCE: file:///app/migrations
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - NYCU_OAUTH_CLIENT_ID=${NYCU_OAUTH_CLIENT_ID}
+      - NYCU_OAUTH_CLIENT_SECRET=${NYCU_OAUTH_CLIENT_SECRET}
+      - SECRET=${SECRET}
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
