@@ -16,7 +16,7 @@ services:
       - SECRET=${SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.dev.clustron.sdc.nycu.club
-      - MIGRATION_SOURCE=file://app/migrations
+      - MIGRATION_SOURCE=file:///app/migrations
       - ALLOW_ORIGINS=*
       - LDAP_DEBUG=true
       - LDAP_HOST=localhost
