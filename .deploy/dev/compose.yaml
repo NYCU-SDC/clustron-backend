@@ -1,0 +1,62 @@
+services:
+  backend:
+    image: nycusdc/clustron-backend:dev
+    container_name: clustron-backend
+    networks:
+      - clustron_dev
+      - traefik
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
+      MIGRATION_SOURCE: file:///app/migrations
+    labels:
+      - "vector.enable=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.clustron-backend.rule=Host(`api.dev.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend.tls=true"
+      - "traefik.http.routers.clustron-backend.tls.certresolver=cloudflare"
+
+  postgres:
+    image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: clustron
+    networks:
+      - clustron_dev
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    healthcheck:
+      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      LDAP_ORGANISATION: "Clustron"
+      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
+      LDAP_ADMIN_PASSWORD: "password"
+      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      KEEP_EXISTING_CONFIG: "false"
+    volumes:
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service --loglevel debug
+    ports:
+      - "389:389"
+    networks:
+      - clustron_dev
+
+networks:
+  clustron_dev:
+  traefik:
+    external: true
