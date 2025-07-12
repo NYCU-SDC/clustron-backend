@@ -19,7 +19,7 @@ services:
       - MIGRATION_SOURCE=file:///app/migrations
       - ALLOW_ORIGINS=*
       - LDAP_DEBUG=true
-      - LDAP_HOST=localhost
+      - LDAP_HOST=ldap
       - LDAP_PORT=389
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
