@@ -110,12 +110,32 @@ jobs:
           context: .
 
   Deploy:
+    name: Deploy
     needs: Build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Deploy container to local
+      - name: Trigger n8n Snapshot Webhook
         run: |
-          ~/deploy.sh "Snapshot" "${{ github.event.number }}" "${{ github.event.pull_request.title }}"
+          curl --location --request POST 'https://webhook.eng.sdc.nycu.club/webhook/deploy' \
+            --header 'Content-Type: application/json' \
+            --header 'x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}' \
+              --data-raw '{
+            "source": {
+              "title": "Clustron",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.head_ref || github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "pr_number": "${{ github.event.number }}",
+              "pr_title": "${{ github.event.pull_request.title }}"
+            },
+            "method": "deploy",
+            "metadata": {
+              "environment": "snapshot"
+            },
+            "post": {
+              "notify_discord": {
+                "enable": true,
+                "channel": "clustron-activity"
+              }
+            }
+          }'
