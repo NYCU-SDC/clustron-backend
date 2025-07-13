@@ -33,6 +33,8 @@ services:
       - "traefik.http.routers.clustron-backend.entrypoints=websecure"
       - "traefik.http.routers.clustron-backend.tls=true"
       - "traefik.http.routers.clustron-backend.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend.loadbalancer.server.port=8080"
+
 
   postgres:
     image: postgres:latest
