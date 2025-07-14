@@ -1,2 +1,1 @@
-ALTER TABLE group_role
-DROP COLUMN role_name
+ALTER TABLE group_role RENAME COLUMN role_name TO role;

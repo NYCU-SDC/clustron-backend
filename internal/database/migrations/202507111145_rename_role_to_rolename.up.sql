@@ -1,3 +1,1 @@
-ALTER TABLE group_role
-ADD COLUMN role_name VARCHAR(50);
-UPDATE group_role SET role_name = role;
+ALTER TABLE group_role RENAME COLUMN role TO role_name;
