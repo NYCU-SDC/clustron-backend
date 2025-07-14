@@ -136,9 +136,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 }
 
 func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (grouprole.GroupRole, error) {
-	traceCtx, span := otel.Tracer("membership/service").Start(ctx, "GetRoleByUser")
+	traceCtx, span := s.tracer.Start(ctx, "GetByUser")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, zap.L())
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get user role
 	membership, err := s.queries.GetByUser(traceCtx, GetByUserParams{
@@ -156,6 +156,22 @@ func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.
 		Role:        membership.Role,
 		AccessLevel: membership.AccessLevel,
 	}, nil
+}
+
+func (s *Service) GetOwnerByGroupID(ctx context.Context, groupId uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetOwnerByGroupID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get group owner
+	membership, err := s.queries.GetOwnerByGroupID(traceCtx, groupId)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group members")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	return membership, nil
 }
 
 func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {

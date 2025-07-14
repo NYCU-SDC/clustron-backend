@@ -44,6 +44,7 @@ type SettingStore interface {
 
 type MembershipStore interface {
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
+	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
 	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
 }
 
@@ -574,7 +575,7 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 		span.RecordError(err)
 		return grouprole.UserScope{}, err
 	}
-	if membership.AccessLevel != grouprole.AccessLevelOwner.String() {
+	if membership.AccessLevel != grouprole.AccessLevelOwner.String() || user.Role != role.Admin.String() {
 		err = fmt.Errorf("user %s is not the owner of group %s", user.ID.String(), groupID.String())
 		logger.Error("transfer owner failed", zap.Error(err))
 		span.RecordError(err)
@@ -598,11 +599,19 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 		}
 	}
 
+	var oldOwnerID uuid.UUID
+	oldOwnerID, err = s.memberStore.GetOwnerByGroupID(traceCtx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "group_id", groupID.String(), logger, "get group owner")
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+
 	err = s.memberStore.UpdateRole(traceCtx, groupID, newOwnerID, uuid.MustParse(grouprole.RoleOwner.String()))
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}
-	err = s.memberStore.UpdateRole(traceCtx, groupID, user.ID, uuid.MustParse(grouprole.RoleStudent.String()))
+	err = s.memberStore.UpdateRole(traceCtx, groupID, oldOwnerID, uuid.MustParse(grouprole.RoleStudent.String()))
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}
