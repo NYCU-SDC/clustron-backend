@@ -8,7 +8,7 @@ import (
 
 type MemberResponse struct {
 	ID        uuid.UUID              `json:"id"`
-	Username  string                 `json:"username"`
+	FullName  string                 `json:"fullName"`
 	Email     string                 `json:"email"`
 	StudentID string                 `json:"studentId"`
 	Role      grouprole.RoleResponse `json:"role"`
