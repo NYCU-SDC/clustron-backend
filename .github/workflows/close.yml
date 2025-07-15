@@ -7,11 +7,16 @@ on:
 
 jobs:
   Close:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Close snapshot
+      - name: Trigger n8n Snapshot Webhook
         run: |
-          ~/deploy.sh "Close" "${{ github.event.number }}"
+          curl -X POST https://webhook.eng.sdc.nycu.club/webhook/snapshot \
+            -H "Content-Type: application/json" \
+            -d '{
+              "pr_number": "${{ github.event.number }}",
+              "pr_title": "${{ github.event.pull_request.title }}",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "method": "close"
+            }'

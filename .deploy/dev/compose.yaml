@@ -1,0 +1,78 @@
+services:
+  backend:
+    image: nycusdc/clustron-backend:dev
+    container_name: clustron-backend-dev
+    networks:
+      - clustron_dev
+      - traefik
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ldap:
+        condition: service_healthy
+    environment:
+      - HOST=0.0.0.0
+      - BASE_URL=https://api.dev.clustron.sdc.nycu.club
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - SECRET=${SECRET}
+      - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
+      - BASE_URL=https://api.dev.clustron.sdc.nycu.club
+      - MIGRATION_SOURCE=file:///app/migrations
+      - CASBIN_POLICY_SOURCE=policy.csv
+      - CASBIN_MODEL_SOURCE=model.conf
+      - ALLOW_ORIGINS=*
+      - LDAP_DEBUG=true
+      - LDAP_HOST=ldap
+      - LDAP_PORT=389
+      - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_PWD=password
+    labels:
+      - "vector.enable=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.clustron-backend.rule=Host(`api.dev.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend.tls=true"
+      - "traefik.http.routers.clustron-backend.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend.loadbalancer.server.port=8080"
+
+
+  postgres:
+    image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: clustron
+    networks:
+      - clustron_dev
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    healthcheck:
+      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      LDAP_ORGANISATION: "Clustron"
+      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
+      LDAP_ADMIN_PASSWORD: "password"
+      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      KEEP_EXISTING_CONFIG: "false"
+    volumes:
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service --loglevel debug
+    networks:
+      - clustron_dev
+
+networks:
+  clustron_dev:
+  traefik:
+    external: true
