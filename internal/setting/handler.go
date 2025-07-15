@@ -22,7 +22,7 @@ import (
 )
 
 type OnboardingRequest struct {
-	Username      string `json:"username" validate:"required"`
+	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
 }
 
@@ -116,7 +116,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
