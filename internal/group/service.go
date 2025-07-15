@@ -211,20 +211,20 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 
 	var groups []Group
 	var err error
-	if sort == "desc" {
-		params := ListDescPagedParams{
-			Sortby: sortBy,
-			Size:   int32(size),
-			Skip:   int32(page) * int32(size),
-		}
-		groups, err = s.queries.ListDescPaged(ctx, params)
-	} else {
+	if sort == "asc" {
+		logger.Info("list in asc, sortBy", zap.String("sortBy", sortBy))
 		params := ListAscPagedParams{
-			Sortby: sortBy,
-			Size:   int32(size),
-			Skip:   int32(page) * int32(size),
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		groups, err = s.queries.ListAscPaged(ctx, params)
+	} else {
+		logger.Info("list in desc, sortBy", zap.String("sortBy", sortBy))
+		params := ListDescPagedParams{
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
+		}
+		groups, err = s.queries.ListDescPaged(ctx, params)
 	}
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get groups")
@@ -281,14 +281,13 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if sort == "desc" {
-		params := ListIfMemberDescPagedParams{
+	if sort == "asc" {
+		params := ListIfMemberAscPagedParams{
 			UserID: userID,
-			Sortby: sortBy,
 			Size:   int32(size),
 			Skip:   int32(page) * int32(size),
 		}
-		res, err := s.queries.ListIfMemberDescPaged(ctx, params)
+		res, err := s.queries.ListIfMemberAscPaged(ctx, params)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
 			span.RecordError(err)
@@ -314,13 +313,12 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 		}
 		return groups, roles, nil
 	} else {
-		params := ListIfMemberAscPagedParams{
+		params := ListIfMemberDescPagedParams{
 			UserID: userID,
-			Sortby: sortBy,
 			Size:   int32(size),
 			Skip:   int32(page) * int32(size),
 		}
-		res, err := s.queries.ListIfMemberAscPaged(ctx, params)
+		res, err := s.queries.ListIfMemberDescPaged(ctx, params)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
 			span.RecordError(err)
