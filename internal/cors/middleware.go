@@ -12,6 +12,7 @@ type Middleware struct {
 }
 
 func NewMiddleware(logger *zap.Logger, allowOrigins []string) Middleware {
+	logger.Info("CORS middleware initialized", zap.Strings("allow_origins", allowOrigins))
 	return Middleware{
 		logger:       logger,
 		allowOrigins: allowOrigins,
