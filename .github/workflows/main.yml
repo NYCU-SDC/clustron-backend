@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - ci/create-deploy-script-n8n-flow
 
 jobs:
   Lint:
