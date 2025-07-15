@@ -20,6 +20,8 @@ github.com/NYCU-SDC/summer v0.0.0-20250525125733-427342db230e h1:bkl29lqQfBSJEZp
 github.com/NYCU-SDC/summer v0.0.0-20250525125733-427342db230e/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1 h1:qw1zXBvga7vtWm0C33ULYZ1gzgHzocZkRZ4cM4mC7JQ=
 github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
+github.com/NYCU-SDC/summer v0.0.0-20250706143253-c5b26ed73f11 h1:zTNa11rnPluksn8UBKPbMCGSwzoaRFvX/INp1hA5U5Y=
+github.com/NYCU-SDC/summer v0.0.0-20250706143253-c5b26ed73f11/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=
