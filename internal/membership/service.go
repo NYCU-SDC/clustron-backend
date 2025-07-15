@@ -96,9 +96,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				Username:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -123,9 +123,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 				Username:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -235,7 +235,11 @@ func (s *Service) JoinPending(ctx context.Context, params CreateOrUpdatePendingP
 		ID:             pendingMember.ID,
 		UserIdentifier: pendingMember.UserIdentifier,
 		GroupID:        pendingMember.GroupID,
-		Role:           grouprole.Role(roleInfo),
+		Role: grouprole.RoleResponse{
+			ID:          roleInfo.ID.String(),
+			RoleName:    roleInfo.RoleName,
+			AccessLevel: roleInfo.AccessLevel,
+		},
 	}, nil
 }
 
@@ -343,7 +347,11 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		Username:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.RoleResponse{
+			ID:          roleResponse.ID.String(),
+			RoleName:    roleResponse.RoleName,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 
@@ -489,7 +497,11 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		Username:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.RoleResponse{
+			ID:          roleResponse.ID.String(),
+			RoleName:    roleResponse.RoleName,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 
@@ -613,9 +625,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
 				GroupID:        member.GroupID,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -639,9 +651,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
 				GroupID:        member.GroupID,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -714,7 +726,11 @@ func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingI
 		ID:             updatedPending.ID,
 		UserIdentifier: updatedPending.UserIdentifier,
 		GroupID:        updatedPending.GroupID,
-		Role:           grouprole.Role(roleInfo),
+		Role: grouprole.RoleResponse{
+			ID:          roleInfo.ID.String(),
+			RoleName:    roleInfo.RoleName,
+			AccessLevel: roleInfo.AccessLevel,
+		},
 	}, nil
 }
 
