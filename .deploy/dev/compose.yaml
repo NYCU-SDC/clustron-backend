@@ -12,6 +12,7 @@ services:
         condition: service_healthy
     environment:
       - HOST=0.0.0.0
+      - BASE_URL=https://api.dev.clustron.sdc.nycu.club
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - SECRET=${SECRET}
