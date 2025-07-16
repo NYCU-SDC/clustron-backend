@@ -129,14 +129,14 @@ jobs:
             },
             "method": "deploy",
             "metadata": {
-              "environment": "staging",
+              "environment": "stage",
               "component": "backend"
             },
             "setup": {
               "inject_secret": {
                 "enable": true,
                 "project": "clustron",
-                "environment": "stage",
+                "environment": "staging",
                 "secrets": [
                   {
                     "path": "/google-oauth",
