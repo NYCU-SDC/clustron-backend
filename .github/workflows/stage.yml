@@ -129,7 +129,7 @@ jobs:
             },
             "method": "deploy",
             "metadata": {
-              "environment": "stage",
+              "environment": "staging",
               "component": "backend"
             },
             "setup": {
