@@ -31,11 +31,11 @@ services:
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.clustron-backend.rule=Host(`api.dev.clustron.sdc.nycu.club`)"
-      - "traefik.http.routers.clustron-backend.entrypoints=websecure"
-      - "traefik.http.routers.clustron-backend.tls=true"
-      - "traefik.http.routers.clustron-backend.tls.certresolver=cloudflare"
-      - "traefik.http.services.clustron-backend.loadbalancer.server.port=8080"
+      - "traefik.http.routers.clustron-backend-dev.rule=Host(`api.dev.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend-dev.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend-dev.tls=true"
+      - "traefik.http.routers.clustron-backend-dev.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend-dev.loadbalancer.server.port=8080"
 
 
   postgres:
