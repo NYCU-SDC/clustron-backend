@@ -38,6 +38,7 @@ services:
 
   postgres:
     image: postgres:latest
+    container_name: clustron-db-stage
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -51,6 +52,7 @@ services:
       - clustron_stage
 
   ldap:
+    container_name: clustron-ldap-stage
     image: osixia/openldap:1.5.0
     healthcheck:
       test: ["CMD", "cat", "/run/slapd/slapd.pid"]
