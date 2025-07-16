@@ -112,10 +112,11 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var results JoinMemberResponse
-	results.Errors = make([]JoinMemberErrorResponse, 0)
-	successCount := 0
-	failureCount := 0
+	results := JoinMemberResponse{
+		AddedSuccessNumber: 0,
+		AddedFailureNumber: 0,
+		Errors:             []JoinMemberErrorResponse{},
+	}
 	for _, m := range request.Members {
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
@@ -124,7 +125,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		_, err = h.store.Add(traceCtx, groupUUID, m.Member, m.Role)
 		// Errors happened during adding members, add it the error list
 		if err != nil {
-			failureCount++
+			results.AddedFailureNumber++
 			results.Errors = append(results.Errors, JoinMemberErrorResponse{
 				Member:  m.Member,
 				Role:    m.Role.String(),
@@ -133,14 +134,14 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		// If adding member is successful, increase the success count
-		successCount++
+		results.AddedSuccessNumber++
 	}
 
-	if successCount > 0 {
+	if results.AddedSuccessNumber > 0 {
 		handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
 		return
 	}
-	if failureCount > 0 {
+	if results.AddedFailureNumber > 0 {
 		handlerutil.WriteJSONResponse(w, http.StatusInternalServerError, results)
 		return
 	}

@@ -231,10 +231,11 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Add other members
-	var results membership.JoinMemberResponse
-	results.Errors = make([]membership.JoinMemberErrorResponse, 0)
-	successCount := 0
-	failureCount := 0
+	results := membership.JoinMemberResponse{
+		AddedSuccessNumber: 0,
+		AddedFailureNumber: 0,
+		Errors:             []membership.JoinMemberErrorResponse{},
+	}
 	for _, m := range request.Members {
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
@@ -242,7 +243,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		_, err = h.memberStore.Add(traceCtx, group.ID, m.Member, m.Role)
 		if err != nil {
-			failureCount++
+			results.AddedFailureNumber++
 			results.Errors = append(results.Errors, membership.JoinMemberErrorResponse{
 				Member:  m.Member,
 				Role:    m.Role.String(),
@@ -251,7 +252,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// If adding member is successful, increase the success count
-		successCount++
+		results.AddedSuccessNumber++
 	}
 
 	groupResponse := CreateResponse{
