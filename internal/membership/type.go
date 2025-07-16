@@ -39,3 +39,15 @@ func (m MemberResponse) JoinType() JoinMemberResponseType {
 func (p PendingMemberResponse) JoinType() JoinMemberResponseType {
 	return JoinMemberResponseTypePending
 }
+
+type JoinMemberErrorResponse struct {
+	Member  string `json:"member"`
+	Role    string `json:"role"`
+	Message string `json:"message"`
+}
+
+type JoinMemberResponse struct {
+	AddedSuccessNumber int64                     `json:"addedSuccessNumber"`
+	AddedFailureNumber int64                     `json:"addedFailureNumber"`
+	Errors             []JoinMemberErrorResponse `json:"errors"`
+}
