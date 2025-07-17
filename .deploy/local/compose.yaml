@@ -1,5 +1,6 @@
 services:
   postgres:
+    container_name: clustron-db
     image: postgres:latest
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
@@ -14,6 +15,7 @@ services:
       - "5432:5432"
 
   ldap:
+    container_name: clustron-ldap
     image: osixia/openldap:1.5.0
     healthcheck:
       test: ["CMD", "cat", "/run/slapd/slapd.pid"]
