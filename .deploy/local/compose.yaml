@@ -32,3 +32,5 @@ services:
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
     command: --copy-service --loglevel debug
+    ports:
+      - "389:389"
