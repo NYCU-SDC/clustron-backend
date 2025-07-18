@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS links (
     group_id UUID REFERENCES groups(id) NOT NULL,
     title VARCHAR(255) NOT NULL,
     url TEXT NOT NULL
-)
+);
