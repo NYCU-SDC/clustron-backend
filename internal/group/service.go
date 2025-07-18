@@ -231,11 +231,12 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 	return groups, nil
 }
 
-func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error) {
+func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListByIDWithUserScope")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// Get group by ID
 	var group Group
 	var err error
 	if user.Role != role.Admin.String() {
@@ -246,28 +247,52 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
 		span.RecordError(err)
-		return grouprole.UserScope{}, err
+		return WithLinks{}, err
 	}
 
+	// Get link by group ID
+	links, err := s.queries.ListLinksByGroup(traceCtx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "group_id", groupID.String(), logger, "Get group links")
+		span.RecordError(err)
+		return WithLinks{}, err
+	}
+
+	// Get user role in the group
 	roleResponse, roleType, err := s.roleStore.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
 		span.RecordError(err)
-		return grouprole.UserScope{}, err
+		return WithLinks{}, err
 	}
 
-	response := grouprole.UserScope{
-		Group: grouprole.Group{
-			ID:          group.ID,
-			Title:       group.Title,
-			Description: group.Description,
-			IsArchived:  group.IsArchived,
-			CreatedAt:   group.CreatedAt,
-			UpdatedAt:   group.UpdatedAt,
+	response := WithLinks{
+		// Basic user scope with group information
+		UserScope: grouprole.UserScope{
+			Group: grouprole.Group{
+				ID:          group.ID,
+				Title:       group.Title,
+				Description: group.Description,
+				IsArchived:  group.IsArchived,
+				CreatedAt:   group.CreatedAt,
+				UpdatedAt:   group.UpdatedAt,
+			},
 		},
 	}
+
+	// Set the user's role and type in the response
 	response.Me.Type = roleType
 	response.Me.Role = grouprole.Role(roleResponse)
+
+	// Convert links to the response format
+	response.Links = make([]Link, len(links))
+	for i, link := range links {
+		response.Links[i] = Link{
+			ID:    link.ID,
+			Title: link.Title,
+			Url:   link.Url,
+		}
+	}
 
 	return response, nil
 }
