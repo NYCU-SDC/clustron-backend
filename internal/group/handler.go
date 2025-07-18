@@ -30,13 +30,24 @@ type MemberStore interface {
 //go:generate mockery --name=Store
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
-	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error)
+	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
 	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
+}
+
+type LinkResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Url   string `json:"url"`
+}
+
+type CreateLinkRequest struct {
+	Title string `json:"title" validate:"required"`
+	Url   string `json:"url" validate:"required,url"`
 }
 
 type Response struct {
@@ -52,10 +63,16 @@ type Response struct {
 	} `json:"me"`
 }
 
+type WithLinksResponse struct {
+	Response
+	Links []LinkResponse `json:"links"`
+}
+
 type CreateRequest struct {
 	Title       string                        `json:"title" validate:"required"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
+	Links       []CreateLinkRequest           `json:"links"`
 }
 
 type Handler struct {
@@ -165,16 +182,31 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groupResponse := Response{
-		ID:          userScopeResponse.ID.String(),
-		Title:       userScopeResponse.Title,
-		Description: userScopeResponse.Description.String,
-		IsArchived:  userScopeResponse.IsArchived.Bool,
-		CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	groupResponse := WithLinksResponse{
+		// Basic group information
+		Response: Response{
+			ID:          userScopeResponse.ID.String(),
+			Title:       userScopeResponse.Title,
+			Description: userScopeResponse.Description.String,
+			IsArchived:  userScopeResponse.IsArchived.Bool,
+			CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		},
 	}
+
+	// User-specific information
 	groupResponse.Me.Type = userScopeResponse.Me.Type
 	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
+
+	// Links resources of the group
+	groupResponse.Links = make([]LinkResponse, len(userScopeResponse.Links))
+	for i, link := range userScopeResponse.Links {
+		groupResponse.Links[i] = LinkResponse{
+			ID:    link.ID.String(),
+			Title: link.Title,
+			Url:   link.Url,
+		}
+	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
