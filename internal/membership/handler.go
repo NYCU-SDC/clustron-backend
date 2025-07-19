@@ -112,21 +112,39 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var results []JoinResult
-	// TODO: adding errorList to return all the errors in adding members
+	results := JoinMemberResponse{
+		AddedSuccessNumber: 0,
+		AddedFailureNumber: 0,
+		Errors:             []JoinMemberErrorResponse{},
+	}
 	for _, m := range request.Members {
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
 		}
-		member, err := h.store.Add(traceCtx, groupUUID, m.Member, m.Role)
+
+		_, err = h.store.Add(traceCtx, groupUUID, m.Member, m.Role)
+		// Errors happened during adding members, add it the error list
 		if err != nil {
-			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			results.AddedFailureNumber++
+			results.Errors = append(results.Errors, JoinMemberErrorResponse{
+				Member:  m.Member,
+				Role:    m.Role.String(),
+				Message: err.Error(),
+			})
 			continue
 		}
-		results = append(results, member)
+		// If adding member is successful, increase the success count
+		results.AddedSuccessNumber++
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
+	if results.AddedSuccessNumber > 0 {
+		handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
+		return
+	}
+	if results.AddedFailureNumber > 0 {
+		handlerutil.WriteJSONResponse(w, http.StatusInternalServerError, results)
+		return
+	}
 }
 
 func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
