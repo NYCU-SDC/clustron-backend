@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 	"strings"
 
@@ -739,12 +740,6 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
-		logger.Warn("The user's access is not allowed to control this group")
-		return handlerutil.ErrForbidden
-	}
-
 	// Get the pending member to verify it belongs to the correct group and check permissions
 	pendingMember, err := s.queries.GetPendingByID(traceCtx, pendingId)
 	if err != nil {
@@ -758,10 +753,26 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 		return handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
 	}
 
-	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, groupId, pendingMember.RoleID) {
-		logger.Warn("The user's access is not allowed to remove this pending member")
-		return handlerutil.ErrForbidden
+	// check if the user is the pending member (process pending membership after onboarding)
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		logger.Error("failed to get user from context", zap.Error(err))
+		return err
+	}
+
+	// Check if the user is a pending member who is allowed to remove themselves after onboarding
+	if jwtUser.Email != pendingMember.UserIdentifier && jwtUser.StudentID.String != pendingMember.UserIdentifier {
+		// check if the user has access to the group (group owner or group admin)
+		if !s.hasGroupControlAccess(traceCtx, groupId) {
+			logger.Warn("The user's access is not allowed to control this group")
+			return handlerutil.ErrForbidden
+		}
+
+		// check if the user's access_level is bigger than the target access_level
+		if !s.canAssignRole(traceCtx, groupId, pendingMember.RoleID) {
+			logger.Warn("The user's access is not allowed to remove this pending member")
+			return handlerutil.ErrForbidden
+		}
 	}
 
 	err = s.queries.DeletePendingByID(traceCtx, pendingId)
@@ -786,4 +797,51 @@ func (s *Service) CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) 
 	}
 
 	return count, nil
+}
+
+func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessPendingMemberships")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get all pending memberships for this user identifier
+	pendingMemberships, err := s.queries.GetPendingByUserIdentifier(traceCtx, GetPendingByUserIdentifierParams{
+		Email:     email,
+		StudentID: studentID,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		err = databaseutil.WrapDBError(err, logger, "failed to get pending memberships")
+		span.RecordError(err)
+		return err
+	}
+
+	// Process each pending membership
+	for _, pending := range pendingMemberships {
+		// Add user to group with the specified role
+		_, err := s.Join(traceCtx, userID, pending.GroupID, pending.RoleID)
+		if err != nil {
+			logger.Warn("failed to join user to group from pending membership",
+				zap.String("email", email),
+				zap.String("studentID", studentID),
+				zap.String("groupID", pending.GroupID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Remove the pending membership after successful join
+		err = s.RemovePending(ctx, pending.GroupID, pending.ID)
+		if err != nil {
+			logger.Warn("failed to delete pending membership after join",
+				zap.String("pendingID", pending.ID.String()),
+				zap.Error(err))
+		}
+
+		logger.Info("successfully processed pending membership",
+			zap.String("email", email),
+			zap.String("studentID", studentID),
+			zap.String("groupID", pending.GroupID.String()),
+			zap.String("role", pending.RoleName))
+	}
+
+	return nil
 }
