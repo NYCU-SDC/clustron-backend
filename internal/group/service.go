@@ -29,6 +29,10 @@ type RoleStore interface {
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 }
 
+type MembershipStore interface {
+	HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool
+}
+
 type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
@@ -43,24 +47,26 @@ type SettingStore interface {
 }
 
 type Service struct {
-	logger       *zap.Logger
-	tracer       trace.Tracer
-	queries      *Queries
-	userStore    UserStore
-	roleStore    RoleStore
-	settingStore SettingStore
-	ldapClient   ldap.LDAPClient
+	logger          *zap.Logger
+	tracer          trace.Tracer
+	queries         *Queries
+	userStore       UserStore
+	membershipStore MembershipStore
+	roleStore       RoleStore
+	settingStore    SettingStore
+	ldapClient      ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, membershipStore MembershipStore, settingStore SettingStore, roleStore RoleStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
-		logger:       logger,
-		tracer:       otel.Tracer("group/service"),
-		queries:      New(db),
-		userStore:    userStore,
-		roleStore:    roleStore,
-		settingStore: settingStore,
-		ldapClient:   ldapClient,
+		logger:          logger,
+		tracer:          otel.Tracer("group/service"),
+		queries:         New(db),
+		userStore:       userStore,
+		membershipStore: membershipStore,
+		roleStore:       roleStore,
+		settingStore:    settingStore,
+		ldapClient:      ldapClient,
 	}
 }
 
@@ -611,11 +617,12 @@ func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title strin
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
 		logger.Warn("The user's access is not allowed to control this group")
-		return nil, handlerutil.ErrForbidden
+		return Link{}, handlerutil.ErrForbidden
 	}
 
+	// create the link
 	newLink, err := s.queries.CreateLink(traceCtx, CreateLinkParams{
 		GroupID: groupID,
 		Title:   title,
@@ -630,11 +637,18 @@ func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title strin
 	return newLink, nil
 }
 
-func (s *Service) UpdateLink(ctx context.Context, linkID uuid.UUID, title string, Url string) (Link, error) {
+func (s *Service) UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateLink")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// check if the user has access to the group (group owner or group admin)
+	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return Link{}, handlerutil.ErrForbidden
+	}
+
+	// update the link
 	updatedLink, err := s.queries.UpdateLink(traceCtx, UpdateLinkParams{
 		ID:    linkID,
 		Title: title,
@@ -649,11 +663,18 @@ func (s *Service) UpdateLink(ctx context.Context, linkID uuid.UUID, title string
 	return updatedLink, nil
 }
 
-func (s *Service) DeleteLink(ctx context.Context, linkID uuid.UUID) error {
+func (s *Service) DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "DeleteLink")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// check if the user has access to the group (group owner or group admin)
+	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return handlerutil.ErrForbidden
+	}
+
+	// delete the link
 	err := s.queries.DeleteLink(traceCtx, linkID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "link_id", linkID.String(), logger, "delete link")

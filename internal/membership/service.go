@@ -71,7 +71,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		return nil, handlerutil.ErrForbidden
 	}
 
@@ -154,7 +154,7 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return nil, handlerutil.ErrForbidden
 	}
@@ -383,7 +383,7 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return handlerutil.ErrForbidden
 	}
@@ -425,7 +425,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return MemberResponse{}, handlerutil.ErrForbidden
 	}
@@ -566,7 +566,7 @@ func (s *Service) canAssignRole(ctx context.Context, groupId uuid.UUID, roleId u
 	return grouprole.AccessLevelRank[accessLevel] > grouprole.AccessLevelRank[targetRole.AccessLevel]
 }
 
-func (s *Service) hasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool {
+func (s *Service) HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool {
 	traceCtx, span := s.tracer.Start(ctx, "HasGroupControlAccess")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -600,7 +600,7 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return nil, handlerutil.ErrForbidden
 	}
@@ -682,7 +682,7 @@ func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingI
 	}
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return PendingMemberResponse{}, handlerutil.ErrForbidden
 	}
@@ -740,7 +740,7 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
+	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return handlerutil.ErrForbidden
 	}

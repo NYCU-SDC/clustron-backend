@@ -38,8 +38,8 @@ type Store interface {
 	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 	CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error)
-	UpdateLink(ctx context.Context, linkID uuid.UUID, title string, Url string) (Link, error)
-	DeleteLink(ctx context.Context, linkID uuid.UUID) error
+	UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error)
+	DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error
 }
 
 type LinkResponse struct {
@@ -458,4 +458,73 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
+}
+
+func (h *Handler) UpdateLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	linkID := r.PathValue("link_id")
+	linkUUID, err := uuid.Parse(linkID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request CreateLinkRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	link, err := h.store.UpdateLink(traceCtx, groupUUID, linkUUID, request.Title, request.Url)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := LinkResponse{
+		ID:    link.ID.String(),
+		Title: link.Title,
+		Url:   link.Url,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "DeleteLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "DeleteLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	linkID := r.PathValue("link_id")
+	linkUUID, err := uuid.Parse(linkID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.DeleteLink(traceCtx, groupUUID, linkUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
