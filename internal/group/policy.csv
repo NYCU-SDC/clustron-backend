@@ -3,3 +3,6 @@ p, organizer, /api/groups, POST
 p, user, /api/groups/:groupId, GET
 p, organizer, /api/groups/:groupId/archive, POST
 p, organizer, /api/groups/:groupId/unarchive, POST
+p, user, /api/groups/:group_id/link, POST
+p, user, /api/groups/:group_id/link/:linkId, PUT
+p, user, /api/groups/:group_id/link/:linkId, DELETE
