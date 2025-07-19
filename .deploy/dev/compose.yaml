@@ -1,9 +1,10 @@
+name: clustron-dev
+
 services:
   backend:
     image: nycusdc/clustron-backend:dev
-    container_name: clustron-backend-dev
     networks:
-      - clustron_dev
+      - internal
       - traefik
     depends_on:
       postgres:
@@ -52,7 +53,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
     networks:
-      - clustron_dev
+      - internal
 
   ldap:
     image: osixia/openldap:1.5.0
@@ -73,9 +74,9 @@ services:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
     command: --copy-service --loglevel debug
     networks:
-      - clustron_dev
+      - internal
 
 networks:
-  clustron_dev:
+  internal:
   traefik:
     external: true
