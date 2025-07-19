@@ -1,7 +1,7 @@
 # echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Deploying Start" >> ./deploy.log
 
-DB_NAME="clustron-db"
-LDAP_NAME="clustron-ldap"
+DB_NAME="clustron-local-postgres-1"
+LDAP_NAME="clustron-local-ldap-1"
 
 if ! docker compose ps ${DB_NAME} | grep -q "running"; then
     echo "Database not running. Starting..."

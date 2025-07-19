@@ -18,12 +18,13 @@ prepare:
     	|| (echo -e "  -> $(RED)Depending services deploy failed$(NC)" && exit 1)
 	@echo -e "==> $(BLUE)Environment preparation completed$(NC)"
 
-run: gen
+run:
 	@echo -e ":: $(GREEN)Starting backend...$(NC)"
 	@echo -e "-> Starting depending services..."
 	@cd ./.deploy/local \
 		&& ./start.sh \
 		|| (echo -e "  -> $(RED)Depending services start failed. Make sure you run 'make prepare' previously.$(NC)" && exit 1)
+	@make gen
 	@echo -e "-> starting backend..."
 	@go build -o bin/backend cmd/backend/main.go && \
 		DEBUG=true ./bin/backend \
