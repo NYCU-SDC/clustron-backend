@@ -136,7 +136,7 @@ jobs:
               "inject_secret": {
                 "enable": true,
                 "project": "clustron",
-                "environment": "stage",
+                "environment": "staging",
                 "secrets": [
                   {
                     "path": "/google-oauth",

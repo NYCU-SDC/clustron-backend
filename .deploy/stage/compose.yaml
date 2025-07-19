@@ -27,17 +27,19 @@ services:
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_PWD=password
+      - OTEL_COLLECTOR_URL=10.140.0.3:4317
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.clustron-backend.rule=Host(`api.stage.clustron.sdc.nycu.club`)"
-      - "traefik.http.routers.clustron-backend.entrypoints=websecure"
-      - "traefik.http.routers.clustron-backend.tls=true"
-      - "traefik.http.routers.clustron-backend.tls.certresolver=cloudflare"
-      - "traefik.http.services.clustron-backend.loadbalancer.server.port=8080"
+      - "traefik.http.routers.clustron-backend-stage.rule=Host(`api.stage.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend-stage.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend-stage.tls=true"
+      - "traefik.http.routers.clustron-backend-stage.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend-stage.loadbalancer.server.port=8080"
 
   postgres:
     image: postgres:latest
+    container_name: clustron-db-stage
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -51,6 +53,7 @@ services:
       - clustron_stage
 
   ldap:
+    container_name: clustron-ldap-stage
     image: osixia/openldap:1.5.0
     healthcheck:
       test: ["CMD", "cat", "/run/slapd/slapd.pid"]
