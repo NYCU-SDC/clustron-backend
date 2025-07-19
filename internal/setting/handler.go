@@ -60,7 +60,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, username pgtype.Text, linuxUsername pgtype.Text) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
 
