@@ -10,10 +10,6 @@ github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 h1:mFRzDkZVAjdal+
 github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358/go.mod h1:chxPXzSsl7ZWRAuOIE23GDNzjWuZquvFlgA8xmpunjU=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1 h1:qw1zXBvga7vtWm0C33ULYZ1gzgHzocZkRZ4cM4mC7JQ=
-github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
-github.com/NYCU-SDC/summer v0.0.0-20250706143253-c5b26ed73f11 h1:zTNa11rnPluksn8UBKPbMCGSwzoaRFvX/INp1hA5U5Y=
-github.com/NYCU-SDC/summer v0.0.0-20250706143253-c5b26ed73f11/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/NYCU-SDC/summer v0.0.0-20250715133749-7cf0fa5f1a10 h1:MRcbVNkzEeAsESregY985QtMfG+614+43vcD15bluLo=
 github.com/NYCU-SDC/summer v0.0.0-20250715133749-7cf0fa5f1a10/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
