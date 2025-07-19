@@ -63,6 +63,16 @@ FROM
 WHERE
     user_id = $1 AND group_id = $2;
 
+-- name: GetOwnerByGroupID :one
+SELECT
+    m.user_id
+FROM
+    memberships AS m
+        JOIN
+    group_role AS gr ON gr.id = m.role_id
+WHERE
+    m.group_id = $1 AND gr.access_level = 'GROUP_OWNER';
+
 -- name: CountByGroupID :one
 SELECT COUNT(*) FROM memberships
 WHERE group_id = $1;
