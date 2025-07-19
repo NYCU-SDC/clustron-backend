@@ -840,7 +840,7 @@ func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUI
 			zap.String("email", email),
 			zap.String("studentID", studentID),
 			zap.String("groupID", pending.GroupID.String()),
-			zap.String("role", pending.Role))
+			zap.String("role", pending.RoleName))
 	}
 
 	return nil

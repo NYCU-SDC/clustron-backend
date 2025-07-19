@@ -117,7 +117,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.Username, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
