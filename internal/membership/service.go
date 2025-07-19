@@ -740,6 +740,7 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 		return err
 	}
 
+	// Check if the user is a pending member who is allowed to remove themselves after onboarding
 	if jwtUser.Email != pendingMember.UserIdentifier && jwtUser.StudentID.String != pendingMember.UserIdentifier {
 		// check if the user has access to the group (group owner or group admin)
 		if !s.hasGroupControlAccess(traceCtx, groupId) {
