@@ -256,7 +256,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should complete onboarding",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "testuser",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -268,7 +268,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with reserved word",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "root",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -278,7 +278,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with over 32 characters",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "12345678901234567890123456789012345678901234567890",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -288,7 +288,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with space",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -298,7 +298,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username start with number",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "1testuser",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -308,7 +308,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username start with hyphen",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "-testuser",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -318,7 +318,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain ':'",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test:user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -328,7 +328,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain '/'",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test/user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -338,7 +338,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain uppercase letters",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "TestUser",
 			},
 			setupMock: func(store *mocks.Store) {

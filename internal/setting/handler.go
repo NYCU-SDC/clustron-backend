@@ -23,7 +23,7 @@ import (
 )
 
 type OnboardingRequest struct {
-	Username      string `json:"username" validate:"required"`
+	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
 }
 

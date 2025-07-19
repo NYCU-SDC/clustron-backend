@@ -154,11 +154,7 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 			}
 			role := roles[i]
 			response[i].Me.Type = "membership"
-			response[i].Me.Role = grouprole.Role{
-				ID:          role.ID,
-				Role:        role.Role,
-				AccessLevel: role.AccessLevel,
-			}
+			response[i].Me.Role = grouprole.Role(role)
 		}
 	}
 
@@ -170,7 +166,7 @@ func buildRoleGroupIDMap(roles []ListMembershipsByUserRow) map[uuid.UUID]groupro
 	for _, r := range roles {
 		m[r.GroupID] = grouprole.Role{
 			ID:          r.RoleID,
-			Role:        r.Role,
+			RoleName:    r.RoleName,
 			AccessLevel: r.AccessLevel,
 		}
 	}
@@ -211,20 +207,20 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 
 	var groups []Group
 	var err error
-	if sort == "desc" {
-		params := ListDescPagedParams{
-			Sortby: sortBy,
-			Size:   int32(size),
-			Skip:   int32(page) * int32(size),
-		}
-		groups, err = s.queries.ListDescPaged(ctx, params)
-	} else {
+	if sort == "asc" {
+		logger.Info("list in asc, sortBy", zap.String("sortBy", sortBy))
 		params := ListAscPagedParams{
-			Sortby: sortBy,
-			Size:   int32(size),
-			Skip:   int32(page) * int32(size),
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		groups, err = s.queries.ListAscPaged(ctx, params)
+	} else {
+		logger.Info("list in desc, sortBy", zap.String("sortBy", sortBy))
+		params := ListDescPagedParams{
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
+		}
+		groups, err = s.queries.ListDescPaged(ctx, params)
 	}
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get groups")
@@ -281,42 +277,9 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if sort == "desc" {
-		params := ListIfMemberDescPagedParams{
-			UserID: userID,
-			Sortby: sortBy,
-			Size:   int32(size),
-			Skip:   int32(page) * int32(size),
-		}
-		res, err := s.queries.ListIfMemberDescPaged(ctx, params)
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
-			span.RecordError(err)
-			return nil, nil, err
-		}
-
-		groups := make([]Group, len(res))
-		roles := make([]GroupRole, len(res))
-		for i, r := range res {
-			groups[i] = Group{
-				ID:          r.ID,
-				Title:       r.Title,
-				Description: r.Description,
-				IsArchived:  r.IsArchived,
-				CreatedAt:   r.CreatedAt,
-				UpdatedAt:   r.UpdatedAt,
-			}
-			roles[i] = GroupRole{
-				ID:          r.ID_2,
-				Role:        r.Role,
-				AccessLevel: r.AccessLevel,
-			}
-		}
-		return groups, roles, nil
-	} else {
+	if sort == "asc" {
 		params := ListIfMemberAscPagedParams{
 			UserID: userID,
-			Sortby: sortBy,
 			Size:   int32(size),
 			Skip:   int32(page) * int32(size),
 		}
@@ -340,7 +303,38 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			}
 			roles[i] = GroupRole{
 				ID:          r.ID_2,
-				Role:        r.Role,
+				RoleName:    r.RoleName,
+				AccessLevel: r.AccessLevel,
+			}
+		}
+		return groups, roles, nil
+	} else {
+		params := ListIfMemberDescPagedParams{
+			UserID: userID,
+			Size:   int32(size),
+			Skip:   int32(page) * int32(size),
+		}
+		res, err := s.queries.ListIfMemberDescPaged(ctx, params)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "user_id", userID.String(), logger, "failed to get groups by user id")
+			span.RecordError(err)
+			return nil, nil, err
+		}
+
+		groups := make([]Group, len(res))
+		roles := make([]GroupRole, len(res))
+		for i, r := range res {
+			groups[i] = Group{
+				ID:          r.ID,
+				Title:       r.Title,
+				Description: r.Description,
+				IsArchived:  r.IsArchived,
+				CreatedAt:   r.CreatedAt,
+				UpdatedAt:   r.UpdatedAt,
+			}
+			roles[i] = GroupRole{
+				ID:          r.ID_2,
+				RoleName:    r.RoleName,
 				AccessLevel: r.AccessLevel,
 			}
 		}

@@ -6,7 +6,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -24,7 +24,7 @@ SELECT
     u.email,
     u.student_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
@@ -54,7 +54,7 @@ SELECT
     m.user_id,
     m.group_id,
     m.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM
     memberships AS m
@@ -109,7 +109,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
@@ -123,7 +123,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
@@ -141,7 +141,7 @@ SELECT
     pm.user_identifier,
     pm.group_id,
     pm.role_id,
-    gr.role,
+    gr.role_name,
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
