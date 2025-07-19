@@ -425,3 +425,37 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
+
+func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "CreateLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request CreateLinkRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	link, err := h.store.CreateLink(traceCtx, groupUUID, request.Title, request.Url)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := LinkResponse{
+		ID:    link.ID.String(),
+		Title: link.Title,
+		Url:   link.Url,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
+}

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"strconv"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -608,6 +609,12 @@ func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title strin
 	traceCtx, span := s.tracer.Start(ctx, "CreateLink")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.hasGroupControlAccess(traceCtx, groupId) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return nil, handlerutil.ErrForbidden
+	}
 
 	newLink, err := s.queries.CreateLink(traceCtx, CreateLinkParams{
 		GroupID: groupID,
