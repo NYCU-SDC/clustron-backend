@@ -1,0 +1,36 @@
+name: clustron-local
+
+services:
+  postgres:
+    image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: clustron
+    ports:
+      - "5432:5432"
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    healthcheck:
+      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      LDAP_ORGANISATION: "Clustron"
+      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
+      LDAP_ADMIN_PASSWORD: "password"
+      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      KEEP_EXISTING_CONFIG: "false"
+    volumes:
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service --loglevel debug
+    ports:
+      - "389:389"
