@@ -37,6 +37,9 @@ type Store interface {
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
 	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
+	CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error)
+	UpdateLink(ctx context.Context, linkID uuid.UUID, title string, Url string) (Link, error)
+	DeleteLink(ctx context.Context, linkID uuid.UUID) error
 }
 
 type LinkResponse struct {
@@ -47,7 +50,7 @@ type LinkResponse struct {
 
 type CreateLinkRequest struct {
 	Title string `json:"title" validate:"required"`
-	Url   string `json:"url" validate:"required,url"`
+	Url   string `json:"url" validate:"required"`
 }
 
 type Response struct {
@@ -267,6 +270,14 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		_, err = h.memberStore.Add(traceCtx, group.ID, m.Member, m.Role)
 		if err != nil {
 			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			continue
+		}
+	}
+
+	// 3. Add links
+	for _, link := range request.Links {
+		_, err = h.store.CreateLink(traceCtx, group.ID, link.Title, link.Url)
+		if err != nil {
 			continue
 		}
 	}

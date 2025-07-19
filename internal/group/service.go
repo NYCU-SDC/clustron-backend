@@ -603,3 +603,56 @@ func (s *Service) GetAvailableGidNumber(ctx context.Context) (int, error) {
 		next++
 	}
 }
+
+func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	newLink, err := s.queries.CreateLink(traceCtx, CreateLinkParams{
+		GroupID: groupID,
+		Title:   title,
+		Url:     Url,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "group_id", groupID.String(), logger, "create link")
+		span.RecordError(err)
+		return Link{}, err
+	}
+
+	return newLink, nil
+}
+
+func (s *Service) UpdateLink(ctx context.Context, linkID uuid.UUID, title string, Url string) (Link, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	updatedLink, err := s.queries.UpdateLink(traceCtx, UpdateLinkParams{
+		ID:    linkID,
+		Title: title,
+		Url:   Url,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "link_id", linkID.String(), logger, "update link")
+		span.RecordError(err)
+		return Link{}, err
+	}
+
+	return updatedLink, nil
+}
+
+func (s *Service) DeleteLink(ctx context.Context, linkID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.DeleteLink(traceCtx, linkID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "link_id", linkID.String(), logger, "delete link")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
