@@ -23,6 +23,10 @@ type googleUserInfo struct {
 	Locale        string `json:"locale"`
 }
 
+type GoogleUserInfo struct {
+	UserInfo
+}
+
 func NewGoogleConfig(clientID, clientSecret, redirectURL string) *GoogleConfig {
 	return &GoogleConfig{
 		config: &oauth2.Config{
@@ -63,7 +67,7 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 		}
 	}(resp.Body)
 
-	var userInfo googleUserInfo
+	var userInfo googleUserResponse
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return UserInfo{}, err
 	}

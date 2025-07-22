@@ -1,8 +1,7 @@
 package oauthprovider
 
 type UserInfo struct {
-	ID        string
-	Name      string
-	Email     string
-	StudentID string
+	ID    string
+	Email string
+	Name  string
 }

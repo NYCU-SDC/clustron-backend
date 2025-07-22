@@ -5,11 +5,12 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v5"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"

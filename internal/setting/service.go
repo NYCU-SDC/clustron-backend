@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserStore interface {
+type AuthStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 }
 type Service struct {
@@ -23,17 +23,17 @@ type Service struct {
 	tracer trace.Tracer
 	query  *Queries
 
-	userStore  UserStore
+	authStore  AuthStore
 	ldapClient ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db DBTX, authStore AuthStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
 		query:  New(db),
 
-		userStore:  userStore,
+		authStore:  authStore,
 		ldapClient: ldapClient,
 	}
 }
@@ -62,7 +62,7 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	}
 
 	// set up the user's role
-	_, err = s.userStore.SetupUserRole(traceCtx, userID)
+	_, err = s.authStore.SetupUserRole(traceCtx, userID)
 	if err != nil {
 		span.RecordError(err)
 		return err

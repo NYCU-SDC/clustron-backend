@@ -128,13 +128,14 @@ func main() {
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	authService := auth.NewService(logger, dbPool, userService, cfg.PresetUser)
 	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
