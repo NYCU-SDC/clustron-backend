@@ -430,7 +430,7 @@ func (h *Handler) TransferGroupOwnerHandler(w http.ResponseWriter, r *http.Reque
 		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	groupResponse.Me.Type = userScopeResponse.Me.Type
-	groupResponse.Me.Role = RoleResponse(userScopeResponse.Me.Role.ToResponse())
+	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }

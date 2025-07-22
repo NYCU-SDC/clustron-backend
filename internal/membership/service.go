@@ -154,7 +154,7 @@ func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.
 
 	return grouprole.GroupRole{
 		ID:          membership.RoleID,
-		Role:        membership.Role,
+		RoleName:    membership.RoleName,
 		AccessLevel: membership.AccessLevel,
 	}, nil
 }
