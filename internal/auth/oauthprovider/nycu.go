@@ -21,6 +21,7 @@ type NYCUConfig struct {
 }
 
 type NYCUUserInfo struct {
+	UserInfo
 	Sub           string `json:"sub"`
 	Name          string `json:"name"`
 	GivenName     string `json:"given_name"`
@@ -29,6 +30,14 @@ type NYCUUserInfo struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Locale        string `json:"locale"`
+}
+
+func (n *NYCUUserInfo) GetUserInfo() UserInfo {
+	return n.UserInfo
+}
+
+func (n *NYCUUserInfo) SetUserInfo(userInfo UserInfo) {
+	n.UserInfo = userInfo
 }
 
 func NewNYCUConfig(clientID, clientSecret, redirectURL string) *NYCUConfig {
@@ -95,13 +104,13 @@ func (n *NYCUConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, 
 	//return n.config.Exchange(ctx, code, oauth2.SetAuthURLParam("client_id", n.config.ClientID), oauth2.SetAuthURLParam("client_secret", n.config.ClientSecret))
 }
 
-func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (UserInfo, error) {
+func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (UserInfoStore, error) {
 	client := n.config.Client(ctx, token)
 
 	// Fetch user info from NYCU OAuth Service
 	profileResp, err := client.Get("https://id.nycu.edu.tw/api/profile")
 	if err != nil {
-		return UserInfo{}, err
+		return &NYCUUserInfo{}, err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -113,12 +122,14 @@ func (n *NYCUConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (User
 	var profile NYCUProfile
 	err = json.NewDecoder(profileResp.Body).Decode(&profile)
 	if err != nil {
-		return UserInfo{}, err
+		return &NYCUUserInfo{}, err
 	}
 
-	return UserInfo{
-		ID:    profile.Username,
-		Email: profile.Email,
-		Name:  profile.Username,
+	return &NYCUUserInfo{
+		UserInfo: UserInfo{
+			ID:    profile.Username,
+			Email: profile.Email,
+			Name:  profile.Username,
+		},
 	}, nil
 }

@@ -53,7 +53,7 @@ type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
-	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfo, error)
+	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfoStore, error)
 }
 
 type callBackInfo struct {

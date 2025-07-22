@@ -12,7 +12,7 @@ type GoogleConfig struct {
 	config *oauth2.Config
 }
 
-type googleUserInfo struct {
+type googleUserResponse struct {
 	Sub           string `json:"sub"`
 	Name          string `json:"name"`
 	GivenName     string `json:"given_name"`
@@ -25,6 +25,14 @@ type googleUserInfo struct {
 
 type GoogleUserInfo struct {
 	UserInfo
+}
+
+func (g *GoogleUserInfo) GetUserInfo() UserInfo {
+	return g.UserInfo
+}
+
+func (g *GoogleUserInfo) SetUserInfo(userInfo UserInfo) {
+	g.UserInfo = userInfo
 }
 
 func NewGoogleConfig(clientID, clientSecret, redirectURL string) *GoogleConfig {
@@ -54,11 +62,11 @@ func (g *GoogleConfig) Exchange(ctx context.Context, code string) (*oauth2.Token
 	return g.config.Exchange(ctx, code)
 }
 
-func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (UserInfo, error) {
+func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (UserInfoStore, error) {
 	client := g.config.Client(ctx, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
 	if err != nil {
-		return UserInfo{}, err
+		return &GoogleUserInfo{}, err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -69,12 +77,14 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 
 	var userInfo googleUserResponse
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return UserInfo{}, err
+		return &GoogleUserInfo{}, err
 	}
 
-	return UserInfo{
-		ID:    userInfo.Sub,
-		Email: userInfo.Email,
-		Name:  userInfo.Name,
+	return &GoogleUserInfo{
+		UserInfo: UserInfo{
+			ID:    userInfo.Sub,
+			Email: userInfo.Email,
+			Name:  userInfo.Name,
+		},
 	}, nil
 }
