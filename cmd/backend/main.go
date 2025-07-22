@@ -131,8 +131,8 @@ func main() {
 	authService := auth.NewService(logger, dbPool, userService, cfg.PresetUser)
 	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
-	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, ldapClient)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -195,6 +195,7 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/transfer", authMiddleware.HandlerFunc(groupHandler.TransferGroupOwnerHandler))
 
 	// Members
 	mux.HandleFunc("GET /api/groups/{group_id}/members", authMiddleware.HandlerFunc(memberHandler.ListGroupMembersPagedHandler))
