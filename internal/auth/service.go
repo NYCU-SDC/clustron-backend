@@ -65,6 +65,7 @@ func (s *Service) FindOrCreate(ctx context.Context, email, identifier string, pr
 		return LoginInfo{}, err
 	}
 	if exists {
+		// If it exists, return the login info
 		loginInfo, err := s.queries.GetByIdentifier(traceCtx, identifier)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "get login info by identifier")
