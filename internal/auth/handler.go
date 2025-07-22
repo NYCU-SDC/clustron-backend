@@ -46,7 +46,6 @@ type SettingStore interface {
 
 type Store interface {
 	FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error)
-	GetEmailByUserID(ctx context.Context, userID uuid.UUID) (string, error)
 }
 
 type OAuthProvider interface {

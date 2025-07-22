@@ -22,11 +22,6 @@ SELECT *
 FROM login_info
 WHERE user_id = $1;
 
--- name: GetEmailByUserID :one
-SELECT email
-FROM login_info
-WHERE user_id = $1 AND is_linked = FALSE;
-
 -- name: GetByEmail :one
 SELECT *
 FROM login_info

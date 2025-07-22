@@ -52,21 +52,6 @@ func (s *Service) ExistsByIdentifier(ctx context.Context, identifier string) (bo
 	return exists, nil
 }
 
-func (s *Service) GetEmailByUserID(ctx context.Context, userID uuid.UUID) (string, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetEmailByUserID")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	email, err := s.queries.GetEmailByUserID(traceCtx, userID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "get email by user id")
-		span.RecordError(err)
-		return "", err
-	}
-
-	return email.String, nil
-}
-
 func (s *Service) FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreateLoginInfo")
 	defer span.End()
