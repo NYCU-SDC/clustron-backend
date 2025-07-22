@@ -395,6 +395,18 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		return handlerutil.ErrForbidden
 	}
 
+	// Remove the user from LDAP group
+	groupName := groupId.String()
+	userSetting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
+	if err != nil {
+		logger.Warn("get user setting failed", zap.Error(err))
+	} else {
+		err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
+		if err != nil {
+			logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.Error(err))
+		}
+	}
+
 	err = s.queries.Delete(traceCtx, DeleteParams{
 		GroupID: groupId,
 		UserID:  userId,

@@ -450,6 +450,27 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		return Group{}, err
 	}
 
+	// Remove all members from the group in LDAP
+	members, err := s.queries.GetMembersByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get members by group id")
+		span.RecordError(err)
+		return Group{}, err
+	}
+	for _, member := range members {
+		userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
+			span.RecordError(err)
+			return Group{}, err
+		}
+
+		err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), userSetting.LinuxUsername.String)
+		if err != nil {
+			logger.Warn("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+		}
+	}
+
 	return group, nil
 }
 
@@ -463,6 +484,27 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to unarchive group")
 		span.RecordError(err)
 		return Group{}, err
+	}
+
+	// Add all members back to the group in LDAP
+	members, err := s.queries.GetMembersByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get members by group id")
+		span.RecordError(err)
+		return Group{}, err
+	}
+	for _, member := range members {
+		userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
+			span.RecordError(err)
+			return Group{}, err
+		}
+
+		err = s.ldapClient.AddUserToGroup(group.ID.String(), userSetting.LinuxUsername.String)
+		if err != nil {
+			logger.Warn("add user to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+		}
 	}
 
 	return group, nil
