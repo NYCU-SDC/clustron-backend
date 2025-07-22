@@ -87,7 +87,7 @@ jobs:
         run: |
           go mod download
           make gen
-          env GOOS=linux GOARCH=arm64 go build -o bin/backend cmd/backend/main.go
+          env GOOS=linux go build -o bin/backend cmd/backend/main.go
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -103,7 +103,6 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/arm64
           push: true
           tags: |
             nycusdc/clustron-backend:pr-${{ github.event.number }}
@@ -111,12 +110,56 @@ jobs:
           context: .
 
   Deploy:
+    name: Deploy
     needs: Build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Deploy container to local
+      - name: Trigger n8n Snapshot Webhook
         run: |
-          ~/deploy.sh "Snapshot" "${{ github.event.number }}" "${{ github.event.pull_request.title }}"
+          curl --location --request POST 'https://webhook.eng.sdc.nycu.club/webhook/deploy' \
+            --header 'Content-Type: application/json' \
+            --header 'x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}' \
+              --data-raw '{
+            "source": {
+              "title": "Clustron",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.head_ref || github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "pr_number": "${{ github.event.number }}",
+              "pr_title": "${{ github.event.pull_request.title }}"
+            },
+            "method": "deploy",
+            "metadata": {
+              "environment": "snapshot"
+            },
+            "setup": {
+              "inject_secret": {
+                "enable": true,
+                "project": "clustron",
+                "environment": "dev",
+                "secrets": [
+                  {
+                    "path": "/google-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "GOOGLE_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/google-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "JWT_SECRET",
+                    "env_name": "SECRET"
+                  }
+                ]
+              }
+            },
+            "post": {
+              "notify_discord": {
+                "enable": true,
+                "channel": "clustron-activity"
+              }
+            }
+          }'

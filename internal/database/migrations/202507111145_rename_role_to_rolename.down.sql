@@ -1,0 +1,1 @@
+ALTER TABLE group_role RENAME COLUMN role_name TO role;

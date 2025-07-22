@@ -15,30 +15,38 @@ import (
 	"go.uber.org/zap"
 )
 
-type AuthStore interface {
+type UserStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 }
-type Service struct {
-	logger *zap.Logger
-	tracer trace.Tracer
-	query  *Queries
 
-	authStore  AuthStore
-	ldapClient ldap.LDAPClient
+type MembershipService interface {
+	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
+}
+type Service struct {
+	logger            *zap.Logger
+	tracer            trace.Tracer
+	query             *Queries
+	userStore         UserStore
+	membershipService MembershipService
+	ldapClient        ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, authStore AuthStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
 		query:  New(db),
 
-		authStore:  authStore,
+		userStore:  userStore,
 		ldapClient: ldapClient,
 	}
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) SetMembershipService(membershipService MembershipService) {
+	s.membershipService = membershipService
+}
+
+func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -62,10 +70,20 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	}
 
 	// set up the user's role
-	_, err = s.authStore.SetupUserRole(traceCtx, userID)
+	_, err = s.userStore.SetupUserRole(traceCtx, userID)
 	if err != nil {
 		span.RecordError(err)
 		return err
+	}
+
+	// Process pending memberships after user onboarding
+	err = s.membershipService.ProcessPendingMemberships(traceCtx, userID, email, studentID)
+	if err != nil {
+		logger.Warn("failed to process pending memberships for onboarded user",
+			zap.String("userID", userID.String()),
+			zap.String("email", email),
+			zap.String("student_id", studentID),
+			zap.Error(err))
 	}
 
 	return nil

@@ -5,8 +5,13 @@ import (
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
-	"github.com/NYCU-SDC/summer/pkg/handler"
-	"github.com/NYCU-SDC/summer/pkg/log"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -15,14 +20,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
-	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
 )
 
 type OnboardingRequest struct {
-	Username      string `json:"username" validate:"required"`
+	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
 }
 
@@ -59,7 +60,7 @@ type Store interface {
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error
+	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
 
@@ -116,7 +117,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, pgtype.Text{String: request.Username, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

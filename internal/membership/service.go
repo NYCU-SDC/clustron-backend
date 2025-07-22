@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 	"strings"
 
@@ -93,12 +94,12 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		for i, member := range res {
 			members[i] = Response{
 				ID:        member.UserID,
-				Username:  member.FullName.String,
+				FullName:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -120,12 +121,12 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		for i, member := range res {
 			members[i] = Response{
 				ID:        member.UserID,
-				Username:  member.FullName.String,
+				FullName:  member.FullName.String,
 				Email:     member.Email,
 				StudentID: member.StudentID.String,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -235,7 +236,11 @@ func (s *Service) JoinPending(ctx context.Context, params CreateOrUpdatePendingP
 		ID:             pendingMember.ID,
 		UserIdentifier: pendingMember.UserIdentifier,
 		GroupID:        pendingMember.GroupID,
-		Role:           grouprole.Role(roleInfo),
+		Role: grouprole.RoleResponse{
+			ID:          roleInfo.ID.String(),
+			RoleName:    roleInfo.RoleName,
+			AccessLevel: roleInfo.AccessLevel,
+		},
 	}, nil
 }
 
@@ -340,10 +345,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  userSetting.FullName.String,
+		FullName:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.RoleResponse{
+			ID:          roleResponse.ID.String(),
+			RoleName:    roleResponse.RoleName,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 
@@ -486,10 +495,14 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	return MemberResponse{
 		ID:        u.ID,
-		Username:  userSetting.FullName.String,
+		FullName:  userSetting.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
-		Role:      grouprole.Role(roleResponse),
+		Role: grouprole.RoleResponse{
+			ID:          roleResponse.ID.String(),
+			RoleName:    roleResponse.RoleName,
+			AccessLevel: roleResponse.AccessLevel,
+		},
 	}, nil
 }
 
@@ -613,9 +626,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
 				GroupID:        member.GroupID,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -639,9 +652,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 				ID:             member.ID,
 				UserIdentifier: member.UserIdentifier,
 				GroupID:        member.GroupID,
-				Role: grouprole.Role{
-					ID:          member.RoleID,
-					Role:        member.Role,
+				Role: grouprole.RoleResponse{
+					ID:          member.RoleID.String(),
+					RoleName:    member.RoleName,
 					AccessLevel: member.AccessLevel,
 				},
 			}
@@ -714,7 +727,11 @@ func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingI
 		ID:             updatedPending.ID,
 		UserIdentifier: updatedPending.UserIdentifier,
 		GroupID:        updatedPending.GroupID,
-		Role:           grouprole.Role(roleInfo),
+		Role: grouprole.RoleResponse{
+			ID:          roleInfo.ID.String(),
+			RoleName:    roleInfo.RoleName,
+			AccessLevel: roleInfo.AccessLevel,
+		},
 	}, nil
 }
 
@@ -722,12 +739,6 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 	traceCtx, span := s.tracer.Start(ctx, "RemovePending")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
-
-	// check if the user has access to the group (group owner or group admin)
-	if !s.hasGroupControlAccess(traceCtx, groupId) {
-		logger.Warn("The user's access is not allowed to control this group")
-		return handlerutil.ErrForbidden
-	}
 
 	// Get the pending member to verify it belongs to the correct group and check permissions
 	pendingMember, err := s.queries.GetPendingByID(traceCtx, pendingId)
@@ -742,10 +753,26 @@ func (s *Service) RemovePending(ctx context.Context, groupId uuid.UUID, pendingI
 		return handlerutil.NewNotFoundError("pending_memberships", "group_id", groupId.String(), "pending member does not belong to group")
 	}
 
-	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, groupId, pendingMember.RoleID) {
-		logger.Warn("The user's access is not allowed to remove this pending member")
-		return handlerutil.ErrForbidden
+	// check if the user is the pending member (process pending membership after onboarding)
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		logger.Error("failed to get user from context", zap.Error(err))
+		return err
+	}
+
+	// Check if the user is a pending member who is allowed to remove themselves after onboarding
+	if jwtUser.Email != pendingMember.UserIdentifier && jwtUser.StudentID.String != pendingMember.UserIdentifier {
+		// check if the user has access to the group (group owner or group admin)
+		if !s.hasGroupControlAccess(traceCtx, groupId) {
+			logger.Warn("The user's access is not allowed to control this group")
+			return handlerutil.ErrForbidden
+		}
+
+		// check if the user's access_level is bigger than the target access_level
+		if !s.canAssignRole(traceCtx, groupId, pendingMember.RoleID) {
+			logger.Warn("The user's access is not allowed to remove this pending member")
+			return handlerutil.ErrForbidden
+		}
 	}
 
 	err = s.queries.DeletePendingByID(traceCtx, pendingId)
@@ -770,4 +797,51 @@ func (s *Service) CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) 
 	}
 
 	return count, nil
+}
+
+func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessPendingMemberships")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get all pending memberships for this user identifier
+	pendingMemberships, err := s.queries.GetPendingByUserIdentifier(traceCtx, GetPendingByUserIdentifierParams{
+		Email:     email,
+		StudentID: studentID,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		err = databaseutil.WrapDBError(err, logger, "failed to get pending memberships")
+		span.RecordError(err)
+		return err
+	}
+
+	// Process each pending membership
+	for _, pending := range pendingMemberships {
+		// Add user to group with the specified role
+		_, err := s.Join(traceCtx, userID, pending.GroupID, pending.RoleID)
+		if err != nil {
+			logger.Warn("failed to join user to group from pending membership",
+				zap.String("email", email),
+				zap.String("studentID", studentID),
+				zap.String("groupID", pending.GroupID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Remove the pending membership after successful join
+		err = s.RemovePending(ctx, pending.GroupID, pending.ID)
+		if err != nil {
+			logger.Warn("failed to delete pending membership after join",
+				zap.String("pendingID", pending.ID.String()),
+				zap.Error(err))
+		}
+
+		logger.Info("successfully processed pending membership",
+			zap.String("email", email),
+			zap.String("studentID", studentID),
+			zap.String("groupID", pending.GroupID.String()),
+			zap.String("role", pending.RoleName))
+	}
+
+	return nil
 }

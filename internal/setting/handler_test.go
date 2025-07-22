@@ -9,6 +9,10 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -16,9 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 var exampleValidKey = "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAQB/nAmOjTmezNUDKYvEeIRf2YnwM9/uUG1d0BYsc8/tRtx+RGi7N2lUbp728MXGwdnL9od4cItzky/zVdLZE2cycOa18xBK9cOWmcKS0A8FYBxEQWJ/q9YVUgZbFKfYGaGQxsER+A0w/fX8ALuk78ktP31K69LcQgxIsl7rNzxsoOQKJ/CIxOGMMxczYTiEoLvQhapFQMs3FL96didKr/QbrfB1WT6s3838SEaXfgZvLef1YB2xmfhbT9OXFE3FXvh2UPBfN+ffE7iiayQf/2XR+8j4N4bW30DiPtOQLGUrH1y5X/rpNZNlWW2+jGIxqZtgWg7lTy3mXy5x836Sj/6L"
@@ -255,11 +256,11 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should complete onboarding",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "testuser",
 			},
 			setupMock: func(store *mocks.Store) {
-				store.On("OnboardUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				store.On("OnboardUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, nil).Once()
 			},
 			expectedStatus: http.StatusOK,
@@ -267,7 +268,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with reserved word",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "root",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -277,7 +278,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with over 32 characters",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "12345678901234567890123456789012345678901234567890",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -287,7 +288,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username with space",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -297,7 +298,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username start with number",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "1testuser",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -307,7 +308,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username start with hyphen",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "-testuser",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -317,7 +318,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain ':'",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test:user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -327,7 +328,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain '/'",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "test/user",
 			},
 			setupMock: func(store *mocks.Store) {
@@ -337,7 +338,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 		{
 			name: "Should block linux username contain uppercase letters",
 			body: setting.OnboardingRequest{
-				Username:      "testuser",
+				FullName:      "testuser",
 				LinuxUsername: "TestUser",
 			},
 			setupMock: func(store *mocks.Store) {

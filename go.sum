@@ -10,16 +10,8 @@ github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 h1:mFRzDkZVAjdal+
 github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358/go.mod h1:chxPXzSsl7ZWRAuOIE23GDNzjWuZquvFlgA8xmpunjU=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/NYCU-SDC/summer v0.0.0-20250525115950-09d0d110df0d h1:zqM2I9gNQzGgSQX2Dqo+1WFjJxAN2Jw3TNB2zUsC1bA=
-github.com/NYCU-SDC/summer v0.0.0-20250525115950-09d0d110df0d/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
-github.com/NYCU-SDC/summer v0.0.0-20250525124507-208340958e82 h1:0b6gGixMIqArDVSViwl7PYTEsPJPlXbpRje6Y9EOUIE=
-github.com/NYCU-SDC/summer v0.0.0-20250525124507-208340958e82/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
-github.com/NYCU-SDC/summer v0.0.0-20250525125041-341a5264424f h1:ZeYZuWvGIZ+/2Q5r4SZQtlmwionVWuA4hpUiFe3VUtI=
-github.com/NYCU-SDC/summer v0.0.0-20250525125041-341a5264424f/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
-github.com/NYCU-SDC/summer v0.0.0-20250525125733-427342db230e h1:bkl29lqQfBSJEZpbnWg9qr2rTVi5k3EHEkWqPoCV1UE=
-github.com/NYCU-SDC/summer v0.0.0-20250525125733-427342db230e/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
-github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1 h1:qw1zXBvga7vtWm0C33ULYZ1gzgHzocZkRZ4cM4mC7JQ=
-github.com/NYCU-SDC/summer v0.0.0-20250606122013-dfbe1c5b21f1/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
+github.com/NYCU-SDC/summer v0.0.0-20250715133749-7cf0fa5f1a10 h1:MRcbVNkzEeAsESregY985QtMfG+614+43vcD15bluLo=
+github.com/NYCU-SDC/summer v0.0.0-20250715133749-7cf0fa5f1a10/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=
@@ -107,8 +99,6 @@ github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsI
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761/go.mod h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=
-github.com/jackc/pgx v3.6.2+incompatible h1:2zP5OD7kiyR3xzRYMhOcXVvkDZsImVXfj+yIyTQf3/o=
-github.com/jackc/pgx v3.6.2+incompatible/go.mod h1:0ZGrqGqkRlliWnWB4zKnWtjbSWbGkVEFm4TeybAXq+I=
 github.com/jackc/pgx/v5 v5.7.4 h1:9wKznZrhWa2QiHL+NjTSPP6yjl3451BX3imWDnokYlg=
 github.com/jackc/pgx/v5 v5.7.4/go.mod h1:ncY89UGWxg82EykZUwSpUKEfccBGGYq1xjrOpsbsfGQ=
 github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=
