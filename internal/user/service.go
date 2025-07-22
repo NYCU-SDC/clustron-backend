@@ -75,21 +75,6 @@ func (s *Service) Create(ctx context.Context, email, studentID string) (User, er
 	return user, nil
 }
 
-func (s *Service) GetByEmail(ctx context.Context, email string) (User, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByEmail")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	user, err := s.queries.GetByEmail(traceCtx, email)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get user by email")
-		span.RecordError(err)
-		return User{}, err
-	}
-
-	return user, nil
-}
-
 func (s *Service) GetEmailByID(ctx context.Context, id uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetEmailByID")
 	defer span.End()
@@ -118,37 +103,6 @@ func (s *Service) ExistsByIdentifier(ctx context.Context, email string) (bool, e
 	}
 
 	return exists, nil
-}
-
-func (s *Service) FindOrCreate(ctx context.Context, email, studentID string) (User, error) {
-	traceCtx, span := s.tracer.Start(ctx, "findOrCreateUser")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	exists, err := s.ExistsByIdentifier(traceCtx, email)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get user by email")
-		span.RecordError(err)
-		return User{}, err
-	}
-
-	var jwtUser User
-	if !exists {
-		jwtUser, err = s.Create(traceCtx, email, studentID)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create user")
-			span.RecordError(err)
-			return User{}, err
-		}
-	} else {
-		jwtUser, err = s.GetByEmail(traceCtx, email)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "get user by email")
-			return User{}, err
-		}
-	}
-
-	return jwtUser, nil
 }
 
 func (s *Service) GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error) {
@@ -185,21 +139,6 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 	}
 
 	return id, nil
-}
-
-func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (string, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetRoleByID")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	role, err := s.queries.GetRoleByID(traceCtx, id)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get role by id")
-		span.RecordError(err)
-		return "", err
-	}
-
-	return role, nil
 }
 
 func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) error {
