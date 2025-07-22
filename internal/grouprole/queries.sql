@@ -1,6 +1,11 @@
 -- name: GetAll :many
 SELECT * FROM group_role;
 
+-- name: ExistsByRoleName :one
+SELECT EXISTS (
+    SELECT 1 FROM group_role WHERE role_name = $1
+) AS role_exists;
+
 -- name: Create :one
 INSERT INTO group_role (role_name, access_level) VALUES ($1, $2) RETURNING *;
 
