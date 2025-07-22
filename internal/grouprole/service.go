@@ -56,6 +56,11 @@ func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, err
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
 	if exists {
 		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
 		span.RecordError(err)
@@ -78,6 +83,11 @@ func (s *Service) Update(ctx context.Context, role UpdateParams) (GroupRole, err
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
 	if exists {
 		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
 		span.RecordError(err)
