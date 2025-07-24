@@ -35,7 +35,6 @@ type MembershipStore interface {
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
 	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
 	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
-
 }
 
 type UserStore interface {
@@ -243,7 +242,53 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 	return groups, nil
 }
 
-func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error) {
+func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListByIDWithUserScope")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get group by ID
+	var group Group
+	var err error
+	if user.Role != role.Admin.String() {
+		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
+	} else {
+		group, err = s.Get(traceCtx, groupID)
+	}
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+
+	// Get user role in the group
+	roleResponse, roleType, err := s.roleStore.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+
+	// Basic user scope with group information
+	response := grouprole.UserScope{
+		Group: grouprole.Group{
+			ID:          group.ID,
+			Title:       group.Title,
+			Description: group.Description,
+			IsArchived:  group.IsArchived,
+			CreatedAt:   group.CreatedAt,
+			UpdatedAt:   group.UpdatedAt,
+		},
+	}
+
+	// Set the user's role and type in the response
+	response.Me.Type = roleType
+	response.Me.Role = grouprole.Role(roleResponse)
+
+	return response, nil
+}
+
+func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListByIDWithUserScope")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -682,7 +727,7 @@ func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title strin
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return Link{}, handlerutil.ErrForbidden
 	}
@@ -708,7 +753,7 @@ func (s *Service) UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return Link{}, handlerutil.ErrForbidden
 	}
@@ -734,7 +779,7 @@ func (s *Service) DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-	if !s.membershipStore.HasGroupControlAccess(traceCtx, groupID) {
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
 		logger.Warn("The user's access is not allowed to control this group")
 		return handlerutil.ErrForbidden
 	}

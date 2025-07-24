@@ -30,7 +30,7 @@ type MemberStore interface {
 //go:generate mockery --name=Store
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
-	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error)
+	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
@@ -70,6 +70,13 @@ type Response struct {
 type WithLinksResponse struct {
 	Response
 	Links []LinkResponse `json:"links"`
+}
+
+type CreateRequest struct {
+	Title       string                        `json:"title" validate:"required"`
+	Description string                        `json:"description" validate:"required"`
+	Members     []membership.AddMemberRequest `json:"members"`
+	Links       []CreateLinkRequest           `json:"links"`
 }
 
 type CreateResponse struct {
@@ -178,7 +185,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userScopeResponse, err := h.store.ListByIDWithUserScope(traceCtx, user, groupUUID)
+	userScopeResponse, err := h.store.ListByIDWithLinks(traceCtx, user, groupUUID)
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
