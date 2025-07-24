@@ -20,7 +20,6 @@ import (
 )
 
 type Store interface {
-	GetByEmail(ctx context.Context, email string) (user.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 }
 

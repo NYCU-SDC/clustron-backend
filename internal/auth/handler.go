@@ -37,21 +37,22 @@ type JWTStore interface {
 }
 
 type UserStore interface {
-	Create(ctx context.Context, email string, studentID string) (user.User, error)
-	ExistsByIdentifier(ctx context.Context, email string) (bool, error)
-	GetByEmail(ctx context.Context, email string) (user.User, error)
-	FindOrCreate(ctx context.Context, email string, studentID string) (user.User, error)
+	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
 }
 
 type SettingStore interface {
 	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (setting.Setting, error)
 }
 
+type Store interface {
+	FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error)
+}
+
 type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
-	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfo, error)
+	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfoStore, error)
 }
 
 type callBackInfo struct {
@@ -73,6 +74,7 @@ type Handler struct {
 	jwtIssuer    JWTIssuer
 	jwtStore     JWTStore
 	settingStore SettingStore
+	store        Store
 	provider     map[string]OAuthProvider
 }
 
@@ -84,6 +86,7 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
+	store Store,
 	settingStore SettingStore) *Handler {
 
 	googleProvider := oauthprovider.NewGoogleConfig(
@@ -108,6 +111,7 @@ func NewHandler(
 		jwtIssuer:    jwtIssuer,
 		jwtStore:     jwtStore,
 		settingStore: settingStore,
+		store:        store,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
@@ -187,21 +191,28 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user exists in the database, if not, create a new user
-	jwtUser, err := h.userStore.FindOrCreate(traceCtx, userInfo.Email, userInfo.StudentID)
+	loginInfo, err := h.store.FindOrCreate(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Create a new setting for the user
-	_, err = h.settingStore.FindOrCreateSetting(traceCtx, jwtUser.ID, pgtype.Text{String: userInfo.Name, Valid: true})
+	_, err = h.settingStore.FindOrCreateSetting(traceCtx, loginInfo.UserID, pgtype.Text{String: userInfo.GetUserInfo().Name, Valid: true})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Get user with loginInfo
+	loginUser, err := h.userStore.GetByID(traceCtx, loginInfo.UserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	// Generate JWT token
-	jwtToken, refreshTokenID, err := h.generateJWT(traceCtx, jwtUser)
+	jwtToken, refreshTokenID, err := h.generateJWT(traceCtx, loginUser)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
