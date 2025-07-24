@@ -12,6 +12,7 @@ import (
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"strconv"
+	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -31,6 +32,10 @@ type RoleStore interface {
 
 type MembershipStore interface {
 	HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool
+	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
+	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
+	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
+
 }
 
 type UserStore interface {
@@ -47,26 +52,26 @@ type SettingStore interface {
 }
 
 type Service struct {
-	logger          *zap.Logger
-	tracer          trace.Tracer
-	queries         *Queries
-	userStore       UserStore
-	membershipStore MembershipStore
-	roleStore       RoleStore
-	settingStore    SettingStore
-	ldapClient      ldap.LDAPClient
+	logger       *zap.Logger
+	tracer       trace.Tracer
+	queries      *Queries
+	userStore    UserStore
+	roleStore    RoleStore
+	settingStore SettingStore
+	memberStore  MembershipStore
+	ldapClient   ldap.LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, membershipStore MembershipStore, settingStore SettingStore, roleStore RoleStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
-		logger:          logger,
-		tracer:          otel.Tracer("group/service"),
-		queries:         New(db),
-		userStore:       userStore,
-		membershipStore: membershipStore,
-		roleStore:       roleStore,
-		settingStore:    settingStore,
-		ldapClient:      ldapClient,
+		logger:       logger,
+		tracer:       otel.Tracer("group/service"),
+		queries:      New(db),
+		userStore:    userStore,
+		roleStore:    roleStore,
+		settingStore: settingStore,
+		memberStore:  membershipStore,
+		ldapClient:   ldapClient,
 	}
 }
 
@@ -579,6 +584,66 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	}
 
 	return groupRole, roleType, nil
+}
+
+func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwnerIdentifier string, user jwt.User) (grouprole.UserScope, error) {
+	traceCtx, span := s.tracer.Start(ctx, "TransferOwner")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	membership, err := s.memberStore.GetByUser(traceCtx, user.ID, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), user.ID.String()), logger, "get membership")
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+	if membership.AccessLevel != grouprole.AccessLevelOwner.String() || user.Role != role.Admin.String() {
+		err = fmt.Errorf("user %s is not the owner of group %s", user.ID.String(), groupID.String())
+		logger.Error("transfer owner failed", zap.Error(err))
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+
+	var newOwnerID uuid.UUID
+	if strings.Contains(newOwnerIdentifier, "@") {
+		newOwnerID, err = s.userStore.GetIdByEmail(traceCtx, newOwnerIdentifier)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "failed to get user by email")
+			span.RecordError(err)
+			return grouprole.UserScope{}, err
+		}
+	} else {
+		newOwnerID, err = s.userStore.GetIdByStudentId(traceCtx, newOwnerIdentifier)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "failed to get user by student id")
+			span.RecordError(err)
+			return grouprole.UserScope{}, err
+		}
+	}
+
+	var oldOwnerID uuid.UUID
+	oldOwnerID, err = s.memberStore.GetOwnerByGroupID(traceCtx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "group_id", groupID.String(), logger, "get group owner")
+		span.RecordError(err)
+		return grouprole.UserScope{}, err
+	}
+
+	err = s.memberStore.UpdateRole(traceCtx, groupID, newOwnerID, uuid.MustParse(grouprole.RoleOwner.String()))
+	if err != nil {
+		return grouprole.UserScope{}, err
+	}
+	err = s.memberStore.UpdateRole(traceCtx, groupID, oldOwnerID, uuid.MustParse(grouprole.RoleStudent.String()))
+	if err != nil {
+		return grouprole.UserScope{}, err
+	}
+
+	userScope, err := s.ListByIDWithUserScope(traceCtx, user, groupID)
+	if err != nil {
+		return grouprole.UserScope{}, err
+	}
+
+	return userScope, nil
 }
 
 /*

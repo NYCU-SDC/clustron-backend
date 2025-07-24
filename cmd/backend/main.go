@@ -128,16 +128,17 @@ func main() {
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	authService := auth.NewService(logger, dbPool, userService, cfg.PresetUser)
 	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
-	groupService := group.NewService(logger, dbPool, userService, memberService, settingService, groupRoleService, ldapClient)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
 
 	// Handler
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
@@ -194,6 +195,7 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/unarchive", authMiddleware.HandlerFunc(groupHandler.UnarchiveHandler))
+	mux.HandleFunc("POST /api/groups/{group_id}/transfer", authMiddleware.HandlerFunc(groupHandler.TransferGroupOwnerHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/link", authMiddleware.HandlerFunc(groupHandler.CreateLinkHandler))
 	mux.HandleFunc("PUT /api/groups/{group_id}/link/{link_id}", authMiddleware.HandlerFunc(groupHandler.UpdateLinkHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/link/{link_id}", authMiddleware.HandlerFunc(groupHandler.DeleteLinkHandler))
