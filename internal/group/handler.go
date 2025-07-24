@@ -53,6 +53,11 @@ type Response struct {
 	} `json:"me"`
 }
 
+type CreateResponse struct {
+	Response
+	membership.JoinMemberResponse
+}
+
 type CreateRequest struct {
 	Title       string                        `json:"title" validate:"required"`
 	Description string                        `json:"description" validate:"required"`
@@ -231,7 +236,11 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Add other members
-	// TODO: adding errorList to return all the errors in adding members
+	results := membership.JoinMemberResponse{
+		AddedSuccessNumber: 0,
+		AddedFailureNumber: 0,
+		Errors:             []membership.JoinMemberErrorResponse{},
+	}
 	for _, m := range request.Members {
 		if m.Member == user.Email || m.Member == user.StudentID.String {
 			continue
@@ -239,18 +248,28 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		_, err = h.memberStore.Add(traceCtx, group.ID, m.Member, m.Role)
 		if err != nil {
-			// h.problemWriter.WriteError(traceCtx, w, err, logger)
+			results.AddedFailureNumber++
+			results.Errors = append(results.Errors, membership.JoinMemberErrorResponse{
+				Member:  m.Member,
+				Role:    m.Role.String(),
+				Message: err.Error(),
+			})
 			continue
 		}
+		// If adding member is successful, increase the success count
+		results.AddedSuccessNumber++
 	}
 
-	groupResponse := Response{
-		ID:          group.ID.String(),
-		Title:       group.Title,
-		Description: group.Description.String,
-		IsArchived:  group.IsArchived.Bool,
-		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	groupResponse := CreateResponse{
+		Response: Response{
+			ID:          group.ID.String(),
+			Title:       group.Title,
+			Description: group.Description.String,
+			IsArchived:  group.IsArchived.Bool,
+			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		},
+		JoinMemberResponse: results,
 	}
 	groupResponse.Me.Type = "membership"
 	groupResponse.Me.Role = grouprole.RoleResponse{
