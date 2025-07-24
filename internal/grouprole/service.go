@@ -1,6 +1,7 @@
 package grouprole
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user/role"
 	"context"
@@ -54,9 +55,21 @@ func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, err
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+	if exists {
+		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+
 	createdRole, err := s.queries.Create(ctx, role)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role", role.RoleName, logger, "create group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "create group role")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
@@ -68,6 +81,18 @@ func (s *Service) Update(ctx context.Context, role UpdateParams) (GroupRole, err
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+	if exists {
+		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
 
 	updatedRole, err := s.queries.Update(ctx, role)
 	if err != nil {
