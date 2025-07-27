@@ -80,9 +80,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	if sort == "desc" {
 		params := ListDescPagedParams{
 			GroupID: groupId,
-			Sortby:  sortBy,
-			Size:    int32(size),
-			Skip:    int32(page) * int32(size),
+			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		res, err := s.queries.ListDescPaged(traceCtx, params)
 		if err != nil {
@@ -107,9 +107,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	} else {
 		params := ListAscPagedParams{
 			GroupID: groupId,
-			Sortby:  sortBy,
-			Size:    int32(size),
-			Skip:    int32(page) * int32(size),
+			//Sortby:  sortBy, //TODO: Implement various query with corresponding sortBy
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		res, err := s.queries.ListAscPaged(traceCtx, params)
 		if err != nil {
@@ -686,9 +686,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 	if sort == "desc" {
 		params := ListPendingMembersDescPagedParams{
 			GroupID: groupId,
-			Sortby:  sortBy,
-			Size:    int32(size),
-			Skip:    int32(page) * int32(size),
+			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		res, err := s.queries.ListPendingMembersDescPaged(traceCtx, params)
 		if err != nil {
@@ -712,9 +712,9 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 	} else {
 		params := ListPendingMembersAscPagedParams{
 			GroupID: groupId,
-			Sortby:  sortBy,
-			Size:    int32(size),
-			Skip:    int32(page) * int32(size),
+			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
+			Size: int32(size),
+			Skip: int32(page) * int32(size),
 		}
 		res, err := s.queries.ListPendingMembersAscPaged(traceCtx, params)
 		if err != nil {

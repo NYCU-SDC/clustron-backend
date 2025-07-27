@@ -13,7 +13,7 @@ JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
 JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
-ORDER BY @SortBy::text DESC
+ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
 
 -- name: ListAscPaged :many
@@ -31,7 +31,7 @@ JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
 JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
-ORDER BY @SortBy::text ASC
+ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;
 
 -- name: ExistsByIdentifier :one
@@ -124,7 +124,7 @@ SELECT
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
 WHERE pm.group_id = $1
-ORDER BY @SortBy::text DESC
+ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
 
 -- name: ListPendingMembersAscPaged :many
@@ -138,7 +138,7 @@ SELECT
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
 WHERE pm.group_id = $1
-ORDER BY @SortBy::text ASC
+ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;
 
 -- name: CountPendingByGroupID :one
