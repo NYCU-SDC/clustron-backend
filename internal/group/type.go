@@ -2,7 +2,7 @@ package group
 
 import "clustron-backend/internal/grouprole"
 
-type WithLinks struct {
+type ResponseWithLinks struct {
 	grouprole.UserScope
 	Links []Link
 }

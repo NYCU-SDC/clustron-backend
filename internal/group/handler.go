@@ -30,7 +30,7 @@ type MemberStore interface {
 //go:generate mockery --name=Store
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
-	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error)
+	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)

@@ -288,7 +288,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 	return response, nil
 }
 
-func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (WithLinks, error) {
+func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListByIDWithUserScope")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -304,7 +304,7 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
 		span.RecordError(err)
-		return WithLinks{}, err
+		return ResponseWithLinks{}, err
 	}
 
 	// Get link by group ID
@@ -312,7 +312,7 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "group_id", groupID.String(), logger, "Get group links")
 		span.RecordError(err)
-		return WithLinks{}, err
+		return ResponseWithLinks{}, err
 	}
 
 	// Get user role in the group
@@ -320,10 +320,10 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
 		span.RecordError(err)
-		return WithLinks{}, err
+		return ResponseWithLinks{}, err
 	}
 
-	response := WithLinks{
+	response := ResponseWithLinks{
 		// Basic user scope with group information
 		UserScope: grouprole.UserScope{
 			Group: grouprole.Group{
