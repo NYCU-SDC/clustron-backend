@@ -55,7 +55,7 @@ type Response struct {
 
 type CreateResponse struct {
 	Response
-	membership.JoinMemberResponse
+	AddedResult membership.JoinMemberResponse `json:"addedResult"` // contains the result of adding members
 }
 
 type CreateRequest struct {
@@ -269,7 +269,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		},
-		JoinMemberResponse: results,
+		AddedResult: results,
 	}
 	groupResponse.Me.Type = "membership"
 	groupResponse.Me.Role = grouprole.RoleResponse{
