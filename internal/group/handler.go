@@ -30,7 +30,7 @@ type MemberStore interface {
 //go:generate mockery --name=Store
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
-	ListByIDWithUserScope(ctx context.Context, user jwt.User, groupID uuid.UUID) (grouprole.UserScope, error)
+	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
@@ -38,6 +38,20 @@ type Store interface {
 	GetUserGroupAccessLevel(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (string, error)
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 	TransferOwner(ctx context.Context, groupID uuid.UUID, newOwnerIdentifier string, user jwt.User) (grouprole.UserScope, error)
+	CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error)
+	UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error)
+	DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error
+}
+
+type LinkResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Url   string `json:"url"`
+}
+
+type CreateLinkRequest struct {
+	Title string `json:"title" validate:"required"`
+	Url   string `json:"url" validate:"required"`
 }
 
 type Response struct {
@@ -53,6 +67,11 @@ type Response struct {
 	} `json:"me"`
 }
 
+type WithLinksResponse struct {
+	Response
+	Links []LinkResponse `json:"links"`
+}
+
 type CreateResponse struct {
 	Response
 	AddedResult membership.JoinMemberResponse `json:"addedResult"` // contains the result of adding members
@@ -62,6 +81,7 @@ type CreateRequest struct {
 	Title       string                        `json:"title" validate:"required"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
+	Links       []CreateLinkRequest
 }
 
 type TransferOwnerRequest struct {
@@ -165,7 +185,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userScopeResponse, err := h.store.ListByIDWithUserScope(traceCtx, user, groupUUID)
+	userScopeResponse, err := h.store.ListByIDWithLinks(traceCtx, user, groupUUID)
 	if err != nil {
 		if errors.As(err, &handlerutil.NotFoundError{}) {
 			handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
@@ -175,16 +195,31 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groupResponse := Response{
-		ID:          userScopeResponse.ID.String(),
-		Title:       userScopeResponse.Title,
-		Description: userScopeResponse.Description.String,
-		IsArchived:  userScopeResponse.IsArchived.Bool,
-		CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	groupResponse := WithLinksResponse{
+		// Basic group information
+		Response: Response{
+			ID:          userScopeResponse.ID.String(),
+			Title:       userScopeResponse.Title,
+			Description: userScopeResponse.Description.String,
+			IsArchived:  userScopeResponse.IsArchived.Bool,
+			CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		},
 	}
+
+	// User-specific information
 	groupResponse.Me.Type = userScopeResponse.Me.Type
 	groupResponse.Me.Role = userScopeResponse.Me.Role.ToResponse()
+
+	// Links resources of the group
+	groupResponse.Links = make([]LinkResponse, len(userScopeResponse.Links))
+	for i, link := range userScopeResponse.Links {
+		groupResponse.Links[i] = LinkResponse{
+			ID:    link.ID.String(),
+			Title: link.Title,
+			Url:   link.Url,
+		}
+	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
@@ -258,6 +293,14 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// If adding member is successful, increase the success count
 		results.AddedSuccessNumber++
+	}
+
+	// 3. Add links
+	for _, link := range request.Links {
+		_, err = h.store.CreateLink(traceCtx, group.ID, link.Title, link.Url)
+		if err != nil {
+			continue
+		}
 	}
 
 	groupResponse := CreateResponse{
@@ -405,6 +448,109 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "CreateLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request CreateLinkRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	link, err := h.store.CreateLink(traceCtx, groupUUID, request.Title, request.Url)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := LinkResponse{
+		ID:    link.ID.String(),
+		Title: link.Title,
+		Url:   link.Url,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
+}
+
+func (h *Handler) UpdateLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	linkID := r.PathValue("link_id")
+	linkUUID, err := uuid.Parse(linkID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request CreateLinkRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	link, err := h.store.UpdateLink(traceCtx, groupUUID, linkUUID, request.Title, request.Url)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := LinkResponse{
+		ID:    link.ID.String(),
+		Title: link.Title,
+		Url:   link.Url,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "DeleteLinkHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "DeleteLinkHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	linkID := r.PathValue("link_id")
+	linkUUID, err := uuid.Parse(linkID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.DeleteLink(traceCtx, groupUUID, linkUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
 func (h *Handler) TransferGroupOwnerHandler(w http.ResponseWriter, r *http.Request) {

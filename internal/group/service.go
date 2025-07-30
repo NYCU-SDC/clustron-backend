@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,13 @@ type RoleStore interface {
 	GetByID(ctx context.Context, roleID uuid.UUID) (grouprole.GroupRole, error)
 }
 
+type MembershipStore interface {
+	HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool
+	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
+	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
+	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
+}
+
 type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
@@ -40,12 +48,6 @@ type UserStore interface {
 type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
-}
-
-type MembershipStore interface {
-	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
-	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
-	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
 }
 
 type Service struct {
@@ -245,6 +247,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	// Get group by ID
 	var group Group
 	var err error
 	if user.Role != role.Admin.String() {
@@ -258,6 +261,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		return grouprole.UserScope{}, err
 	}
 
+	// Get user role in the group
 	roleResponse, roleType, err := s.roleStore.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
@@ -265,6 +269,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		return grouprole.UserScope{}, err
 	}
 
+	// Basic user scope with group information
 	response := grouprole.UserScope{
 		Group: grouprole.Group{
 			ID:          group.ID,
@@ -275,8 +280,76 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 			UpdatedAt:   group.UpdatedAt,
 		},
 	}
+
+	// Set the user's role and type in the response
 	response.Me.Type = roleType
 	response.Me.Role = grouprole.Role(roleResponse)
+
+	return response, nil
+}
+
+func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListByIDWithUserScope")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get group by ID
+	var group Group
+	var err error
+	if user.Role != role.Admin.String() {
+		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
+	} else {
+		group, err = s.Get(traceCtx, groupID)
+	}
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
+		span.RecordError(err)
+		return ResponseWithLinks{}, err
+	}
+
+	// Get link by group ID
+	links, err := s.queries.ListLinksByGroup(traceCtx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "group_id", groupID.String(), logger, "Get group links")
+		span.RecordError(err)
+		return ResponseWithLinks{}, err
+	}
+
+	// Get user role in the group
+	roleResponse, roleType, err := s.roleStore.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group role type")
+		span.RecordError(err)
+		return ResponseWithLinks{}, err
+	}
+
+	response := ResponseWithLinks{
+		// Basic user scope with group information
+		UserScope: grouprole.UserScope{
+			Group: grouprole.Group{
+				ID:          group.ID,
+				Title:       group.Title,
+				Description: group.Description,
+				IsArchived:  group.IsArchived,
+				CreatedAt:   group.CreatedAt,
+				UpdatedAt:   group.UpdatedAt,
+			},
+		},
+	}
+
+	// Set the user's role and type in the response
+	response.Me.Type = roleType
+	response.Me.Role = grouprole.Role(roleResponse)
+
+	// Convert links to the response format
+	response.Links = make([]Link, len(links))
+	for i, link := range links {
+		response.Links[i] = Link{
+			ID:    link.ID,
+			Title: link.Title,
+			Url:   link.Url,
+		}
+	}
 
 	return response, nil
 }
@@ -688,4 +761,78 @@ func (s *Service) GetAvailableGidNumber(ctx context.Context) (int, error) {
 		}
 		next++
 	}
+}
+
+func (s *Service) CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return Link{}, handlerutil.ErrForbidden
+	}
+
+	// create the link
+	newLink, err := s.queries.CreateLink(traceCtx, CreateLinkParams{
+		GroupID: groupID,
+		Title:   title,
+		Url:     Url,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "group_id", groupID.String(), logger, "create link")
+		span.RecordError(err)
+		return Link{}, err
+	}
+
+	return newLink, nil
+}
+
+func (s *Service) UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return Link{}, handlerutil.ErrForbidden
+	}
+
+	// update the link
+	updatedLink, err := s.queries.UpdateLink(traceCtx, UpdateLinkParams{
+		ID:    linkID,
+		Title: title,
+		Url:   Url,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "link_id", linkID.String(), logger, "update link")
+		span.RecordError(err)
+		return Link{}, err
+	}
+
+	return updatedLink, nil
+}
+
+func (s *Service) DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteLink")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.memberStore.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return handlerutil.ErrForbidden
+	}
+
+	// delete the link
+	err := s.queries.DeleteLink(traceCtx, linkID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "links", "link_id", linkID.String(), logger, "delete link")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }

@@ -98,3 +98,24 @@ SELECT
     *
 FROM memberships
 WHERE group_id = $1;
+
+-- name: ListLinksByGroup :many
+SELECT
+    l.id,
+    l.title,
+    l.url
+FROM
+    links AS l
+JOIN
+    groups AS g ON g.id = l.group_id
+WHERE
+    g.id = $1;
+
+-- name: CreateLink :one
+INSERT INTO links (group_id, title, url) VALUES ($1, $2, $3) RETURNING *;
+
+-- name: UpdateLink :one
+UPDATE links SET title = $2, url = $3 WHERE id = $1 RETURNING *;
+
+-- name: DeleteLink :exec
+DELETE FROM links WHERE id = $1;
