@@ -1,9 +1,10 @@
+name: clustron-dev
+
 services:
   backend:
     image: nycusdc/clustron-backend:dev
-    container_name: clustron-backend-dev
     networks:
-      - clustron_dev
+      - internal
       - traefik
     depends_on:
       postgres:
@@ -29,6 +30,7 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_PWD=password
       - OTEL_COLLECTOR_URL=10.140.0.3:4317
+      - PRESET_USER=Wwp7InVzZXIiOiJreWxlOTQxMDEwQGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiJiZW5kb3JpczA1MDlAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJoMjM3azc3Nzc3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFubmllMTA3MzEzMDNAZ21haWwuY29tIiwgInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiAiMXA0MXA0amVqb0BnbWFpbC5jb20iLCAicm9sZSI6ImFkbWluIn0KXQ==
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
@@ -41,7 +43,6 @@ services:
 
   postgres:
     image: postgres:latest
-    container_name: clustron-db-dev
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -52,11 +53,10 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
     networks:
-      - clustron_dev
+      - internal
 
   ldap:
     image: osixia/openldap:1.5.0
-    container_name: clustron-ldap-dev
     healthcheck:
       test: ["CMD", "cat", "/run/slapd/slapd.pid"]
       interval: 30s
@@ -73,9 +73,9 @@ services:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
     command: --copy-service --loglevel debug
     networks:
-      - clustron_dev
+      - internal
 
 networks:
-  clustron_dev:
+  internal:
   traefik:
     external: true

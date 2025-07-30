@@ -1,9 +1,10 @@
+name: clustron-stage
+
 services:
   backend:
     image: nycusdc/clustron-backend:stage
-    container_name: clustron-backend-stage
     networks:
-      - clustron_stage
+      - internal
       - traefik
     depends_on:
       postgres:
@@ -39,7 +40,6 @@ services:
 
   postgres:
     image: postgres:latest
-    container_name: clustron-db-stage
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -50,10 +50,9 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
     networks:
-      - clustron_stage
+      - internal
 
   ldap:
-    container_name: clustron-ldap-stage
     image: osixia/openldap:1.5.0
     healthcheck:
       test: ["CMD", "cat", "/run/slapd/slapd.pid"]
@@ -71,9 +70,9 @@ services:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
     command: --copy-service --loglevel debug
     networks:
-      - clustron_stage
+      - internal
 
 networks:
-  clustron_stage:
+  internal:
   traefik:
     external: true
