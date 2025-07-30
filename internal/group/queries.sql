@@ -92,3 +92,9 @@ SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;
 
 -- name: UpdateGidNumber :exec
 UPDATE groups SET gid_number = $2 WHERE id = $1;
+
+-- name: GetMembersByGroupID :many
+SELECT
+    *
+FROM memberships
+WHERE group_id = $1;
