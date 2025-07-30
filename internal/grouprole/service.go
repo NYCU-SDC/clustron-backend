@@ -82,18 +82,6 @@ func (s *Service) Update(ctx context.Context, role UpdateParams) (GroupRole, err
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
-		span.RecordError(err)
-		return GroupRole{}, err
-	}
-	if exists {
-		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
-		span.RecordError(err)
-		return GroupRole{}, err
-	}
-
 	updatedRole, err := s.queries.Update(ctx, role)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", role.ID.String(), logger, "update group role")
