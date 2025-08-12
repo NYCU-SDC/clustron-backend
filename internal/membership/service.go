@@ -353,8 +353,10 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			if err != nil {
 				logger.Warn("get public key failed", zap.Error(err))
 			}
+
 			// create LDAP user
 			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+
 			// add public key to LDAP user
 			for _, publicKey := range publicKeys {
 				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
@@ -362,6 +364,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
 				}
 			}
+
 			if err != nil {
 				if errors.Is(err, ldap.ErrUserExists) {
 					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
@@ -374,6 +377,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					logger.Warn("set uid number failed", zap.Error(err))
 				}
 			}
+
 			// add user to LDAP group
 			if groupName != "" && uidNumber != 0 {
 				err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
