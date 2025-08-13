@@ -89,7 +89,7 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	return nil
 }
 
-func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error) {
+func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, []ListLoginMethodsRow, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetSettingByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -98,10 +98,17 @@ func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Set
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
-		return Setting{}, err
+		return Setting{}, nil, err
 	}
 
-	return setting, nil
+	loginMethods, err := s.query.ListLoginMethods(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "login_info", "user_id", userID.String(), logger, "list login methods")
+		span.RecordError(err)
+		return Setting{}, nil, err
+	}
+
+	return setting, loginMethods, nil
 }
 
 func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (Setting, error) {
@@ -193,7 +200,7 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 		return PublicKey{}, err
 	}
 
-	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	settings, _, err := s.GetSettingByUserID(ctx, publicKey.UserID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
 		span.RecordError(err)
@@ -233,7 +240,7 @@ func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	settings, _, err := s.GetSettingByUserID(ctx, publicKey.UserID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
 		span.RecordError(err)

@@ -32,9 +32,15 @@ type UpdateSettingRequest struct {
 	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
 }
 
+type LoginMethod struct {
+	Provider string `json:"provider"`
+	Email    string `json:"email"`
+}
+
 type BasicSettingResponse struct {
-	FullName      string `json:"fullName"`
-	LinuxUsername string `json:"linuxUsername"`
+	FullName          string        `json:"fullName"`
+	LinuxUsername     string        `json:"linuxUsername"`
+	BoundLoginMethods []LoginMethod `json:"boundLoginMethods"`
 }
 
 type AddPublicKeyRequest struct {
@@ -54,7 +60,7 @@ type PublicKeyResponse struct {
 
 //go:generate mockery --name Store
 type Store interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error)
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, []ListLoginMethodsRow, error)
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
@@ -140,7 +146,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	userID := user.ID
 
-	setting, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
+	setting, loginMethods, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -150,6 +156,14 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		FullName:      setting.FullName.String,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
+	response.BoundLoginMethods = make([]LoginMethod, len(loginMethods))
+	for i, method := range loginMethods {
+		response.BoundLoginMethods[i] = LoginMethod{
+			Provider: method.Providertype,
+			Email:    method.Email.String,
+		}
+	}
+
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -165,7 +179,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	oldSetting, _, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
