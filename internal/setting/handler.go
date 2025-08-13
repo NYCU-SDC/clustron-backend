@@ -60,7 +60,7 @@ type PublicKeyResponse struct {
 
 //go:generate mockery --name Store
 type Store interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, []ListLoginMethodsRow, error)
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error)
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
@@ -77,6 +77,7 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 
 	settingStore Store
+	userStore    UserStore
 }
 
 func validatePublicKey(key string) error {
@@ -87,13 +88,14 @@ func validatePublicKey(key string) error {
 	return nil
 }
 
-func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store) Handler {
+func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
 	return Handler{
 		logger:        logger,
 		validator:     v,
 		tracer:        otel.Tracer("setting/handler"),
 		problemWriter: problemWriter,
 		settingStore:  store,
+		userStore:     userStore,
 	}
 }
 
@@ -146,7 +148,13 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	userID := user.ID
 
-	setting, loginMethods, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
+	setting, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	loginMethods, err := h.userStore.ListLoginMethodsByID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -179,7 +187,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	oldSetting, _, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
