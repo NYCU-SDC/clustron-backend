@@ -356,6 +356,11 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 			// create LDAP user
 			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+			if err != nil {
+				logger.Warn("create LDAP user failed", zap.String("username", userSetting.LinuxUsername.String), zap.Int("uid", uidNumber), zap.Error(err))
+			} else {
+				logger.Info("LDAP user created", zap.String("username", userSetting.LinuxUsername.String), zap.Int("uid", uidNumber))
+			}
 
 			// add public key to LDAP user
 			for _, publicKey := range publicKeys {
