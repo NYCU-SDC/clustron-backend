@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name UserStore
 type UserStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
