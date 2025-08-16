@@ -9,7 +9,6 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
-	"errors"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -449,13 +448,13 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	var (
-		newGroup    Group
-		groupName   string
-		userSetting setting.Setting
-		err         error
-		gidNumber   int
-		uidNumber   int
-		publicKeys  []setting.PublicKey
+		newGroup  Group
+		groupName string
+		//userSetting setting.Setting
+		err       error
+		gidNumber int
+		uidNumber int
+		//publicKeys  []setting.PublicKey
 	)
 
 	saga := internal.NewSaga(s.logger)
@@ -487,7 +486,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 	saga.AddStep(internal.SagaStep{
 		Name: "GetSettingByUserID",
 		Action: func(ctx context.Context) error {
-			userSetting, err = s.settingStore.GetSettingByUserID(ctx, userID)
+			_, err := s.settingStore.GetSettingByUserID(ctx, userID)
 			if err != nil {
 				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
 				span.RecordError(err)
@@ -574,123 +573,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 			})
 			if err != nil {
 				s.logger.Warn("failed to reset gid number in compensation", zap.Error(err), zap.String("group_id", newGroup.ID.String()))
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "GetPublicKeysByUserID",
-		Action: func(ctx context.Context) error {
-			publicKeys, err = s.settingStore.GetPublicKeysByUserID(ctx, userID)
-			if err != nil {
-				logger.Warn("get public keys failed", zap.Error(err))
-				return err
-			}
-			if len(publicKeys) == 0 {
-				logger.Warn("no public keys found for user", zap.String("user_id", userID.String()))
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "CreateLDAPUser",
-		Action: func(ctx context.Context) error {
-			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
-			if err != nil {
-				if errors.Is(err, ldap.ErrUserExists) {
-					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
-				} else {
-					logger.Warn("create LDAP user failed", zap.String("userID", userID.String()), zap.Int("uid", uidNumber), zap.Error(err))
-					return err
-				}
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if userSetting.LinuxUsername.String == "" {
-				return nil
-			}
-			err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
-			if err != nil {
-				s.logger.Warn("failed to delete LDAP user in compensation", zap.Error(err), zap.String("user_name", userSetting.LinuxUsername.String))
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "AddPublicKeysToLDAPUser",
-		Action: func(ctx context.Context) error {
-			for _, publicKey := range publicKeys {
-				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
-					return err
-				}
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if userSetting.LinuxUsername.String == "" {
-				return nil
-			}
-			for _, publicKey := range publicKeys {
-				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					s.logger.Warn("failed to delete public key in compensation", zap.Error(err), zap.String("public_key", publicKey.PublicKey))
-				}
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "SetUidNumber",
-		Action: func(ctx context.Context) error {
-			if uidNumber == 0 {
-				return fmt.Errorf("uid number is not set")
-			}
-			err = s.userStore.SetUidNumber(ctx, userID, uidNumber)
-			if err != nil {
-				logger.Warn("set uid number failed", zap.Error(err))
-				return err
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if userID == uuid.Nil {
-				return nil
-			}
-			err = s.userStore.SetUidNumber(ctx, userID, 0)
-			if err != nil {
-				s.logger.Warn("failed to reset uid number in compensation", zap.Error(err), zap.String("user_id", userID.String()))
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "AddUserToLDAPGroup",
-		Action: func(ctx context.Context) error {
-			if groupName == "" || uidNumber == 0 {
-				return fmt.Errorf("group name or uid number is not set")
-			}
-			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
-			if err != nil {
-				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
-				return err
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if groupName == "" || userSetting.LinuxUsername.String == "" {
-				return nil
-			}
-			err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
-			if err != nil {
-				s.logger.Warn("failed to remove user from LDAP group in compensation", zap.Error(err), zap.String("group_name", groupName), zap.String("user_name", userSetting.LinuxUsername.String))
 			}
 			return nil
 		},
