@@ -480,7 +480,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 			if err != nil {
 				s.logger.Warn("failed to delete group in compensation", zap.Error(err), zap.String("group_id", newGroup.ID.String()))
 			}
-
 			return nil
 		},
 	})
