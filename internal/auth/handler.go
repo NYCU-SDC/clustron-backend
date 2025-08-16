@@ -9,6 +9,7 @@ import (
 	"clustron-backend/internal/user"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -46,6 +47,7 @@ type SettingStore interface {
 
 type Store interface {
 	FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error)
+	Create(ctx context.Context, userID uuid.UUID, providerType ProviderType, email, identifier string) (LoginInfo, error)
 }
 
 type OAuthProvider interface {
@@ -55,11 +57,21 @@ type OAuthProvider interface {
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfoStore, error)
 }
 
-type callBackInfo struct {
-	code       string
-	oauthError string
-	callback   url.URL
-	redirectTo string
+type BindLoginInfoResponse struct {
+	Url string `json:"url"`
+}
+
+type callbackInfo struct {
+	code        string
+	oauthError  string
+	callback    url.URL
+	redirectTo  string
+	bindingUser uuid.UUID
+}
+
+type callbackState struct {
+	Callback    string `json:"callback"`
+	BindingUser string `json:"bindingUser"`
 }
 
 type Handler struct {
@@ -140,7 +152,16 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	if redirectTo != "" {
 		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
 	}
-	state := base64.StdEncoding.EncodeToString([]byte(callback))
+
+	callbackState := callbackState{
+		Callback: callback,
+	}
+	jsonCallbackState, err := json.Marshal(callbackState)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackState, err), logger)
+		return
+	}
+	state := base64.StdEncoding.EncodeToString(jsonCallbackState)
 
 	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
@@ -172,6 +193,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	code := callbackInfo.code
 	redirectTo := callbackInfo.redirectTo
 	oauthError := callbackInfo.oauthError
+	bindingUser := callbackInfo.bindingUser
 
 	if oauthError != "" {
 		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, oauthError), http.StatusTemporaryRedirect)
@@ -190,11 +212,21 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if the user exists in the database, if not, create a new user
-	loginInfo, err := h.store.FindOrCreate(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
+	// Check if the user is binding to an existing user
+	var loginInfo LoginInfo
+	if bindingUser != uuid.Nil {
+		loginInfo, err = h.store.Create(traceCtx, bindingUser, ProviderTypesMap[provider.Name()], userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+	} else {
+		// Check if the user exists in the database, if not, create a new user
+		loginInfo, err = h.store.FindOrCreate(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
 	}
 
 	// Create a new setting for the user
@@ -226,6 +258,54 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
+}
+
+// BindLoginInfo binds the login information to the request context
+func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "BindLoginInfo")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrUnauthorized, logger)
+		return
+	}
+
+	providerName := r.PathValue("provider")
+	provider := h.provider[providerName]
+	if provider == nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: provider not found: %s", internal.ErrProviderNotFound, providerName), logger)
+		return
+	}
+
+	callback := r.URL.Query().Get("c")
+	redirectTo := r.URL.Query().Get("r")
+	if callback == "" {
+		callback = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
+	}
+	if redirectTo != "" {
+		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
+	}
+
+	callbackState := callbackState{
+		Callback:    callback,
+		BindingUser: jwtUser.ID.String(),
+	}
+	jsonCallbackState, err := json.Marshal(callbackState)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackState, err), logger)
+		return
+	}
+	state := base64.StdEncoding.EncodeToString(jsonCallbackState)
+
+	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+
+	result := &BindLoginInfoResponse{
+		Url: authURL,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, result)
 }
 
 func (h *Handler) DebugToken(w http.ResponseWriter, r *http.Request) {
@@ -271,31 +351,41 @@ func (h *Handler) generateJWT(ctx context.Context, user user.User) (string, stri
 	return jwtToken, refreshToken.ID.String(), nil
 }
 
-func (h *Handler) getCallBackInfo(url *url.URL) (callBackInfo, error) {
-
+func (h *Handler) getCallBackInfo(url *url.URL) (callbackInfo, error) {
 	code := url.Query().Get("code")
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error") // Check if there was an error during the OAuth2 process
 
-	callbackURL, err := base64.StdEncoding.DecodeString(state)
+	callbackStateString, err := base64.StdEncoding.DecodeString(state)
 	if err != nil {
-		return callBackInfo{}, err
+		return callbackInfo{}, err
+	}
+	var callbackState callbackState
+	err = json.Unmarshal(callbackStateString, &callbackState)
+	if err != nil {
+		return callbackInfo{}, err
 	}
 
-	callback, err := url.Parse(string(callbackURL))
+	callback, err := url.Parse(callbackState.Callback)
 	if err != nil {
-		return callBackInfo{}, err
+		return callbackInfo{}, err
 	}
 
 	// Clear the query parameters from the callback URL, due to "?" symbol in original URL
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
 
-	return callBackInfo{
-		code:       code,
-		oauthError: oauthError,
-		callback:   *callback,
-		redirectTo: redirectTo,
+	// If the binding user is not provided, we set it to a nil UUID
+	if callbackState.BindingUser == "" {
+		callbackState.BindingUser = uuid.Nil.String()
+	}
+
+	return callbackInfo{
+		code:        code,
+		oauthError:  oauthError,
+		callback:    *callback,
+		redirectTo:  redirectTo,
+		bindingUser: uuid.Must(uuid.Parse(callbackState.BindingUser)),
 	}, nil
 }
 

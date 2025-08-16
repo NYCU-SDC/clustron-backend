@@ -25,6 +25,7 @@ type Service struct {
 type userStore interface {
 	Create(ctx context.Context, email, studentID string) (user.User, error)
 	UpdateRoleByID(ctx context.Context, userID uuid.UUID, role string) error
+	UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (user.User, error)
 }
 
 func NewService(logger *zap.Logger, db DBTX, userStore userStore, presetMap map[string]config.PresetUserInfo) *Service {
@@ -50,6 +51,36 @@ func (s *Service) ExistsByIdentifier(ctx context.Context, identifier string) (bo
 	}
 
 	return exists, nil
+}
+
+func (s *Service) Create(ctx context.Context, userID uuid.UUID, providerType ProviderType, email, identifier string) (LoginInfo, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateLoginInfo")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	loginInfo, err := s.queries.Create(traceCtx, CreateParams{
+		UserID:       userID,
+		Providertype: providerType.String(),
+		Identifier:   identifier,
+		Email:        pgtype.Text{String: email, Valid: true},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create login info")
+		span.RecordError(err)
+		return LoginInfo{}, err
+	}
+
+	if providerType == ProviderTypeNYCU {
+		// Update the user role to Student if the provider is NYCU
+		_, err := s.userStore.UpdateStudentID(traceCtx, userID, identifier)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user student ID")
+			span.RecordError(err)
+			return LoginInfo{}, err
+		}
+	}
+
+	return loginInfo, nil
 }
 
 func (s *Service) FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error) {
