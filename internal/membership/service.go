@@ -436,98 +436,100 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		},
 	})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "CreateLDAPUser",
-		Action: func(ctx context.Context) error {
-			// Create LDAP user
-			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
-			if err != nil {
-				if errors.Is(err, ldap.ErrUserExists) {
-					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
-				} else {
-					logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
+	if !isArchived {
+		saga.AddStep(internal.SagaStep{
+			Name: "CreateLDAPUser",
+			Action: func(ctx context.Context) error {
+				// Create LDAP user
+				err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+				if err != nil {
+					if errors.Is(err, ldap.ErrUserExists) {
+						logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
+					} else {
+						logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
+						return err
+					}
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				// If the user creation failed, we should remove the user from LDAP
+				err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
+				if err != nil {
+					logger.Warn("delete LDAP user failed", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
 					return err
 				}
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			// If the user creation failed, we should remove the user from LDAP
-			err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
-			if err != nil {
-				logger.Warn("delete LDAP user failed", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
-				return err
-			}
-			return nil
-		},
-	})
+				return nil
+			},
+		})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "SetUidNumber",
-		Action: func(ctx context.Context) error {
-			err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
-			if err != nil {
-				logger.Warn("set uid number failed", zap.Error(err))
-				return err
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			err = s.userStore.SetUidNumber(traceCtx, userId, 0)
-			if err != nil {
-				logger.Warn("set uid number to 0 failed", zap.Error(err))
-				return err
-			}
-			return nil
-		},
-	})
+		saga.AddStep(internal.SagaStep{
+			Name: "SetUidNumber",
+			Action: func(ctx context.Context) error {
+				err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
+				if err != nil {
+					logger.Warn("set uid number failed", zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.userStore.SetUidNumber(traceCtx, userId, 0)
+				if err != nil {
+					logger.Warn("set uid number to 0 failed", zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "AddPublicKeysToLDAPUser",
-		Action: func(ctx context.Context) error {
-			for _, publicKey := range publicKeys {
-				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
-					return err
+		saga.AddStep(internal.SagaStep{
+			Name: "AddPublicKeysToLDAPUser",
+			Action: func(ctx context.Context) error {
+				for _, publicKey := range publicKeys {
+					err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+					if err != nil {
+						logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						return err
+					}
 				}
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			for _, publicKey := range publicKeys {
-				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				for _, publicKey := range publicKeys {
+					err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+					if err != nil {
+						logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+					}
 				}
-			}
-			return nil
-		},
-	})
+				return nil
+			},
+		})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "AddUserToLDAPGroup",
-		Action: func(ctx context.Context) error {
-			if groupName != "" && uidNumber != 0 {
-				err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
-				if err != nil {
-					logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
-					return err
+		saga.AddStep(internal.SagaStep{
+			Name: "AddUserToLDAPGroup",
+			Action: func(ctx context.Context) error {
+				if groupName != "" && uidNumber != 0 {
+					err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+					if err != nil {
+						logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
+						return err
+					}
 				}
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if groupName != "" && uidNumber != 0 {
-				err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
-				if err != nil {
-					logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.Error(err))
-					return err
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				if groupName != "" && uidNumber != 0 {
+					err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
+					if err != nil {
+						logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.Error(err))
+						return err
+					}
 				}
-			}
-			return nil
-		},
-	})
+				return nil
+			},
+		})
+	}
 
 	err = saga.Execute(traceCtx)
 	if err != nil {
