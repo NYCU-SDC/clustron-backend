@@ -1,6 +1,7 @@
 package group
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/ldap"
@@ -11,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"strconv"
 	"strings"
 
@@ -59,9 +61,10 @@ type Service struct {
 	settingStore SettingStore
 	memberStore  MembershipStore
 	ldapClient   ldap.LDAPClient
+	db           *pgxpool.Pool
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:       logger,
 		tracer:       otel.Tracer("group/service"),
@@ -71,6 +74,7 @@ func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore S
 		settingStore: settingStore,
 		memberStore:  membershipStore,
 		ldapClient:   ldapClient,
+		db:           db,
 	}
 }
 
@@ -444,77 +448,259 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	newGroup, err := s.queries.Create(ctx, group)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to create group")
-		span.RecordError(err)
-		return Group{}, err
-	}
+	var (
+		newGroup    Group
+		groupName   string
+		userSetting setting.Setting
+		err         error
+		gidNumber   int
+		uidNumber   int
+		publicKeys  []setting.PublicKey
+	)
 
-	userSetting, err := s.settingStore.GetSettingByUserID(ctx, userID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
-		span.RecordError(err)
-		return Group{}, err
-	}
+	saga := internal.NewSaga(s.logger)
 
-	// Create LDAP group
-	groupName := newGroup.ID.String()
-	gidNumber, err := s.GetAvailableGidNumber(ctx)
-	if err != nil {
-		logger.Warn("get available gid number failed", zap.Error(err))
-	}
-	uidNumber, err := s.userStore.GetAvailableUidNumber(ctx)
-	logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
-	if err != nil {
-		logger.Warn("get available gid number failed", zap.Error(err))
-	} else {
-		err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
-		if err != nil {
-			logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
-		} else {
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateGroup",
+		Action: func(ctx context.Context) error {
+			newGroup, err = s.queries.Create(ctx, group)
+			if err != nil {
+				err = databaseutil.WrapDBError(err, logger, "failed to create group")
+				span.RecordError(err)
+				return err
+			}
+			groupName = newGroup.ID.String()
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if newGroup.ID == uuid.Nil {
+				return nil
+			}
+			err := s.queries.Delete(ctx, newGroup.ID)
+			if err != nil {
+				s.logger.Warn("failed to delete group in compensation", zap.Error(err), zap.String("group_id", newGroup.ID.String()))
+			}
+
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetSettingByUserID",
+		Action: func(ctx context.Context) error {
+			userSetting, err = s.settingStore.GetSettingByUserID(ctx, userID)
+			if err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetAvailableGidNumber",
+		Action: func(ctx context.Context) error {
+			gidNumber, err = s.GetAvailableGidNumber(ctx)
+			if err != nil {
+				logger.Warn("get available gid number failed", zap.Error(err))
+				return err
+			}
+			logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetAvailableUidNumber",
+		Action: func(ctx context.Context) error {
+			uidNumber, err = s.userStore.GetAvailableUidNumber(ctx)
+			if err != nil {
+				logger.Warn("get available uid number failed", zap.Error(err))
+				return err
+			}
+			logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateLDAPGroup",
+		Action: func(ctx context.Context) error {
+			if groupName == "" {
+				groupName = newGroup.ID.String()
+			}
+			err = s.ldapClient.CreateGroup(groupName, strconv.Itoa(gidNumber), []string{})
+			if err != nil {
+				logger.Warn("create LDAP group failed", zap.String("group", groupName), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if groupName == "" {
+				return nil
+			}
+			err = s.ldapClient.DeleteGroup(groupName)
+			if err != nil {
+				s.logger.Warn("failed to delete LDAP group in compensation", zap.Error(err), zap.String("group_name", groupName))
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "UpdateGidNumber",
+		Action: func(ctx context.Context) error {
+			if gidNumber == 0 {
+				return fmt.Errorf("gid number is not set")
+			}
 			err = s.queries.UpdateGidNumber(ctx, UpdateGidNumberParams{
 				ID:        newGroup.ID,
 				GidNumber: pgtype.Int4{Int32: int32(gidNumber), Valid: true},
 			})
 			if err != nil {
 				logger.Warn("set gid number failed", zap.Error(err))
+				return err
 			}
-		}
-
-		// get public key
-		publicKeys, err := s.settingStore.GetPublicKeysByUserID(ctx, userID)
-		if err != nil {
-			logger.Warn("get public key failed", zap.Error(err))
-		}
-		// create LDAP user
-		err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
-		// add public key to LDAP user
-		for _, publicKey := range publicKeys {
-			err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if newGroup.ID == uuid.Nil {
+				return nil
+			}
+			err = s.queries.UpdateGidNumber(ctx, UpdateGidNumberParams{
+				ID:        newGroup.ID,
+				GidNumber: pgtype.Int4{Int32: 0, Valid: false},
+			})
 			if err != nil {
-				logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+				s.logger.Warn("failed to reset gid number in compensation", zap.Error(err), zap.String("group_id", newGroup.ID.String()))
 			}
-		}
-		if err != nil {
-			if errors.Is(err, ldap.ErrUserExists) {
-				logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
-			} else {
-				logger.Warn("create LDAP user failed", zap.String("userID", userID.String()), zap.Int("uid", uidNumber), zap.Error(err))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetPublicKeysByUserID",
+		Action: func(ctx context.Context) error {
+			publicKeys, err = s.settingStore.GetPublicKeysByUserID(ctx, userID)
+			if err != nil {
+				logger.Warn("get public keys failed", zap.Error(err))
+				return err
 			}
-		} else {
+			if len(publicKeys) == 0 {
+				logger.Warn("no public keys found for user", zap.String("user_id", userID.String()))
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateLDAPUser",
+		Action: func(ctx context.Context) error {
+			err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+			if err != nil {
+				if errors.Is(err, ldap.ErrUserExists) {
+					logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
+				} else {
+					logger.Warn("create LDAP user failed", zap.String("userID", userID.String()), zap.Int("uid", uidNumber), zap.Error(err))
+					return err
+				}
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if userSetting.LinuxUsername.String == "" {
+				return nil
+			}
+			err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
+			if err != nil {
+				s.logger.Warn("failed to delete LDAP user in compensation", zap.Error(err), zap.String("user_name", userSetting.LinuxUsername.String))
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "AddPublicKeysToLDAPUser",
+		Action: func(ctx context.Context) error {
+			for _, publicKey := range publicKeys {
+				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+				if err != nil {
+					logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+					return err
+				}
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if userSetting.LinuxUsername.String == "" {
+				return nil
+			}
+			for _, publicKey := range publicKeys {
+				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+				if err != nil {
+					s.logger.Warn("failed to delete public key in compensation", zap.Error(err), zap.String("public_key", publicKey.PublicKey))
+				}
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "SetUidNumber",
+		Action: func(ctx context.Context) error {
+			if uidNumber == 0 {
+				return fmt.Errorf("uid number is not set")
+			}
 			err = s.userStore.SetUidNumber(ctx, userID, uidNumber)
 			if err != nil {
 				logger.Warn("set uid number failed", zap.Error(err))
+				return err
 			}
-		}
-		// add user to LDAP group
-		if groupName != "" && uidNumber != 0 {
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if userID == uuid.Nil {
+				return nil
+			}
+			err = s.userStore.SetUidNumber(ctx, userID, 0)
+			if err != nil {
+				s.logger.Warn("failed to reset uid number in compensation", zap.Error(err), zap.String("user_id", userID.String()))
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "AddUserToLDAPGroup",
+		Action: func(ctx context.Context) error {
+			if groupName == "" || uidNumber == 0 {
+				return fmt.Errorf("group name or uid number is not set")
+			}
 			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
 			if err != nil {
 				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
+				return err
 			}
-		}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if groupName == "" || userSetting.LinuxUsername.String == "" {
+				return nil
+			}
+			err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
+			if err != nil {
+				s.logger.Warn("failed to remove user from LDAP group in compensation", zap.Error(err), zap.String("group_name", groupName), zap.String("user_name", userSetting.LinuxUsername.String))
+			}
+			return nil
+		},
+	})
+
+	err = saga.Execute(traceCtx)
+	if err != nil {
+		s.logger.Error("saga execution failed", zap.Error(err))
+		return Group{}, err
 	}
 
 	return newGroup, nil
