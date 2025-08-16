@@ -172,6 +172,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", basicMiddleware.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
+	mux.HandleFunc("POST /api/bind/oauth/{provider}", authMiddleware.HandlerFunc(authHandler.BindLoginInfo))
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))

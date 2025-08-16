@@ -12,6 +12,7 @@ var (
 	ErrProviderNotFound     = errors.New("provider not found")
 	ErrInvalidExchangeToken = errors.New("invalid exchange token")
 	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
+	ErrInvalidCallbackState = errors.New("invalid callback state")
 	ErrPermissionDenied     = errors.New("permission denied")
 	ErrAlreadyOnboarded     = errors.New("user already onboarded")
 
@@ -41,6 +42,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid exchange token")
 	case errors.Is(err, ErrInvalidCallbackInfo):
 		return problem.NewValidateProblem("invalid callback info")
+	case errors.Is(err, ErrInvalidCallbackState):
+		return problem.NewInternalServerProblem("invalid callback state")
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
 	case errors.Is(err, ErrDatabaseConflict):
