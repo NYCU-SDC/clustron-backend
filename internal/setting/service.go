@@ -186,36 +186,97 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	addedPublicKey, err := s.query.CreatePublicKey(ctx, publicKey)
+	var (
+		addedPublicKey PublicKey
+		err            error
+		userSetting    Setting
+		exists         bool
+	)
+
+	saga := internal.NewSaga(s.logger)
+
+	saga.AddStep(internal.SagaStep{
+		Name: "AddPublicKey",
+		Action: func(ctx context.Context) error {
+			addedPublicKey, err = s.query.CreatePublicKey(ctx, publicKey)
+			if err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if err := s.query.DeletePublicKey(ctx, addedPublicKey.ID); err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", addedPublicKey.ID.String(), logger, "compensate delete public key")
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetSettingByUserID",
+		Action: func(ctx context.Context) error {
+			userSetting, err = s.GetSettingByUserID(ctx, publicKey.UserID)
+			if err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "GetUserInfo",
+		Action: func(ctx context.Context) error {
+			ldapUser, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
+			if err != nil {
+				logger.Warn("get user by id failed", zap.Error(err))
+				return err
+			}
+			exists = ldapUser != nil
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "AddSSHPublicKey",
+		Action: func(ctx context.Context) error {
+			if exists {
+				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+				if err != nil {
+					logger.Warn("add public key to LDAP user failed", zap.Error(err))
+					return err
+				}
+				logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+				return nil
+			}
+			logger.Info("LDAP user does not exist, skipping adding public key", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			if exists {
+				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+				if err != nil {
+					logger.Warn("delete public key from LDAP user failed", zap.Error(err))
+					return err
+				}
+				logger.Info("delete public key from LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+				return nil
+			}
+			logger.Info("LDAP user does not exist, skipping deleting public key", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+			return nil
+		},
+	})
+
+	err = saga.Execute(traceCtx)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
+		logger.Error("saga execution failed", zap.Error(err))
 		span.RecordError(err)
 		return PublicKey{}, err
-	}
-
-	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
-		span.RecordError(err)
-		return PublicKey{}, err
-	}
-
-	// check if the user LDAP user exists, if exists, add the public key to the user
-	user, err := s.ldapClient.GetUserInfo(settings.LinuxUsername.String)
-	if err != nil {
-		logger.Warn("get user by id failed", zap.Error(err))
-	} else if user != nil {
-		err = s.ldapClient.AddSSHPublicKey(settings.LinuxUsername.String, publicKey.PublicKey)
-		if err != nil {
-			logger.Warn("add public key to LDAP user failed", zap.Error(err))
-		}
-		// get public key
-		publicKeys, err := s.GetPublicKeysByUserID(ctx, publicKey.UserID)
-		if err != nil {
-			logger.Warn("get public key failed", zap.Error(err))
-		}
-		logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-		logger.Info("public keys", zap.Any("publicKeys", publicKeys))
 	}
 
 	return addedPublicKey, nil
