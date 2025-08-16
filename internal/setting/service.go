@@ -3,6 +3,7 @@ package setting
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/ldap"
+	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
 
@@ -15,13 +16,16 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name UserStore
 type UserStore interface {
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
 }
 
 type MembershipService interface {
 	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
 }
+
 type Service struct {
 	logger            *zap.Logger
 	tracer            trace.Tracer

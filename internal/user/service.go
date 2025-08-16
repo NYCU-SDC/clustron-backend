@@ -242,3 +242,18 @@ func (s *Service) SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int)
 
 	return nil
 }
+
+func (s *Service) ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]ListLoginMethodsRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListLoginMethods")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	methods, err := s.queries.ListLoginMethods(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "login_info", "user_id", userID.String(), logger, "list login methods")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return methods, nil
+}
