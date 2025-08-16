@@ -55,6 +55,9 @@ INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING *;
 -- name: Update :one
 UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
+-- name: Delete :exec
+DELETE FROM groups WHERE id = $1;
+
 -- name: Archive :one
 UPDATE groups SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
