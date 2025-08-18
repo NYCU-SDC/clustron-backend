@@ -468,7 +468,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		saga.AddStep(internal.SagaStep{
 			Name: "SetUidNumber",
 			Action: func(ctx context.Context) error {
-				if !exists {
+				if !u.UidNumber.Valid {
 					err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
 					if err != nil {
 						logger.Warn("set uid number failed", zap.Error(err))
@@ -479,7 +479,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				if !exists {
+				if !u.UidNumber.Valid {
 					err = s.userStore.SetUidNumber(traceCtx, userId, 0)
 					if err != nil {
 						logger.Warn("clear uid number failed", zap.Error(err))
