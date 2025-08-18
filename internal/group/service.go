@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"strconv"
 	"strings"
 
@@ -60,10 +59,9 @@ type Service struct {
 	settingStore SettingStore
 	memberStore  MembershipStore
 	ldapClient   ldap.LDAPClient
-	db           *pgxpool.Pool
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient ldap.LDAPClient) *Service {
 	return &Service{
 		logger:       logger,
 		tracer:       otel.Tracer("group/service"),
@@ -73,7 +71,6 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, setti
 		settingStore: settingStore,
 		memberStore:  membershipStore,
 		ldapClient:   ldapClient,
-		db:           db,
 	}
 }
 
