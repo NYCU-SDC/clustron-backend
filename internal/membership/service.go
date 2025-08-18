@@ -325,8 +325,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			if exists {
 				roleInfo, err := s.groupRoleStore.GetByUser(traceCtx, userId, groupId)
 				if err != nil {
+					err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to get membership role")
 					span.RecordError(err)
-					return databaseutil.WrapDBError(err, logger, "failed to get group role by user")
+					return err
 				}
 				roleID = roleInfo.ID
 			}
@@ -343,8 +344,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 				RoleID:  role,
 			})
 			if err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId, userId), logger, "failed to create or update membership")
 				span.RecordError(err)
-				return databaseutil.WrapDBError(err, logger, "failed to add member")
+				return err
 			}
 			return nil
 		},
@@ -466,18 +468,24 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		saga.AddStep(internal.SagaStep{
 			Name: "SetUidNumber",
 			Action: func(ctx context.Context) error {
-				err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
-				if err != nil {
-					logger.Warn("set uid number failed", zap.Error(err))
-					return err
+				if !exists {
+					err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
+					if err != nil {
+						logger.Warn("set uid number failed", zap.Error(err))
+						return err
+					}
+					return nil
 				}
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				err = s.userStore.SetUidNumber(traceCtx, userId, 0)
-				if err != nil {
-					logger.Warn("set uid number to 0 failed", zap.Error(err))
-					return err
+				if !exists {
+					err = s.userStore.SetUidNumber(traceCtx, userId, 0)
+					if err != nil {
+						logger.Warn("clear uid number failed", zap.Error(err))
+						return err
+					}
+					return nil
 				}
 				return nil
 			},
