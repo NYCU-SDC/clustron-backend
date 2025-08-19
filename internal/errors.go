@@ -8,13 +8,14 @@ import (
 
 var (
 	// Auth Errors
-	ErrInvalidRefreshToken  = errors.New("invalid refresh token")
-	ErrProviderNotFound     = errors.New("provider not found")
-	ErrInvalidExchangeToken = errors.New("invalid exchange token")
-	ErrInvalidCallbackInfo  = errors.New("invalid callback info")
-	ErrInvalidCallbackState = errors.New("invalid callback state")
-	ErrPermissionDenied     = errors.New("permission denied")
-	ErrAlreadyOnboarded     = errors.New("user already onboarded")
+	ErrInvalidRefreshToken    = errors.New("invalid refresh token")
+	ErrProviderNotFound       = errors.New("provider not found")
+	ErrInvalidExchangeToken   = errors.New("invalid exchange token")
+	ErrInvalidCallbackInfo    = errors.New("invalid callback info")
+	ErrInvalidCallbackState   = errors.New("invalid callback state")
+	ErrPermissionDenied       = errors.New("permission denied")
+	ErrAlreadyOnboarded       = errors.New("user already onboarded")
+	ErrBindingAccountConflict = errors.New("binding account conflict")
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
@@ -54,6 +55,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid syntax")
 	case errors.As(err, &ErrInvalidLinuxUsername{}):
 		return problem.NewValidateProblem("invalid username: " + err.Error())
+	case errors.Is(err, ErrBindingAccountConflict):
+		return problem.NewBadRequestProblem("binding account conflict")
 	default:
 		return problem.Problem{}
 	}

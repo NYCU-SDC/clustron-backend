@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/user"
 	"context"
+	"fmt"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -27,6 +29,7 @@ type Service struct {
 
 type userStore interface {
 	Create(ctx context.Context, email, studentID string) (user.User, error)
+	ExistsByIdentifier(ctx context.Context, identifier string) (bool, error)
 	UpdateRoleByID(ctx context.Context, userID uuid.UUID, role string) error
 	UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (user.User, error)
 }
@@ -61,6 +64,30 @@ func (s *Service) CreateInfo(ctx context.Context, userID uuid.UUID, providerType
 	traceCtx, span := s.tracer.Start(ctx, "CreateLoginInfo")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exist, err := s.queries.ExistsInfoByIdentifier(traceCtx, identifier)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check login info existence by identifier")
+		span.RecordError(err)
+		return LoginInfo{}, err
+	}
+	if exist {
+		err = fmt.Errorf("login info with identifier %s already exists, %w", identifier, internal.ErrBindingAccountConflict)
+		span.RecordError(err)
+		return LoginInfo{}, err
+	}
+
+	exist, err = s.userStore.ExistsByIdentifier(traceCtx, identifier)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check user existence by identifier")
+		span.RecordError(err)
+		return LoginInfo{}, err
+	}
+	if exist {
+		err = fmt.Errorf("user with identifier %s already exists, %w", identifier, internal.ErrBindingAccountConflict)
+		span.RecordError(err)
+		return LoginInfo{}, err
+	}
 
 	loginInfo, err := s.queries.CreateInfo(traceCtx, CreateInfoParams{
 		UserID:       userID,
