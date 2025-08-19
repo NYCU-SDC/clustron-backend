@@ -291,6 +291,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	var (
 		exists      bool
+		ldapExists  bool
 		member      Membership
 		err         error
 		roleID      uuid.UUID
@@ -440,15 +441,32 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	if !isArchived {
 		saga.AddStep(internal.SagaStep{
+			Name: "CheckLDAPUser",
+			Action: func(ctx context.Context) error {
+				// Check if the user already exists in LDAP
+				_, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
+				if err != nil {
+					if errors.Is(err, ldap.ErrUserNotFound) {
+						logger.Info("user does not exist in LDAP", zap.String("username", userSetting.LinuxUsername.String))
+						ldapExists = false
+						return nil
+					}
+					logger.Warn("check LDAP user existence failed", zap.String("username", userSetting.LinuxUsername.String), zap.Error(err))
+					return err
+				}
+				ldapExists = true
+				return nil
+			},
+		})
+
+		saga.AddStep(internal.SagaStep{
 			Name: "CreateLDAPUser",
 			Action: func(ctx context.Context) error {
 				// Create LDAP user
-				err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
-				if err != nil {
-					if errors.Is(err, ldap.ErrUserExists) {
-						logger.Info("user already exists", zap.String("uid", userSetting.LinuxUsername.String))
-					} else {
-						logger.Warn("create LDAP user failed", zap.String("email", u.Email), zap.Int("uid", uidNumber), zap.Error(err))
+				if !ldapExists {
+					err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+					if err != nil {
+						logger.Warn("create LDAP user failed", zap.String("username", userSetting.LinuxUsername.String), zap.Int("uid", uidNumber), zap.Error(err))
 						return err
 					}
 				}
@@ -456,10 +474,12 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			},
 			Compensate: func(ctx context.Context) error {
 				// If the user creation failed, we should remove the user from LDAP
-				err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
-				if err != nil {
-					logger.Warn("delete LDAP user failed", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
-					return err
+				if !ldapExists {
+					err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
+					if err != nil {
+						logger.Warn("delete LDAP user failed", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
+						return err
+					}
 				}
 				return nil
 			},
