@@ -5,11 +5,10 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5"
-
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -248,15 +247,42 @@ func (s *Service) SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int)
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
-		ID:        id,
-		UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: true},
-	})
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
-		span.RecordError(err)
-		return err
+	if uidNumber == 0 {
+		err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
+			ID:        id,
+			UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: false},
+		})
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
+			span.RecordError(err)
+			return err
+		}
+	} else {
+		err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
+			ID:        id,
+			UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: true},
+		})
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
+			span.RecordError(err)
+			return err
+		}
 	}
 
 	return nil
+}
+
+func (s *Service) ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]ListLoginMethodsRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListLoginMethods")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	methods, err := s.queries.ListLoginMethods(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "login_info", "user_id", userID.String(), logger, "list login methods")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return methods, nil
 }

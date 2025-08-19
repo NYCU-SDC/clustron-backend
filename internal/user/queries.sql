@@ -44,3 +44,5 @@ SELECT uid_number FROM users WHERE uid_number IS NOT NULL ORDER BY uid_number;
 -- name: SetUidNumber :exec
 UPDATE users SET uid_number = $2 WHERE id = $1;
 
+-- name: ListLoginMethods :many
+SELECT providertype, email FROM login_info WHERE user_id = $1;
