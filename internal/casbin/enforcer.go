@@ -17,7 +17,7 @@ type Enforcer struct {
 }
 
 func NewEnforcer(logger *zap.Logger, config config.Config) *Enforcer {
-	// Create a new enforcer with the model and adapter
+	// CreateInfo a new enforcer with the model and adapter
 	e, err := casbin.NewEnforcer(config.CasbinModelSource, config.CasbinPolicySource)
 	if err != nil {
 		logger.Fatal("Failed to create enforcer", zap.Error(err))

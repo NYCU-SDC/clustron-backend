@@ -8,8 +8,6 @@ import (
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -46,8 +44,12 @@ type SettingStore interface {
 }
 
 type Store interface {
-	FindOrCreate(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error)
-	Create(ctx context.Context, userID uuid.UUID, providerType ProviderType, email, identifier string) (LoginInfo, error)
+	FindOrCreateInfo(ctx context.Context, email, identifier string, providerType ProviderType) (LoginInfo, error)
+	CreateInfo(ctx context.Context, userID uuid.UUID, providerType ProviderType, email, identifier string) (LoginInfo, error)
+	GetTokenByID(ctx context.Context, id uuid.UUID) (LoginToken, error)
+	CreateToken(ctx context.Context, callback string, userID uuid.UUID) (LoginToken, error)
+	InactivateToken(ctx context.Context, id uuid.UUID) error
+	DeleteExpiredTokens(ctx context.Context) error
 }
 
 type OAuthProvider interface {
@@ -153,17 +155,13 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
 	}
 
-	callbackState := callbackState{
-		Callback: callback,
-	}
-	jsonCallbackState, err := json.Marshal(callbackState)
+	token, err := h.store.CreateToken(traceCtx, callback, uuid.Nil)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackState, err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	state := base64.StdEncoding.EncodeToString(jsonCallbackState)
 
-	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURL := provider.Config().AuthCodeURL(token.ID.String(), oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 
 	logger.Info("Redirecting to Google OAuth2", zap.String("url", authURL))
@@ -183,9 +181,15 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the OAuth2 code and state from the request
-	callbackInfo, err := h.getCallBackInfo(r.URL)
+	callbackInfo, err := h.getCallBackInfo(traceCtx, r.URL)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackInfo, err), logger)
+		return
+	}
+
+	err = h.store.DeleteExpiredTokens(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -215,21 +219,21 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Check if the user is binding to an existing user
 	var loginInfo LoginInfo
 	if bindingUser != uuid.Nil {
-		loginInfo, err = h.store.Create(traceCtx, bindingUser, ProviderTypesMap[provider.Name()], userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID)
+		loginInfo, err = h.store.CreateInfo(traceCtx, bindingUser, ProviderTypesMap[provider.Name()], userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	} else {
 		// Check if the user exists in the database, if not, create a new user
-		loginInfo, err = h.store.FindOrCreate(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
+		loginInfo, err = h.store.FindOrCreateInfo(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 	}
 
-	// Create a new setting for the user
+	// CreateInfo a new setting for the user
 	_, err = h.settingStore.FindOrCreateSetting(traceCtx, loginInfo.UserID, pgtype.Text{String: userInfo.GetUserInfo().Name, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -288,18 +292,13 @@ func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
 	}
 
-	callbackState := callbackState{
-		Callback:    callback,
-		BindingUser: jwtUser.ID.String(),
-	}
-	jsonCallbackState, err := json.Marshal(callbackState)
+	token, err := h.store.CreateToken(traceCtx, callback, jwtUser.ID)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackState, err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	state := base64.StdEncoding.EncodeToString(jsonCallbackState)
 
-	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURL := provider.Config().AuthCodeURL(token.ID.String(), oauth2.AccessTypeOffline)
 
 	result := &BindLoginInfoResponse{
 		Url: authURL,
@@ -351,22 +350,27 @@ func (h *Handler) generateJWT(ctx context.Context, user user.User) (string, stri
 	return jwtToken, refreshToken.ID.String(), nil
 }
 
-func (h *Handler) getCallBackInfo(url *url.URL) (callbackInfo, error) {
+func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callbackInfo, error) {
 	code := url.Query().Get("code")
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error") // Check if there was an error during the OAuth2 process
 
-	callbackStateString, err := base64.StdEncoding.DecodeString(state)
+	tokenID, err := handlerutil.ParseUUID(state)
 	if err != nil {
-		return callbackInfo{}, err
+		return callbackInfo{}, fmt.Errorf("%w: invalid state parameter", internal.ErrInvalidCallbackInfo)
 	}
-	var callbackState callbackState
-	err = json.Unmarshal(callbackStateString, &callbackState)
+
+	token, err := h.store.GetTokenByID(ctx, tokenID)
 	if err != nil {
 		return callbackInfo{}, err
 	}
 
-	callback, err := url.Parse(callbackState.Callback)
+	err = h.store.InactivateToken(ctx, tokenID)
+	if err != nil {
+		return callbackInfo{}, err
+	}
+
+	callback, err := url.Parse(token.Callback)
 	if err != nil {
 		return callbackInfo{}, err
 	}
@@ -375,9 +379,12 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callbackInfo, error) {
 	redirectTo := callback.Query().Get("r")
 	callback.RawQuery = ""
 
-	// If the binding user is not provided, we set it to a nil UUID
-	if callbackState.BindingUser == "" {
-		callbackState.BindingUser = uuid.Nil.String()
+	// Extract the binding user ID from the token
+	var bindingUser uuid.UUID
+	if !token.UserID.Valid {
+		bindingUser = uuid.Nil
+	} else {
+		bindingUser = token.UserID.Bytes
 	}
 
 	return callbackInfo{
@@ -385,7 +392,7 @@ func (h *Handler) getCallBackInfo(url *url.URL) (callbackInfo, error) {
 		oauthError:  oauthError,
 		callback:    *callback,
 		redirectTo:  redirectTo,
-		bindingUser: uuid.Must(uuid.Parse(callbackState.BindingUser)),
+		bindingUser: bindingUser,
 	}, nil
 }
 

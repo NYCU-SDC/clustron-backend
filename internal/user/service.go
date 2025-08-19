@@ -56,7 +56,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 func (s *Service) Create(ctx context.Context, email, studentID string) (User, error) {
-	traceCtx, span := s.tracer.Start(ctx, "Create")
+	traceCtx, span := s.tracer.Start(ctx, "CreateInfo")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 

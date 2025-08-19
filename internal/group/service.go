@@ -440,7 +440,7 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 }
 
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error) {
-	traceCtx, span := s.tracer.Start(ctx, "Create")
+	traceCtx, span := s.tracer.Start(ctx, "CreateInfo")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -458,7 +458,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 		return Group{}, err
 	}
 
-	// Create LDAP group
+	// CreateInfo LDAP group
 	groupName := newGroup.ID.String()
 	gidNumber, err := s.GetAvailableGidNumber(ctx)
 	if err != nil {

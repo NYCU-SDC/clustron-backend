@@ -42,16 +42,16 @@ package membership
 //			setup: func(t *testing.T, params params, db dbtestdata.DBTX) context.Context {
 //				builder := dbtestdata.NewBuilder(t, db)
 //				userBuilder := builder.User()
-//				builder.Group().Create(dbtestdata.GroupWithID(params.groupId))
+//				builder.Group().CreateInfo(dbtestdata.GroupWithID(params.groupId))
 //
 //				operatorID := uuid.MustParse("bcdc86ec-4e09-4239-b73b-389e2909138c")
-//				operator := userBuilder.Create(dbtestdata.UserWithID(operatorID),
+//				operator := userBuilder.CreateInfo(dbtestdata.UserWithID(operatorID),
 //					dbtestdata.UserWithRole(role.Organizer))
 //
-//				_, err := builder.Membership().Create(params.groupId, operatorID, uuid.MustParse(grouprole.RoleOwner.String()))
+//				_, err := builder.Membership().CreateInfo(params.groupId, operatorID, uuid.MustParse(grouprole.RoleOwner.String()))
 //				require.NoError(t, err, "failed to create membership for operator")
 //
-//				userBuilder.Create(dbtestdata.UserWithID(params.userId),
+//				userBuilder.CreateInfo(dbtestdata.UserWithID(params.userId),
 //					dbtestdata.UserWithEmail("user@example.com"))
 //
 //				contextUser := jwt.User{
