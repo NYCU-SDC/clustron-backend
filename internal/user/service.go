@@ -268,3 +268,29 @@ func (s *Service) ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([
 
 	return methods, nil
 }
+
+func (s *Service) SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "SearchByIdentifier")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	totalCount, err := s.queries.CountSearchByIdentifier(traceCtx, pgtype.Text{String: query, Valid: true})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "count search user by identifier")
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	identifiers, err := s.queries.SearchByIdentifier(traceCtx, SearchByIdentifierParams{
+		Query: pgtype.Text{String: query, Valid: true},
+		Size:  int32(size),
+		Skip:  int32(page * size),
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "search user by identifier")
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	return identifiers, int(totalCount), nil
+}

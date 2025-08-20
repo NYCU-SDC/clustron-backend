@@ -138,6 +138,7 @@ func main() {
 	settingService.SetMembershipService(memberService)
 
 	// Handler
+	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService, userService)
@@ -208,6 +209,9 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}/pendingMembers", authMiddleware.HandlerFunc(memberHandler.ListPendingMembersPagedHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.RemovePendingMemberHandler))
 	mux.HandleFunc("PUT /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.UpdatePendingMemberHandler))
+
+	// Search
+	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -43,3 +43,19 @@ UPDATE users SET uid_number = $2 WHERE id = $1;
 
 -- name: ListLoginMethods :many
 SELECT providertype, email FROM login_info WHERE user_id = $1;
+
+-- name: CountSearchByIdentifier :one
+SELECT COUNT(*) FROM users WHERE email ILIKE @Query || '%' OR student_id ILIKE @Query || '%';
+
+-- name: SearchByIdentifier :many
+SELECT
+    COALESCE(
+        CASE
+            WHEN email ILIKE @Query || '%' THEN email
+            WHEN student_id ILIKE @Query || '%' THEN student_id
+        END, ''
+    )::text AS identifier
+FROM users
+WHERE email ILIKE @Query || '%' OR student_id ILIKE @Query || '%'
+ORDER BY identifier
+LIMIT @Size OFFSET @Skip;
