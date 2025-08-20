@@ -71,11 +71,6 @@ type callbackInfo struct {
 	bindingUser uuid.UUID
 }
 
-type callbackState struct {
-	Callback    string `json:"callback"`
-	BindingUser string `json:"bindingUser"`
-}
-
 type Handler struct {
 	config config.Config
 	logger *zap.Logger
