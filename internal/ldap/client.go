@@ -9,8 +9,10 @@ import (
 
 type LDAPClient interface {
 	CreateGroup(groupName, gidNumber string, memberUids []string) error
+	DeleteGroup(groupName string) error
 	AddUserToGroup(groupName, memberUid string) error
 	CreateUser(uid, cn, sn, sshPublicKey, uidNumber string) error
+	DeleteUser(uid string) error
 	AddSSHPublicKey(uid, publicKey string) error
 	DeleteSSHPublicKey(uid string, publicKey string) error
 	GetUserInfo(uid string) (*ldap.Entry, error)

@@ -32,9 +32,15 @@ type UpdateSettingRequest struct {
 	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
 }
 
+type LoginMethod struct {
+	Provider string `json:"provider"`
+	Email    string `json:"email"`
+}
+
 type BasicSettingResponse struct {
-	FullName      string `json:"fullName"`
-	LinuxUsername string `json:"linuxUsername"`
+	FullName          string        `json:"fullName"`
+	LinuxUsername     string        `json:"linuxUsername"`
+	BoundLoginMethods []LoginMethod `json:"boundLoginMethods"`
 }
 
 type AddPublicKeyRequest struct {
@@ -71,6 +77,7 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 
 	settingStore Store
+	userStore    UserStore
 }
 
 func validatePublicKey(key string) error {
@@ -81,13 +88,14 @@ func validatePublicKey(key string) error {
 	return nil
 }
 
-func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store) Handler {
+func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
 	return Handler{
 		logger:        logger,
 		validator:     v,
 		tracer:        otel.Tracer("setting/handler"),
 		problemWriter: problemWriter,
 		settingStore:  store,
+		userStore:     userStore,
 	}
 }
 
@@ -146,10 +154,24 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	loginMethods, err := h.userStore.ListLoginMethodsByID(traceCtx, userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	response := BasicSettingResponse{
 		FullName:      setting.FullName.String,
 		LinuxUsername: setting.LinuxUsername.String,
 	}
+	response.BoundLoginMethods = make([]LoginMethod, len(loginMethods))
+	for i, method := range loginMethods {
+		response.BoundLoginMethods[i] = LoginMethod{
+			Provider: method.Providertype,
+			Email:    method.Email.String,
+		}
+	}
+
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 

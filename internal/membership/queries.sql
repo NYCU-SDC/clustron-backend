@@ -108,9 +108,11 @@ SELECT
     pm.group_id,
     pm.role_id,
     gr.role_name,
-    gr.access_level
+    gr.access_level,
+    g.is_archived
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
+Join groups As g ON g.id = pm.group_id
 WHERE pm.user_identifier = @email OR pm.user_identifier = @student_id;
 
 -- name: ListPendingMembersDescPaged :many

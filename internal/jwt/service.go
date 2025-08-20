@@ -46,10 +46,11 @@ func NewService(logger *zap.Logger, secret string, expiration, refreshTokenExpir
 }
 
 type claims struct {
-	ID       uuid.UUID
-	FullName string
-	Email    string
-	Role     string
+	ID        uuid.UUID
+	FullName  string
+	Email     string
+	Role      string
+	StudentID string
 	jwt.RegisteredClaims
 }
 
@@ -67,11 +68,13 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 	id := user.ID
 	email := user.Email
 	role := user.Role
+	studentID := user.StudentID.String
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		ID:    id,
-		Email: email,
-		Role:  role,
+		ID:        id,
+		Email:     email,
+		Role:      role,
+		StudentID: studentID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "Clustron",
 			Subject:   id.String(),
@@ -144,9 +147,10 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 	logger.Debug("Successfully parsed JWT token", zap.String("id", claims.ID.String()), zap.String("username", claims.FullName), zap.String("role", claims.Role))
 
 	return User{
-		ID:    claims.ID,
-		Email: claims.Email,
-		Role:  claims.Role,
+		ID:        claims.ID,
+		Email:     claims.Email,
+		Role:      claims.Role,
+		StudentID: pgtype.Text{String: claims.StudentID, Valid: true},
 	}, nil
 }
 
