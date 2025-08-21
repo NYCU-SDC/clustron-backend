@@ -54,7 +54,7 @@ SELECT
             WHEN email ILIKE @Query || '%' THEN email
             WHEN student_id ILIKE @Query || '%' THEN student_id
         END, ''
-    )::text AS identifier
+    )::TEXT AS identifier
 FROM users
 WHERE email ILIKE @Query || '%' OR student_id ILIKE @Query || '%'
 ORDER BY identifier
