@@ -19,7 +19,7 @@ package group_test
 //				Description: "Test Description",
 //			},
 //			setupMocks: func(store *mocks.Store) {
-//				store.On("Create", mock.Anything, mock.Anything).Return(group.Group{
+//				store.On("CreateInfo", mock.Anything, mock.Anything).Return(group.Group{
 //					ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 //					Title:       "Test Group",
 //					Description: pgtype.Text{String: "Test Description", Valid: true},
@@ -45,7 +45,7 @@ package group_test
 //				Description: "Test Description",
 //			},
 //			setupMocks: func(store *mocks.Store) {
-//				store.On("Create", mock.Anything, mock.Anything).Return(group.Group{
+//				store.On("CreateInfo", mock.Anything, mock.Anything).Return(group.Group{
 //					ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
 //					Title:       "Test Group",
 //					Description: pgtype.Text{String: "Test Description", Valid: true},

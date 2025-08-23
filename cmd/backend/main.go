@@ -128,7 +128,7 @@ func main() {
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
-	authService := auth.NewService(logger, dbPool, userService, cfg.PresetUser)
+	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
 	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
@@ -172,6 +172,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/{provider}/callback", basicMiddleware.HandlerFunc(authHandler.Callback))
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
+	mux.HandleFunc("POST /api/bind/oauth/{provider}", authMiddleware.HandlerFunc(authHandler.BindLoginInfo))
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))

@@ -41,7 +41,7 @@ func TestGroupService_CountAll(t *testing.T) {
 	//		setup: func(t *testing.T, db dbtestdata.DBTX) {
 	//			builder := dbtestdata.NewBuilder(t, db)
 	//			for i := 0; i < 3; i++ {
-	//				builder.Group().Create(
+	//				builder.Group().CreateInfo(
 	//					dbtestdata.GroupWithTitle(fmt.Sprintf("Group %d", i+1)),
 	//					dbtestdata.GroupWithDescription(fmt.Sprintf("Description for Group %d", i+1)),
 	//				)
@@ -100,7 +100,7 @@ func TestGroupService_Create(t *testing.T) {
 	//		setup: func(t *testing.T, db dbtestdata.DBTX) {
 	//			builder := dbtestdata.NewBuilder(t, db)
 	//			for i := 0; i < 3; i++ {
-	//				builder.Group().Create(
+	//				builder.Group().CreateInfo(
 	//					dbtestdata.WithTitle(fmt.Sprintf("Group %d", i+1)),
 	//					dbtestdata.WithDescription(fmt.Sprintf("Description for Group %d", i+1)),
 	//				)

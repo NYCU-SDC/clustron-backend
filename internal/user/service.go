@@ -55,7 +55,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 func (s *Service) Create(ctx context.Context, email, studentID string) (User, error) {
-	traceCtx, span := s.tracer.Start(ctx, "Create")
+	traceCtx, span := s.tracer.Start(ctx, "CreateInfo")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -164,6 +164,24 @@ func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole s
 	}
 
 	return nil
+}
+
+func (s *Service) UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateStudentID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	updatedUser, err := s.queries.UpdateStudentID(traceCtx, UpdateStudentIDParams{
+		ID:        userID,
+		StudentID: pgtype.Text{String: studentID, Valid: studentID != ""},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user student id")
+		span.RecordError(err)
+		return User{}, err
+	}
+
+	return updatedUser, nil
 }
 
 func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error) {
