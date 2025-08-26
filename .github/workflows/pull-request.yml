@@ -114,6 +114,19 @@ jobs:
     needs: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Extract PR body for webhook
+        uses: NYCU-SDC/Extract-PRbody@V1.0
+        id: extract
+        with:
+          pr_body: ${{ github.event.pull_request.body }}
+
+      - name: Process PR body for webhook
+        run: |
+          PR_TYPE=$(echo '${{ steps.extract.outputs.type_block }}' | jq -R -s @json)
+          PR_PURPOSE=$(echo '${{ steps.extract.outputs.purpose_block }}' | jq -R -s @json)
+          echo "PR_TYPE=$PR_TYPE" >> $GITHUB_ENV
+          echo "PR_PURPOSE=$PR_PURPOSE" >> $GITHUB_ENV
+
       - name: Trigger n8n Snapshot Webhook
         run: |
           curl --location --request POST 'https://webhook.eng.sdc.nycu.club/webhook/deploy' \
@@ -127,6 +140,8 @@ jobs:
               "commit": "${{ github.sha }}",
               "pr_number": "${{ github.event.number }}",
               "pr_title": "${{ github.event.pull_request.title }}"
+              "pr_type": ${{ env.PR_TYPE }},
+              "pr_purpose": ${{ env.PR_PURPOSE }}
             },
             "method": "deploy",
             "metadata": {
@@ -161,6 +176,12 @@ jobs:
               "notify_discord": {
                 "enable": true,
                 "channel": "clustron-activity"
+              },
+              "setup_domain": {
+                "enable": true,
+                "title": "Endpoint",
+                "name": "pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club",
+                "value": "gcp-eng-deploy:internal"
               }
             }
           }'
