@@ -139,7 +139,7 @@ jobs:
               "branch": "${{ github.head_ref || github.ref_name }}",
               "commit": "${{ github.sha }}",
               "pr_number": "${{ github.event.number }}",
-              "pr_title": "${{ github.event.pull_request.title }}"
+              "pr_title": "${{ github.event.pull_request.title }}",
               "pr_type": ${{ env.PR_TYPE }},
               "pr_purpose": ${{ env.PR_PURPOSE }}
             },
