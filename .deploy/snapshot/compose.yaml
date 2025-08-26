@@ -1,0 +1,81 @@
+name: clustron-$VERSION
+
+services:
+  backend:
+    image: "nycusdc/clustron-backend:$VERSION"
+    networks:
+      - internal
+      - traefik
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ldap:
+        condition: service_healthy
+    environment:
+      - HOST=0.0.0.0
+      - BASE_URL=https://$VERSION.clustron.sdc.nycu.club
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - SECRET=${SECRET}
+      - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
+      - BASE_URL=https://$VERSION.clustron.sdc.nycu.club
+      - MIGRATION_SOURCE=file:///app/migrations
+      - CASBIN_POLICY_SOURCE=policy.csv
+      - CASBIN_MODEL_SOURCE=model.conf
+      - ALLOW_ORIGINS=*
+      - LDAP_DEBUG=true
+      - LDAP_HOST=ldap
+      - LDAP_PORT=389
+      - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_PWD=password
+      - OTEL_COLLECTOR_URL=10.140.0.3:4317
+      - PRESET_USER=Wwp7InVzZXIiOiJreWxlOTQxMDEwQGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiJiZW5kb3JpczA1MDlAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJoMjM3azc3Nzc3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFubmllMTA3MzEzMDNAZ21haWwuY29tIiwgInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiAiMXA0MXA0amVqb0BnbWFpbC5jb20iLCAicm9sZSI6ImFkbWluIn0KXQ==
+    labels:
+      - "vector.enable=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.clustron-backend-$VERSION.rule=Host(`$VERSION.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend-$VERSION.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend-$VERSION.tls=true"
+      - "traefik.http.routers.clustron-backend-$VERSION.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend-$VERSION.loadbalancer.server.port=8080"
+
+
+  postgres:
+    image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: clustron
+    networks:
+      - internal
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    healthcheck:
+      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      LDAP_ORGANISATION: "Clustron"
+      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
+      LDAP_ADMIN_PASSWORD: "password"
+      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      KEEP_EXISTING_CONFIG: "false"
+    volumes:
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service --loglevel debug
+    networks:
+      - internal
+
+networks:
+  internal:
+  traefik:
+    external: true
