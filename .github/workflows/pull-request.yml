@@ -130,7 +130,8 @@ jobs:
             },
             "method": "deploy",
             "metadata": {
-              "environment": "snapshot"
+              "environment": "snapshot",
+              "component": "backend"
             },
             "setup": {
               "inject_secret": {
