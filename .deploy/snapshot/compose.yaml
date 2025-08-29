@@ -13,12 +13,12 @@ services:
         condition: service_healthy
     environment:
       - HOST=0.0.0.0
-      - BASE_URL=https://$VERSION.clustron.sdc.nycu.club
+      - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - SECRET=${SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
-      - BASE_URL=https://$VERSION.clustron.sdc.nycu.club
+      - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
       - MIGRATION_SOURCE=file:///app/migrations
       - CASBIN_POLICY_SOURCE=policy.csv
       - CASBIN_MODEL_SOURCE=model.conf
@@ -34,7 +34,7 @@ services:
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.clustron-backend-$VERSION.rule=Host(`$VERSION.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend-$VERSION.rule=Host(`api.$VERSION.clustron.sdc.nycu.club`)"
       - "traefik.http.routers.clustron-backend-$VERSION.entrypoints=websecure"
       - "traefik.http.routers.clustron-backend-$VERSION.tls=true"
       - "traefik.http.routers.clustron-backend-$VERSION.tls.certresolver=cloudflare"
