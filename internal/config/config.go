@@ -32,6 +32,8 @@ type Config struct {
 	Host                    string                    `yaml:"host"               envconfig:"HOST"`
 	Port                    string                    `yaml:"port"               envconfig:"PORT"`
 	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
+	OAuthProxyBaseURL       string                    `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
+	OAuthProxySecret        string                    `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
 	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
 	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
 	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
@@ -202,6 +204,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		Host:                    os.Getenv("HOST"),
 		Port:                    os.Getenv("PORT"),
 		BaseURL:                 os.Getenv("BASE_URL"),
+		OAuthProxyBaseURL:       os.Getenv("OAUTH_PROXY_BASE_URL"),
+		OAuthProxySecret:        os.Getenv("OAUTH_PROXY_SECRET"),
 		Secret:                  os.Getenv("SECRET"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
@@ -232,6 +236,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.Host, "host", "", "host")
 	flag.StringVar(&flagConfig.Port, "port", "", "port")
 	flag.StringVar(&flagConfig.BaseURL, "base_url", "", "base url")
+	flag.StringVar(&flagConfig.OAuthProxyBaseURL, "oauth_proxy_base_url", "", "OAuth proxy base url")
+	flag.StringVar(&flagConfig.OAuthProxySecret, "oauth_proxy_secret", "", "OAuth proxy secret")
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")

@@ -49,6 +49,8 @@ var BuildTime = "no-build-time"
 
 var CommitHash = "no-commit-hash"
 
+var Environment = "no-env"
+
 func main() {
 	AppName = os.Getenv("APP_NAME")
 	if AppName == "" {
@@ -60,11 +62,17 @@ func main() {
 		BuildTime = "not provided (now: " + now.Format(time.RFC3339) + ")"
 	}
 
+	Environment = os.Getenv("ENV")
+	if Environment == "" {
+		Environment = "no-env"
+	}
+
 	appMetadata := []zap.Field{
 		zap.String("app_name", AppName),
 		zap.String("version", Version),
 		zap.String("build_time", BuildTime),
 		zap.String("commit_hash", CommitHash),
+		zap.String("environment", Environment),
 	}
 
 	cfg, cfgLog := config.Load()
@@ -127,7 +135,7 @@ func main() {
 
 	// Service
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
-	jwtService := jwt.NewService(logger, cfg.Secret, 15*time.Minute, 24*time.Hour, userService, dbPool)
+	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, userService, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
 	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
@@ -139,7 +147,7 @@ func main() {
 
 	// Handler
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	authHandler := auth.NewHandler(cfg, logger, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, Environment, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService, userService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)

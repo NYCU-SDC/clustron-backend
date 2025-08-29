@@ -29,6 +29,8 @@ type JWTIssuer interface {
 	New(ctx context.Context, user jwt.User) (string, error)
 	Parse(ctx context.Context, tokenString string) (jwt.User, error)
 	GenerateRefreshToken(ctx context.Context, user jwt.User) (jwt.RefreshToken, error)
+	NewState(ctx context.Context, service, environment, callbackURL, redirectURL, state string) (string, error)
+	ParseState(ctx context.Context, tokenString string) (string, string, error)
 }
 
 type JWTStore interface {
@@ -72,9 +74,10 @@ type callbackInfo struct {
 }
 
 type Handler struct {
-	config config.Config
-	logger *zap.Logger
-	tracer trace.Tracer
+	config      config.Config
+	logger      *zap.Logger
+	tracer      trace.Tracer
+	environment string
 
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
@@ -90,6 +93,7 @@ type Handler struct {
 func NewHandler(
 	config config.Config,
 	logger *zap.Logger,
+	environment string,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
@@ -98,20 +102,36 @@ func NewHandler(
 	store Store,
 	settingStore SettingStore) *Handler {
 
-	googleProvider := oauthprovider.NewGoogleConfig(
-		config.GoogleOauthClientID,
-		config.GoogleOauthClientSecret,
-		fmt.Sprintf("%s/api/oauth/google/callback", config.BaseURL))
+	var (
+		googleProvider OAuthProvider
+		nycuProvider   OAuthProvider
+	)
+	if config.OAuthProxyBaseURL != "" {
+		googleProvider = oauthprovider.NewGoogleConfig(
+			config.GoogleOauthClientID,
+			config.GoogleOauthClientSecret,
+			fmt.Sprintf("%s/api/auth/google/callback", config.OAuthProxyBaseURL))
+		nycuProvider = oauthprovider.NewNYCUConfig(
+			config.NYCUOauthClientID,
+			config.NYCUOauthClientSecret,
+			fmt.Sprintf("%s/api/auth/google/callback", config.OAuthProxyBaseURL))
+	} else {
+		googleProvider = oauthprovider.NewGoogleConfig(
+			config.GoogleOauthClientID,
+			config.GoogleOauthClientSecret,
+			fmt.Sprintf("%s/api/oauth/google/callback", config.BaseURL))
 
-	nycuProvider := oauthprovider.NewNYCUConfig(
-		config.NYCUOauthClientID,
-		config.NYCUOauthClientSecret,
-		fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
+		nycuProvider = oauthprovider.NewNYCUConfig(
+			config.NYCUOauthClientID,
+			config.NYCUOauthClientSecret,
+			fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
+	}
 
 	return &Handler{
-		config: config,
-		logger: logger,
-		tracer: otel.Tracer("auth/handler"),
+		config:      config,
+		logger:      logger,
+		tracer:      otel.Tracer("auth/handler"),
+		environment: environment,
 
 		validator:     validator,
 		problemWriter: problemWriter,
@@ -141,24 +161,31 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callback := r.URL.Query().Get("c")
-	redirectTo := r.URL.Query().Get("r")
-	if callback == "" {
-		callback = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
+	redirectTo := r.URL.Query().Get("c")
+	frontendRedirectTo := r.URL.Query().Get("r")
+	if frontendRedirectTo == "" {
+		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	}
-	if redirectTo != "" {
-		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
+	if frontendRedirectTo != "" {
+		redirectTo = fmt.Sprintf("%s?r=%s", redirectTo, frontendRedirectTo)
 	}
 
-	token, err := h.store.CreateToken(traceCtx, callback, uuid.Nil)
+	token, err := h.store.CreateToken(traceCtx, redirectTo, uuid.Nil)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	authURL := provider.Config().AuthCodeURL(token.ID.String(), oauth2.AccessTypeOffline)
-	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
 
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, "clustron", h.environment, callback, redirectTo, token.ID.String())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
+		return
+	}
+
+	authURL := provider.Config().AuthCodeURL(proxyState, oauth2.AccessTypeOffline)
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 	logger.Info("Redirecting to Google OAuth2", zap.String("url", authURL))
 }
 
@@ -278,22 +305,30 @@ func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callback := r.URL.Query().Get("c")
-	redirectTo := r.URL.Query().Get("r")
-	if callback == "" {
-		callback = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
+	redirectTo := r.URL.Query().Get("c")
+	frontendRedirectTo := r.URL.Query().Get("r")
+	if frontendRedirectTo == "" {
+		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	}
-	if redirectTo != "" {
-		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
+	if frontendRedirectTo != "" {
+		redirectTo = fmt.Sprintf("%s?r=%s", redirectTo, frontendRedirectTo)
 	}
 
-	token, err := h.store.CreateToken(traceCtx, callback, jwtUser.ID)
+	token, err := h.store.CreateToken(traceCtx, redirectTo, jwtUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	authURL := provider.Config().AuthCodeURL(token.ID.String(), oauth2.AccessTypeOffline)
+	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
+
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, "clustron", h.environment, callback, redirectTo, token.ID.String())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
+		return
+	}
+
+	authURL := provider.Config().AuthCodeURL(proxyState, oauth2.AccessTypeOffline)
 
 	result := &BindLoginInfoResponse{
 		Url: authURL,
@@ -350,9 +385,14 @@ func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callbackIn
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error") // Check if there was an error during the OAuth2 process
 
-	tokenID, err := handlerutil.ParseUUID(state)
+	redirect, tokenStr, err := h.jwtIssuer.ParseState(ctx, state)
 	if err != nil {
 		return callbackInfo{}, fmt.Errorf("%w: invalid state parameter", internal.ErrInvalidCallbackInfo)
+	}
+
+	tokenID, err := handlerutil.ParseUUID(tokenStr)
+	if err != nil {
+		return callbackInfo{}, fmt.Errorf("%w: invalid token ID", internal.ErrInvalidCallbackInfo)
 	}
 
 	token, err := h.store.GetTokenByID(ctx, tokenID)
@@ -365,14 +405,14 @@ func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callbackIn
 		return callbackInfo{}, err
 	}
 
-	callback, err := url.Parse(token.Callback)
+	frontendRedirect, err := url.Parse(redirect)
 	if err != nil {
 		return callbackInfo{}, err
 	}
 
 	// Clear the query parameters from the callback URL, due to "?" symbol in original URL
-	redirectTo := callback.Query().Get("r")
-	callback.RawQuery = ""
+	redirectTo := frontendRedirect.Query().Get("r")
+	frontendRedirect.RawQuery = ""
 
 	// Extract the binding user ID from the token
 	var bindingUser uuid.UUID
@@ -385,7 +425,7 @@ func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callbackIn
 	return callbackInfo{
 		code:        code,
 		oauthError:  oauthError,
-		callback:    *callback,
+		callback:    *frontendRedirect,
 		redirectTo:  redirectTo,
 		bindingUser: bindingUser,
 	}, nil

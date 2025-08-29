@@ -165,9 +165,24 @@ jobs:
                     "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
                   },
                   {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "NYCU_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "NYCU_OAUTH_CLIENT_SECRET"
+                  },
+                  {
                     "path": "/",
                     "secret_name": "JWT_SECRET",
                     "env_name": "SECRET"
+                  },
+                  {
+                      "path": "/",
+                      "secret_name": "OAUTH_PROXY_TOKEN",
+                      "env_name": "OAUTH_PROXY_SECRET"
                   }
                 ]
               }
