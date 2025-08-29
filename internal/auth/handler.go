@@ -228,13 +228,15 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := provider.Exchange(traceCtx, code)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+		logger.Error("Failed to exchange code for token", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 		return
 	}
 
 	userInfo, err := provider.GetUserInfo(traceCtx, token)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		logger.Error("Failed to get user info", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -243,14 +245,16 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	if bindingUser != uuid.Nil {
 		loginInfo, err = h.store.CreateInfo(traceCtx, bindingUser, ProviderTypesMap[provider.Name()], userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID)
 		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			logger.Error("Failed to create user info", zap.Error(err))
+			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 			return
 		}
 	} else {
 		// Check if the user exists in the database, if not, create a new user
 		loginInfo, err = h.store.FindOrCreateInfo(traceCtx, userInfo.GetUserInfo().Email, userInfo.GetUserInfo().ID, ProviderTypesMap[provider.Name()])
 		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			logger.Error("Failed to find or create user info", zap.Error(err))
+			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 			return
 		}
 	}
@@ -258,21 +262,24 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// CreateInfo a new setting for the user
 	_, err = h.settingStore.FindOrCreateSetting(traceCtx, loginInfo.UserID, pgtype.Text{String: userInfo.GetUserInfo().Name, Valid: true})
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		logger.Error("Failed to create setting for user", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 		return
 	}
 
 	// Get user with loginInfo
 	loginUser, err := h.userStore.GetByID(traceCtx, loginInfo.UserID)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		logger.Error("Failed to get user by ID", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 		return
 	}
 
 	// Generate JWT token
 	jwtToken, refreshTokenID, err := h.generateJWT(traceCtx, loginUser)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		logger.Error("Failed to generate JWT", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 		return
 	}
 
