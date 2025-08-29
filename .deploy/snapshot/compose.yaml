@@ -16,9 +16,12 @@ services:
       - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - NYCU_OAUTH_CLIENT_ID=${NYCU_OAUTH_CLIENT_ID}
+      - NYCU_OAUTH_CLIENT_SECRET=${NYCU_OAUTH_CLIENT_SECRET}
       - SECRET=${SECRET}
+      - OAUTH_PROXY_BASE_URL=https://oauth-proxy.eng.sdc.nycu.club
+      - OAUTH_PROXY_SECRET=${OAUTH_PROXY_SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
-      - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
       - MIGRATION_SOURCE=file:///app/migrations
       - CASBIN_POLICY_SOURCE=policy.csv
       - CASBIN_MODEL_SOURCE=model.conf
