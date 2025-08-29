@@ -19,6 +19,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const Issuer = "clustron"
+
 type Store interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 }
@@ -26,6 +28,7 @@ type Store interface {
 type Service struct {
 	logger                 *zap.Logger
 	secret                 string
+	oauthProxySecret       string
 	expiration             time.Duration
 	refreshTokenExpiration time.Duration
 	userStore              Store
@@ -33,10 +36,11 @@ type Service struct {
 	queries                *Queries
 }
 
-func NewService(logger *zap.Logger, secret string, expiration, refreshTokenExpiration time.Duration, userStore Store, db DBTX) *Service {
+func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expiration, refreshTokenExpiration time.Duration, userStore Store, db DBTX) *Service {
 	return &Service{
 		logger:                 logger,
 		secret:                 secret,
+		oauthProxySecret:       oauthProxySecret,
 		expiration:             expiration,
 		refreshTokenExpiration: refreshTokenExpiration,
 		userStore:              userStore,
@@ -51,6 +55,29 @@ type claims struct {
 	Email     string
 	Role      string
 	StudentID string
+	jwt.RegisteredClaims
+}
+
+// oauthProxyClaims defines contextual information for an OAuth transaction.
+// It is encoded into the 'state' parameter as a signed JWT to preserve integrity and authenticity.
+type oauthProxyClaims struct {
+	// Service is the logical service requesting authentication (e.g., "core-system", "clustron").
+	Service string
+
+	// Environment represents the environment or deployment context (e.g., "pr-12", "staging").
+	Environment string
+
+	// CallbackURL is the backend endpoint to receive the OAuth authorization code.
+	// It must be an internal service endpoint, not exposed to users.
+	CallbackURL string
+
+	// RedirectURL is the final URL to send the user to after authentication completes.
+	// This is typically a user-facing frontend page.
+	RedirectURL string
+
+	// State is an optional opaque value used by the client to maintain state between the request and callback.
+	State string
+
 	jwt.RegisteredClaims
 }
 
@@ -93,6 +120,39 @@ func (s Service) New(ctx context.Context, user User) (string, error) {
 
 	logger.Debug("Generated new JWT token", zap.String("id", id.String()), zap.String("role", role))
 
+	return tokenString, nil
+}
+
+func (s Service) NewState(ctx context.Context, service, environment, callbackURL, redirectURL, state string) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "NewState")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	jwtID := uuid.New()
+	claims := &oauthProxyClaims{
+		Service:     service,
+		Environment: environment,
+		CallbackURL: callbackURL,
+		RedirectURL: redirectURL,
+		State:       state,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    Issuer,
+			Subject:   jwtID.String(),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        jwtID.String(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.oauthProxySecret))
+	if err != nil {
+		logger.Error("failed to sign state token", zap.Error(err), zap.String("service", service), zap.String("environment", environment))
+		return "", err
+	}
+
+	logger.Debug("Generated OAuth proxy state token", zap.String("service", service), zap.String("environment", environment))
 	return tokenString, nil
 }
 
@@ -152,6 +212,52 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 		Role:      claims.Role,
 		StudentID: pgtype.Text{String: claims.StudentID, Valid: true},
 	}, nil
+}
+
+func (s Service) ParseState(ctx context.Context, tokenString string) (string, string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ParseState")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	secret := func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.oauthProxySecret), nil
+	}
+
+	tokenClaims := &oauthProxyClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, tokenClaims, secret)
+	if err != nil {
+		switch {
+		case errors.Is(err, jwt.ErrTokenMalformed):
+			logger.Warn("Failed to parse JWT token due to malformed structure, this is not a JWT token", zap.String("token", tokenString), zap.String("error", err.Error()))
+			return "", "", err
+		case errors.Is(err, jwt.ErrSignatureInvalid):
+			logger.Warn("Failed to parse JWT token due to invalid signature", zap.String("error", err.Error()))
+			return "", "", err
+		case errors.Is(err, jwt.ErrTokenExpired):
+			expiredTime, getErr := token.Claims.GetExpirationTime()
+			if getErr != nil {
+				logger.Error("Failed to parse JWT token due to expired timestamp", zap.String("error", getErr.Error()))
+				return "", "", err
+			}
+			logger.Warn("Failed to parse JWT token due to expired timestamp", zap.String("error", err.Error()), zap.Time("expired_at", expiredTime.Time))
+			return "", "", err
+		case errors.Is(err, jwt.ErrTokenNotValidYet):
+			notBeforeTime, getErr := token.Claims.GetNotBefore()
+			if getErr != nil {
+				logger.Error("Failed to parse JWT token due to not valid yet timestamp", zap.String("error", getErr.Error()))
+				return "", "", err
+			}
+			logger.Warn("Failed to parse JWT token due to not valid yet timestamp", zap.String("error", err.Error()), zap.Time("not_before", notBeforeTime.Time))
+			return "", "", err
+		default:
+			logger.Error("Failed to parse JWT token", zap.Error(err))
+			return "", "", err
+		}
+	}
+
+	logger.Debug("Successfully parsed OAuth proxy state token", zap.String("service", tokenClaims.Service), zap.String("environment", tokenClaims.Environment), zap.String("callback_url", tokenClaims.CallbackURL), zap.String("redirect_url", tokenClaims.RedirectURL))
+
+	return tokenClaims.RedirectURL, tokenClaims.State, nil
 }
 
 func (s Service) GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error) {
