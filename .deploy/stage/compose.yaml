@@ -12,6 +12,7 @@ services:
       ldap:
         condition: service_healthy
     environment:
+      - ENV=stage
       - HOST=0.0.0.0
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}

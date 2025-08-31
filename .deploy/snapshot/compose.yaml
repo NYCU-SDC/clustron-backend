@@ -12,6 +12,7 @@ services:
       ldap:
         condition: service_healthy
     environment:
+      - ENV=snapshot
       - HOST=0.0.0.0
       - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
@@ -33,7 +34,7 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_PWD=password
       - OTEL_COLLECTOR_URL=10.140.0.3:4317
-      - PRESET_USER=Wwp7InVzZXIiOiJreWxlOTQxMDEwQGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiJiZW5kb3JpczA1MDlAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJoMjM3azc3Nzc3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFubmllMTA3MzEzMDNAZ21haWwuY29tIiwgInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiAiMXA0MXA0amVqb0BnbWFpbC5jb20iLCAicm9sZSI6ImFkbWluIn0KXQ==
+      - PRESET_USER=Wwp7InVzZXIiOiJreWxlOTQxMDEwQGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiJiZW5kb3JpczA1MDlAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJoMjM3azc3Nzc3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFubmllMTA3MzEzMDNAZ21haWwuY29tIiwgInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiAiMXA0MXA0amVqb0BnbWFpbC5jb20iLCAicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJueWFuMjIyNzI3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFuMTEyNTUwMDA3LmNzMTJAbnljdS5lZHUudHciLCAicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJrb3Jlbi5saW5AZ2FwcC5udGh1LmVkdS50dyIsICJyb2xlIjoiYWRtaW4ifQpd
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
