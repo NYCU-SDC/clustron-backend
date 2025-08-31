@@ -163,7 +163,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 
 	redirectTo := r.URL.Query().Get("c")
 	frontendRedirectTo := r.URL.Query().Get("r")
-	if frontendRedirectTo == "" {
+	if redirectTo == "" {
 		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	}
 	if frontendRedirectTo != "" {
