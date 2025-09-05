@@ -78,6 +78,7 @@ type Handler struct {
 	logger      *zap.Logger
 	tracer      trace.Tracer
 	environment string
+	appName     string
 
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
@@ -94,6 +95,7 @@ func NewHandler(
 	config config.Config,
 	logger *zap.Logger,
 	environment string,
+	appName string,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	userStore UserStore,
@@ -132,6 +134,7 @@ func NewHandler(
 		logger:      logger,
 		tracer:      otel.Tracer("auth/handler"),
 		environment: environment,
+		appName:     appName,
 
 		validator:     validator,
 		problemWriter: problemWriter,
@@ -178,7 +181,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 
 	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
 
-	proxyState, err := h.jwtIssuer.NewState(traceCtx, "clustron", h.environment, callback, redirectTo, token.ID.String())
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, h.appName, h.environment, callback, redirectTo, token.ID.String())
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
 		return
@@ -314,7 +317,7 @@ func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 
 	redirectTo := r.URL.Query().Get("c")
 	frontendRedirectTo := r.URL.Query().Get("r")
-	if frontendRedirectTo == "" {
+	if redirectTo == "" {
 		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	}
 	if frontendRedirectTo != "" {
@@ -329,7 +332,7 @@ func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 
 	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
 
-	proxyState, err := h.jwtIssuer.NewState(traceCtx, "clustron", h.environment, callback, redirectTo, token.ID.String())
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, h.appName, h.environment, callback, redirectTo, token.ID.String())
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
 		return
