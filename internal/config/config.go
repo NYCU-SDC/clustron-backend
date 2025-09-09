@@ -34,6 +34,7 @@ type Config struct {
 	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
 	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
 	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	SlurmBaseURL            string                    `yaml:"slurm_base_url"          envconfig:"SLURM_BASE_URL"`
 	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
 	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
 	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
@@ -204,6 +205,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		BaseURL:                 os.Getenv("BASE_URL"),
 		Secret:                  os.Getenv("SECRET"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		SlurmBaseURL:            os.Getenv("SLURM_BASE_URL"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
 		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
@@ -234,6 +236,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.BaseURL, "base_url", "", "base url")
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
+	flag.StringVar(&flagConfig.SlurmBaseURL, "slurm_base_url", "", "slurm base url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")
 	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
