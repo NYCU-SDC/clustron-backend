@@ -16,6 +16,7 @@ var (
 	ErrPermissionDenied       = errors.New("permission denied")
 	ErrAlreadyOnboarded       = errors.New("user already onboarded")
 	ErrBindingAccountConflict = errors.New("binding account conflict")
+	ErrNewStateFailed         = errors.New("failed to generate new state")
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
