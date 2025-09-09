@@ -168,6 +168,11 @@ jobs:
                     "path": "/",
                     "secret_name": "JWT_SECRET",
                     "env_name": "SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "SLURM_BASE_URL",
+                    "env_name": "SLURM_BASE_URL"
                   }
                 ]
               }
