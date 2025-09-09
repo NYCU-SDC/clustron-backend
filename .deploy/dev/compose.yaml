@@ -19,6 +19,7 @@ services:
       - SECRET=${SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.dev.clustron.sdc.nycu.club
+      - SLURM_BASE_URL=${SLURM_BASE_URL}
       - MIGRATION_SOURCE=file:///app/migrations
       - CASBIN_POLICY_SOURCE=policy.csv
       - CASBIN_MODEL_SOURCE=model.conf
