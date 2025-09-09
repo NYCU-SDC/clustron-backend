@@ -38,7 +38,7 @@ func NewService(logger *zap.Logger, slurmURL string, settingStore settingStore) 
 	}
 }
 
-func (s Service) getNewToken(ctx context.Context, userID uuid.UUID) (string, error) {
+func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetNewToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -66,7 +66,18 @@ func (s Service) getNewToken(ctx context.Context, userID uuid.UUID) (string, err
 		span.RecordError(err)
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected status code: %d", response.StatusCode)
+		logger.Error("failed to get new token", zap.Error(err))
+		span.RecordError(err)
+		return "", err
+	}
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -76,13 +87,6 @@ func (s Service) getNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	}
 
 	tokenString := strings.Trim(string(body), "\n")
-
-	if response.StatusCode != http.StatusOK {
-		err = fmt.Errorf("unexpected status code: %d, body: %s", response.StatusCode, tokenString)
-		logger.Error("failed to get new token", zap.Error(err))
-		span.RecordError(err)
-		return "", err
-	}
 
 	logger.Info("successfully got new slurm token", zap.String("token", tokenString))
 
