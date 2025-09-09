@@ -180,9 +180,14 @@ jobs:
                     "env_name": "SECRET"
                   },
                   {
-                      "path": "/",
-                      "secret_name": "OAUTH_PROXY_TOKEN",
-                      "env_name": "OAUTH_PROXY_SECRET"
+                    "path": "/",
+                    "secret_name": "OAUTH_PROXY_TOKEN",
+                    "env_name": "OAUTH_PROXY_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "SLURM_BASE_URL",
+                    "env_name": "SLURM_BASE_URL"
                   }
                 ]
               }
