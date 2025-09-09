@@ -1,6 +1,9 @@
 database_url: "YOUR_DATABASE_URL"
 base_url: "BASE_URL"
+slurm_base_url: "CONTROL_NODE_URL"
 debug:
+oauth_proxy_base_url:
+oauth_proxy_secret:
 google_oauth_client_id:
 google_oauth_client_secret:
 nycu_oauth_client_id:
