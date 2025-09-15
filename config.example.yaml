@@ -1,6 +1,8 @@
 database_url: "YOUR_DATABASE_URL"
 base_url: "BASE_URL"
 slurm_base_url: "CONTROL_NODE_URL"
+slurm_restful_base_url: "RESTFUL_NODE_URL"
+slurm_restful_version: "v0.0.43"
 debug:
 oauth_proxy_base_url:
 oauth_proxy_secret:
