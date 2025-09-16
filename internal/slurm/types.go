@@ -34,7 +34,7 @@ type JobResponse struct {
 	Nodes         string     `json:"nodes"`
 	Partition     string     `json:"partition"`
 	Priority      NumberFlag `json:"priority"`
-	Qos           string     `json:"qos"`
+	QoS           string     `json:"qos"`
 	SocketPerNode NumberFlag `json:"socket_per_node"`
 	StateReason   string     `json:"state_reason"`
 	Tasks         NumberFlag `json:"tasks"`
