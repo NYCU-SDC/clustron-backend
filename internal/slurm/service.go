@@ -2,7 +2,6 @@ package slurm
 
 import (
 	"bytes"
-	"clustron-backend/internal/config"
 	"clustron-backend/internal/setting"
 	"context"
 	"encoding/json"
@@ -22,20 +21,22 @@ type settingStore interface {
 }
 
 type Service struct {
-	logger     *zap.Logger
-	tracer     trace.Tracer
-	config     config.Config
-	httpClient *http.Client
+	logger              *zap.Logger
+	tracer              trace.Tracer
+	slurmRestfulBaseURL string
+	slurmBaseURL        string
+	httpClient          *http.Client
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, config config.Config, settingStore settingStore) *Service {
+func NewService(logger *zap.Logger, slurmBaseURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore) *Service {
 	return &Service{
-		logger:     logger,
-		tracer:     otel.Tracer("slurm/service"),
-		config:     config,
-		httpClient: &http.Client{},
+		logger:              logger,
+		tracer:              otel.Tracer("slurm/service"),
+		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmBaseURL:        slurmBaseURL,
+		httpClient:          &http.Client{},
 
 		settingStore: settingStore,
 	}
@@ -53,7 +54,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 		return nil, err
 	}
 
-	requestPath := fmt.Sprintf("%s/slurm/%s/jobs", s.config.SlurmRestfulBaseURL, s.config.SlurmRestfulVersion)
+	requestPath := fmt.Sprintf("%s/jobs", s.slurmRestfulBaseURL)
 
 	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
 	if err != nil {
@@ -108,7 +109,7 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 		return nil, err
 	}
 
-	requestPath := fmt.Sprintf("%s/slurm/%s/job/submit", s.config.SlurmRestfulBaseURL, s.config.SlurmRestfulVersion)
+	requestPath := fmt.Sprintf("%s/job/submit", s.slurmRestfulBaseURL)
 
 	submitJobRequest := SubmitJobRequest{
 		Job: jobRequest,
@@ -183,7 +184,7 @@ func (s Service) GetPartitions(ctx context.Context, userID uuid.UUID) (Partition
 		return PartitionResponse{}, err
 	}
 
-	requestPath := fmt.Sprintf("%s/slurm/%s/partitions", s.config.SlurmRestfulBaseURL, s.config.SlurmRestfulVersion)
+	requestPath := fmt.Sprintf("%s/partitions", s.slurmRestfulBaseURL)
 
 	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
 	if err != nil {
@@ -237,7 +238,7 @@ func (s Service) CountJobStates(ctx context.Context, userID uuid.UUID) (JobState
 		return JobStateResponse{}, err
 	}
 
-	requestPath := fmt.Sprintf("%s/slurm/%s/jobs", s.config.SlurmRestfulBaseURL, s.config.SlurmRestfulVersion)
+	requestPath := fmt.Sprintf("%s/jobs", s.slurmRestfulBaseURL)
 
 	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
 	if err != nil {
@@ -314,7 +315,7 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 		return "", err
 	}
 
-	requestPath := fmt.Sprintf("%s/api/token/%s", s.config.SlurmBaseURL, userSetting.LinuxUsername.String)
+	requestPath := fmt.Sprintf("%s/api/token/%s", s.slurmBaseURL, userSetting.LinuxUsername.String)
 	logger.Info("requesting new slurm token", zap.String("path", requestPath))
 
 	httpReq, err := http.NewRequest(http.MethodGet, requestPath, nil)

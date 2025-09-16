@@ -143,7 +143,7 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
-	slurmService := slurm.NewService(logger, cfg, settingService)
+	slurmService := slurm.NewService(logger, cfg.SlurmBaseURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
