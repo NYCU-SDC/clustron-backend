@@ -152,7 +152,8 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 			span.RecordError(err2)
 			return nil, err2
 		}
-		logger.Error("unexpected status code", zap.Int("status_code", response.StatusCode))
+		err = fmt.Errorf("unexpected status code: %d", response.StatusCode)
+		logger.Error("unexpected status code", zap.Error(err))
 		span.RecordError(err)
 		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
