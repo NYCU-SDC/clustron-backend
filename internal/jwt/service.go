@@ -2,7 +2,6 @@ package jwt
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
@@ -21,29 +20,23 @@ import (
 
 const Issuer = "clustron"
 
-type Store interface {
-	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
-}
-
 type Service struct {
 	logger                 *zap.Logger
 	secret                 string
 	oauthProxySecret       string
 	expiration             time.Duration
 	refreshTokenExpiration time.Duration
-	userStore              Store
 	tracer                 trace.Tracer
 	queries                *Queries
 }
 
-func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expiration, refreshTokenExpiration time.Duration, userStore Store, db DBTX) *Service {
+func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expiration, refreshTokenExpiration time.Duration, db DBTX) *Service {
 	return &Service{
 		logger:                 logger,
 		secret:                 secret,
 		oauthProxySecret:       oauthProxySecret,
 		expiration:             expiration,
 		refreshTokenExpiration: refreshTokenExpiration,
-		userStore:              userStore,
 		tracer:                 otel.Tracer("jwt/service"),
 		queries:                New(db),
 	}
