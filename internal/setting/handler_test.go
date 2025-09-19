@@ -25,17 +25,34 @@ import (
 var exampleValidKey = "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAQB/nAmOjTmezNUDKYvEeIRf2YnwM9/uUG1d0BYsc8/tRtx+RGi7N2lUbp728MXGwdnL9od4cItzky/zVdLZE2cycOa18xBK9cOWmcKS0A8FYBxEQWJ/q9YVUgZbFKfYGaGQxsER+A0w/fX8ALuk78ktP31K69LcQgxIsl7rNzxsoOQKJ/CIxOGMMxczYTiEoLvQhapFQMs3FL96didKr/QbrfB1WT6s3838SEaXfgZvLef1YB2xmfhbT9OXFE3FXvh2UPBfN+ffE7iiayQf/2XR+8j4N4bW30DiPtOQLGUrH1y5X/rpNZNlWW2+jGIxqZtgWg7lTy3mXy5x836Sj/6L"
 
 func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
-	testCase := []struct {
+	testCases := []struct {
 		name           string
 		body           setting.AddPublicKeyRequest
+		setupMock      func(store *mocks.Store)
+		userInContext  *jwt.User
 		expectedStatus int
-		expectError    bool
 	}{
 		{
 			name: "Should add public key",
 			body: setting.AddPublicKeyRequest{
 				Title:     "Test Title",
 				PublicKey: exampleValidKey,
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("AddPublicKey", mock.Anything, setting.CreatePublicKeyParams{
+					UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					Title:     "Test Title",
+					PublicKey: exampleValidKey,
+				}).Return(setting.PublicKey{
+					ID:        uuid.MustParse("33a40641-45bb-4b47-aa33-113c7c562328"),
+					UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					Title:     "Test Title",
+					PublicKey: exampleValidKey,
+				}, nil)
+			},
+			userInContext: &jwt.User{
+				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				Role: role.User.String(),
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -45,6 +62,8 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 				Title:     "Test Title",
 				PublicKey: "MFswDQYJKoZIhvcNAQEBBQADSgAwR/",
 			},
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -52,6 +71,8 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			body: setting.AddPublicKeyRequest{
 				PublicKey: exampleValidKey,
 			},
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -59,49 +80,63 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			body: setting.AddPublicKeyRequest{
 				Title: "Test Title",
 			},
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when DB fails",
+			body: setting.AddPublicKeyRequest{
+				Title:     "Test Title",
+				PublicKey: exampleValidKey,
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("AddPublicKey", mock.Anything, mock.Anything).Return(setting.PublicKey{}, assert.AnError)
+			},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "Should return error when user is missing in context",
+			body: setting.AddPublicKeyRequest{
+				Title:     "Test Title",
+				PublicKey: exampleValidKey,
+			},
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  nil,
+			expectedStatus: http.StatusInternalServerError,
 		},
 	}
 
-	// Mock the dependencies
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		t.Fatalf("failed to create logger: %v", err)
-	}
-
-	store := mocks.NewStore(t)
-	store.On("AddPublicKey", mock.Anything, setting.CreatePublicKeyParams{
-		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		Title:     "Test Title",
-		PublicKey: exampleValidKey,
-	}).Return(setting.PublicKey{
-		ID:        uuid.MustParse("33a40641-45bb-4b47-aa33-113c7c562328"),
-		UserID:    uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		Title:     "Test Title",
-		PublicKey: exampleValidKey,
-	}, nil)
-
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-
-	for _, tc := range testCase {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-				Role: role.User.String(),
-			}))
-
 			w := httptest.NewRecorder()
-
-			h.AddUserPublicKeyHandler(w, r)
-
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			if tc.userInContext != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.userInContext))
+			}
+			if tc.name == "Should return error when user is missing in context" {
+				assert.Panics(t, func() {
+					h.AddUserPublicKeyHandler(w, r)
+				}, tc.name)
+			} else {
+				h.AddUserPublicKeyHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			}
 		})
 	}
 }

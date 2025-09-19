@@ -14,70 +14,87 @@ import (
 	"testing"
 )
 
-func TestMiddleware_HandlerFunc(t *testing.T) {
+func TestMiddleware_PermissionMatrix(t *testing.T) {
 	type EnforceCase struct {
 		subject string
 		object  string
 		action  string
 	}
 
-	testCase := []struct {
+	testCases := []struct {
 		name           string
 		user           jwt.User
+		object         string
+		action         string
 		expectedStatus int
-		expectError    bool
-		enforceCase    EnforceCase
+		enforceResult  bool
 	}{
 		{
-			name: "Should return 200 when token is valid",
-			user: jwt.User{
-				ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
-				Role:  "user",
-				Email: "test@gmail.com",
-			},
+			name:           "Admin can GET /api/v1/admin",
+			user:           jwt.User{ID: uuid.New(), Role: role.Admin.String(), Email: "admin@test.com"},
+			object:         "/api/v1/admin",
+			action:         "GET",
 			expectedStatus: http.StatusOK,
-			expectError:    false,
-			enforceCase: EnforceCase{
-				subject: role.User.String(),
-				object:  "/api/v1/user",
-				action:  "GET",
-			},
+			enforceResult:  true,
 		},
 		{
-			name: "Should return 403 when does not have permission",
-			user: jwt.User{
-				ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
-				Role:  role.User.String(),
-				Email: "test@gmail.com",
-			},
+			name:           "User forbidden to GET /api/v1/admin",
+			user:           jwt.User{ID: uuid.New(), Role: role.User.String(), Email: "user@test.com"},
+			object:         "/api/v1/admin",
+			action:         "GET",
 			expectedStatus: http.StatusForbidden,
-			expectError:    true,
-			enforceCase: EnforceCase{
-				subject: role.User.String(),
-				object:  "/api/v1/user",
-				action:  "GET",
-			},
+			enforceResult:  false,
+		},
+		{
+			name:           "User can GET /api/v1/user",
+			user:           jwt.User{ID: uuid.New(), Role: role.User.String(), Email: "user@test.com"},
+			object:         "/api/v1/user",
+			action:         "GET",
+			expectedStatus: http.StatusOK,
+			enforceResult:  true,
+		},
+		{
+			name:           "User forbidden to POST /api/v1/resource",
+			user:           jwt.User{ID: uuid.New(), Role: role.User.String(), Email: "user@test.com"},
+			object:         "/api/v1/resource",
+			action:         "POST",
+			expectedStatus: http.StatusForbidden,
+			enforceResult:  false,
+		},
+		{
+			name:           "Admin can DELETE /api/v1/resource",
+			user:           jwt.User{ID: uuid.New(), Role: role.Admin.String(), Email: "admin@test.com"},
+			object:         "/api/v1/resource",
+			action:         "DELETE",
+			expectedStatus: http.StatusOK,
+			enforceResult:  true,
+		},
+		{
+			name:           "User forbidden to DELETE /api/v1/resource",
+			user:           jwt.User{ID: uuid.New(), Role: role.User.String(), Email: "user@test.com"},
+			object:         "/api/v1/resource",
+			action:         "DELETE",
+			expectedStatus: http.StatusForbidden,
+			enforceResult:  false,
 		},
 	}
 
-	// Mock the dependencies
 	logger, err := logutil.ZapDevelopmentConfig().Build()
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 	problemWriter := internal.NewProblemWriter()
 
-	for _, tc := range testCase {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			enforcer := mocks.NewCasbinEnforcer(t)
-			enforcer.On("Enforce", tc.enforceCase.subject, tc.enforceCase.object, tc.enforceCase.action).Return(tc.expectedStatus == http.StatusOK, nil)
-
+			enforcer.On("Enforce", tc.user.Role, tc.object, tc.action).Return(tc.enforceResult, nil)
 			middleware := auth.NewMiddleware(logger, enforcer, problemWriter)
 			handler := middleware.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			r := httptest.NewRequest(http.MethodGet, "/api/v1/user", nil)
+			r := httptest.NewRequest(tc.action, tc.object, nil)
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
 
@@ -89,5 +106,4 @@ func TestMiddleware_HandlerFunc(t *testing.T) {
 			}
 		})
 	}
-
 }
