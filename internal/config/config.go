@@ -36,7 +36,7 @@ type Config struct {
 	OAuthProxySecret        string                    `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
 	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
 	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	SlurmBaseURL            string                    `yaml:"slurm_base_url"          envconfig:"SLURM_BASE_URL"`
+	SlurmTokenHelperURL     string                    `yaml:"slurm_token_helper_url"          envconfig:"SLURM_TOKEN_HELPER_URL"`
 	SlurmRestfulBaseURL     string                    `yaml:"slurm_restful_base_url"          envconfig:"SLURM_RESTFUL_BASE_URL"`
 	SlurmRestfulVersion     string                    `yaml:"slurm_restful_version"          envconfig:"SLURM_RESTFUL_VERSION"`
 	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
@@ -211,7 +211,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		OAuthProxySecret:        os.Getenv("OAUTH_PROXY_SECRET"),
 		Secret:                  os.Getenv("SECRET"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
-		SlurmBaseURL:            os.Getenv("SLURM_BASE_URL"),
+		SlurmTokenHelperURL:     os.Getenv("SLURM_TOKEN_HELPER_URL"),
 		SlurmRestfulBaseURL:     os.Getenv("SLURM_RESTFUL_BASE_URL"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
@@ -245,7 +245,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OAuthProxySecret, "oauth_proxy_secret", "", "OAuth proxy secret")
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
-	flag.StringVar(&flagConfig.SlurmBaseURL, "slurm_base_url", "", "slurm base url")
+	flag.StringVar(&flagConfig.SlurmTokenHelperURL, "slurm_token_helper_url", "", "slurm token helper url")
 	flag.StringVar(&flagConfig.SlurmRestfulBaseURL, "slurm_restful_base_url", "", "slurm restful base url")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")

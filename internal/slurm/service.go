@@ -24,18 +24,18 @@ type Service struct {
 	logger              *zap.Logger
 	tracer              trace.Tracer
 	slurmRestfulBaseURL string
-	slurmBaseURL        string
+	slurmTokenHelperURL string
 	httpClient          *http.Client
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmBaseURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore) *Service {
+func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore) *Service {
 	return &Service{
 		logger:              logger,
 		tracer:              otel.Tracer("slurm/service"),
 		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmBaseURL:        slurmBaseURL,
+		slurmTokenHelperURL: slurmTokenHelperURL,
 		httpClient:          &http.Client{},
 
 		settingStore: settingStore,
@@ -315,7 +315,7 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 		return "", err
 	}
 
-	requestPath := fmt.Sprintf("%s/api/token/%s", s.slurmBaseURL, userSetting.LinuxUsername.String)
+	requestPath := fmt.Sprintf("%s/api/token/%s", s.slurmTokenHelperURL, userSetting.LinuxUsername.String)
 	logger.Info("requesting new slurm token", zap.String("path", requestPath))
 
 	httpReq, err := http.NewRequest(http.MethodGet, requestPath, nil)

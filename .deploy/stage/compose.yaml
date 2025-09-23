@@ -21,7 +21,7 @@ services:
       - SECRET=${SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.stage.clustron.sdc.nycu.club
-      - SLURM_BASE_URL=${SLURM_BASE_URL}
+      - SLURM_TOKEN_HELPER_URL=${SLURM_TOKEN_HELPER_URL}
       - SLURM_RESTFUL_BASE_URL=${SLURM_RESTFUL_BASE_URL}
       - SLURM_RESTFUL_VERSION=v0.0.43
       - MIGRATION_SOURCE=file:///app/migrations
