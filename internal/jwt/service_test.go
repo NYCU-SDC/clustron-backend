@@ -15,7 +15,7 @@ import (
 )
 
 // generate the db mock using mockery
-//go:generate mockery --name=DBTX --dir=. --output=internal/jwt/mocks
+//go:generate mockery --name=DBTX
 
 // mockRow is a minimal mock for pgx.Row
 // It implements Scan to set the expected values

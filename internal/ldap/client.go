@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name=LDAPClient
 type LDAPClient interface {
 	CreateGroup(groupName, gidNumber string, memberUids []string) error
 	DeleteGroup(groupName string) error
