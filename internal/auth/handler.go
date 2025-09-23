@@ -61,6 +61,15 @@ type OAuthProvider interface {
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (oauthprovider.UserInfoStore, error)
 }
 
+type InternalLoginRequest struct {
+	UserID string `json:"user_id" validate:"required,uuid"`
+}
+
+type InternalLoginResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 type BindLoginInfoResponse struct {
 	Url string `json:"url"`
 }
@@ -371,6 +380,45 @@ func (h *Handler) DebugToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, jwtUser)
+}
+
+func (h *Handler) InternalLogin(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "InternalLogin")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var request InternalLoginRequest
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	userID, err := handlerutil.ParseUUID(request.UserID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	loginUser, err := h.userStore.GetByID(traceCtx, userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	jwtToken, refreshToken, err := h.generateJWT(traceCtx, loginUser)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := &InternalLoginResponse{
+		AccessToken:  jwtToken,
+		RefreshToken: refreshToken,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+
 }
 
 func (h *Handler) generateJWT(ctx context.Context, user user.User) (string, string, error) {
