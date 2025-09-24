@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"strconv"
@@ -65,6 +66,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")
+	case errors.As(err, new(*json.SyntaxError)):
+		return problem.NewValidateProblem("invalid JSON syntax")
 	case errors.As(err, &ErrInvalidLinuxUsername{}):
 		return problem.NewValidateProblem("invalid username: " + err.Error())
 	case errors.As(err, &ErrInvalidSetting{}):
