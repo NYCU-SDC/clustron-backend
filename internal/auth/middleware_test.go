@@ -15,12 +15,6 @@ import (
 )
 
 func TestMiddleware_PermissionMatrix(t *testing.T) {
-	type EnforceCase struct {
-		subject string
-		object  string
-		action  string
-	}
-
 	testCases := []struct {
 		name           string
 		user           jwt.User
