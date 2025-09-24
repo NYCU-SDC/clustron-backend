@@ -51,6 +51,12 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 				if job.Partition == filterValue {
 					filteredJobs = append(filteredJobs, job)
 				}
+			case "resource":
+				if filterValue == "cpu" {
+					if job.CPUs.Number > 0 {
+						filteredJobs = append(filteredJobs, job)
+					}
+				}
 			}
 		}
 		jobsContent = filteredJobs
