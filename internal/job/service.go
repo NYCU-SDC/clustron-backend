@@ -52,11 +52,12 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 					filteredJobs = append(filteredJobs, job)
 				}
 			case "resource":
-				if filterValue == "CPU" {
+				switch filterValue {
+				case "CPU":
 					if job.CPUs.Number > 0 {
 						filteredJobs = append(filteredJobs, job)
 					}
-				} else if filterValue == "Memory" {
+				case "Memory":
 					if job.MemoryPerCPU.Number*job.CPUs.Number > 0 {
 						filteredJobs = append(filteredJobs, job)
 					}
