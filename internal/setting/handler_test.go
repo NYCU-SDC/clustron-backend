@@ -119,7 +119,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			if tc.setupMock != nil {
 				tc.setupMock(store)
 			}
-			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+			h := setting.NewHandler(logger, validator.New(), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
 				t.Fatalf("failed to marshal request body: %v", err)

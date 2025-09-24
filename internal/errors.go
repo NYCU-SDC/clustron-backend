@@ -20,6 +20,9 @@ var (
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
+
+	// Setting Errors
+	ErrInvalidPublicKey = errors.New("invalid public key")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -66,6 +69,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid username: " + err.Error())
 	case errors.As(err, &ErrInvalidSetting{}):
 		return problem.NewValidateProblem("invalid setting: " + err.Error())
+	case errors.Is(err, ErrInvalidPublicKey):
+		return problem.NewValidateProblem("invalid public key")
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
 	default:

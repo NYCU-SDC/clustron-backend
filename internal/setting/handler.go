@@ -310,7 +310,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	}
 	err = validatePublicKey(request.PublicKey)
 	if err != nil {
-		handlerutil.WriteJSONResponse(w, http.StatusBadRequest, err)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidPublicKey, logger)
 		return
 	}
 
