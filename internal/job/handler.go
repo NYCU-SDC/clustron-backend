@@ -85,7 +85,7 @@ func (h Handler) GetAllJobsHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]Response, len(jobs))
 	for i, job := range jobs {
-		response[i] = ToResponse(job)
+		response[i] = toResponse(job)
 	}
 
 	paginatedJobs := h.paginationFactory.NewResponse(response, count, paginationParams.Page, paginationParams.Size)

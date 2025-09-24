@@ -61,6 +61,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 						filteredJobs = append(filteredJobs, job)
 					}
 				}
+				//TODO: add filter option GPU
 			}
 		}
 		jobsContent = filteredJobs

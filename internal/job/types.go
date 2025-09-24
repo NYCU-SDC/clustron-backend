@@ -68,7 +68,7 @@ type Response struct {
 	Resource  ResourceResponse `json:"resource"`
 }
 
-func ToResponse(j slurm.JobResponse) Response {
+func toResponse(j slurm.JobResponse) Response {
 	return Response{
 		ID:        j.JobID,
 		Name:      j.Name,
