@@ -117,6 +117,14 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+	if strings.TrimSpace(request.FullName) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
+		return
+	}
+	if strings.TrimSpace(request.LinuxUsername) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Linux Username cannot be empty"}, logger)
+		return
+	}
 
 	// check if the linux username is valid first
 	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)

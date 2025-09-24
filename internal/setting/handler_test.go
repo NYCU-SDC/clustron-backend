@@ -386,6 +386,77 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name: "Should block empty linux username",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "",
+			},
+			setupMock:      func(store *mocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block empty full name",
+			body: setting.OnboardingRequest{
+				FullName:      "",
+				LinuxUsername: "testuser",
+			},
+			setupMock:      func(store *mocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block linux username with only spaces",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "   ",
+			},
+			setupMock:      func(store *mocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block full name with only spaces",
+			body: setting.OnboardingRequest{
+				FullName:      "   ",
+				LinuxUsername: "testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block if linux username already exists",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "existuser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("IsLinuxUsernameExists", mock.Anything, "existuser").Return(true, nil).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error if checking username existence fails",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "erroruser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("IsLinuxUsernameExists", mock.Anything, "erroruser").Return(false, assert.AnError).Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "Should return error if onboarding fails",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "failuser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("IsLinuxUsernameExists", mock.Anything, "failuser").Return(false, nil).Once()
+				store.On("OnboardUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tc := range testCases {

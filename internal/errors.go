@@ -30,6 +30,14 @@ func (e ErrInvalidLinuxUsername) Error() string {
 	return e.Reason
 }
 
+type ErrInvalidSetting struct {
+	Reason string
+}
+
+func (e ErrInvalidSetting) Error() string {
+	return e.Reason
+}
+
 func NewProblemWriter() *problem.HttpWriter {
 	return problem.NewWithMapping(ErrorHandler)
 }
@@ -56,6 +64,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid syntax")
 	case errors.As(err, &ErrInvalidLinuxUsername{}):
 		return problem.NewValidateProblem("invalid username: " + err.Error())
+	case errors.As(err, &ErrInvalidSetting{}):
+		return problem.NewValidateProblem("invalid setting: " + err.Error())
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
 	default:
