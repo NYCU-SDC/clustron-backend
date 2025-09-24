@@ -58,30 +58,22 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 
 	totalCount := len(jobsContent)
 
-	sort.Slice(jobsContent, func(i, j int) bool {
-		var typeMap = map[string]bool{
-			"id":        false,
-			"status":    true,
-			"partition": true,
-			"user":      true,
-			"cpu":       false,
-			"memory":    false,
-		}
-		if _, ok := typeMap[sortBy]; !ok {
-			return false
-		}
+	compare := map[string]func(a, b slurm.JobResponse) bool{
+		"id":        func(a, b slurm.JobResponse) bool { return a.JobID < b.JobID },
+		"status":    func(a, b slurm.JobResponse) bool { return a.JobState[0] < b.JobState[0] },
+		"partition": func(a, b slurm.JobResponse) bool { return a.Partition < b.Partition },
+		"user":      func(a, b slurm.JobResponse) bool { return a.Username < b.Username },
+		"cpu":       func(a, b slurm.JobResponse) bool { return a.CPUs.Number < b.CPUs.Number },
+		"memory": func(a, b slurm.JobResponse) bool {
+			return a.MemoryPerCPU.Number*a.CPUs.Number < b.MemoryPerCPU.Number*b.CPUs.Number
+		},
+	}
 
-		if typeMap[sortBy] {
-			if sortDirection == "asc" {
-				return jobs.GetSortableStringByIndex(i)[sortBy] < jobs.GetSortableStringByIndex(j)[sortBy]
-			}
-			return jobs.GetSortableStringByIndex(i)[sortBy] > jobs.GetSortableStringByIndex(j)[sortBy]
-		} else {
-			if sortDirection == "asc" {
-				return jobs.GetSortableIntByIndex(i)[sortBy] < jobs.GetSortableIntByIndex(j)[sortBy]
-			}
-			return jobs.GetSortableIntByIndex(i)[sortBy] > jobs.GetSortableIntByIndex(j)[sortBy]
+	sort.Slice(jobsContent, func(i, j int) bool {
+		if sortDirection == "asc" {
+			return compare[sortBy](jobsContent[i], jobsContent[j])
 		}
+		return !compare[sortBy](jobsContent[i], jobsContent[j])
 	})
 
 	paginatedJobs := jobsContent[page*size : min((page+1)*size, totalCount)]
