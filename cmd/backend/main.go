@@ -144,6 +144,7 @@ func main() {
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService)
+	jobService := job.NewService(logger, slurmService)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -156,7 +157,7 @@ func main() {
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
-	jobHandler := job.NewHandler(logger, validator, problemWriter, slurmService)
+	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)

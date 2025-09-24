@@ -53,6 +53,36 @@ func (r Request) ToSlurmJobRequest() slurm.JobRequest {
 	}
 }
 
+type ResourceResponse struct {
+	CPU    int `json:"cpu"`
+	Memory int `json:"memory"`
+}
+
+type Response struct {
+	ID        int              `json:"id"`
+	Name      string           `json:"name"`
+	Comment   string           `json:"comment"`
+	Status    string           `json:"status"`
+	User      string           `json:"user"`
+	Partition string           `json:"partition"`
+	Resource  ResourceResponse `json:"resource"`
+}
+
+func ToResponse(j slurm.JobResponse) Response {
+	return Response{
+		ID:        j.JobID,
+		Name:      j.Name,
+		Comment:   j.Comment,
+		Status:    j.JobState[0],
+		User:      j.Username,
+		Partition: j.Partition,
+		Resource: ResourceResponse{
+			CPU:    j.CPUs.Number,
+			Memory: j.MemoryPerCPU.Number * j.CPUs.Number,
+		},
+	}
+}
+
 type PartitionsResponse struct {
 	Partitions []string `json:"partitions"`
 }

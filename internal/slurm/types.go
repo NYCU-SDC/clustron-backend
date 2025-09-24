@@ -27,6 +27,9 @@ type ErrorResponse struct {
 type JobResponse struct {
 	Account       string     `json:"account"`
 	CPUs          NumberFlag `json:"cpus"`
+	MemoryPerCPU  NumberFlag `json:"memory_per_cpu"`
+	Name          string     `json:"name"`
+	Comment       string     `json:"comment"`
 	GresDetail    []string   `json:"gres_detail"`
 	JobID         int        `json:"job_id"`
 	JobState      []string   `json:"job_state"`
@@ -47,6 +50,22 @@ type JobResponse struct {
 
 type JobsResponse struct {
 	Jobs []JobResponse `json:"jobs"`
+}
+
+func (j JobsResponse) GetSortableIntByIndex(i int) map[string]int {
+	return map[string]int{
+		"id":     j.Jobs[i].JobID,
+		"cpu":    j.Jobs[i].CPUs.Number,
+		"memory": j.Jobs[i].MemoryPerCPU.Number * j.Jobs[i].CPUs.Number,
+	}
+}
+
+func (j JobsResponse) GetSortableStringByIndex(i int) map[string]string {
+	return map[string]string{
+		"status":    j.Jobs[i].JobState[0],
+		"partition": j.Jobs[i].Partition,
+		"user":      j.Jobs[i].Username,
+	}
 }
 
 func (j JobsResponse) GetStates() [][]string {

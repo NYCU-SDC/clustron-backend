@@ -42,7 +42,7 @@ func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBase
 	}
 }
 
-func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, error) {
+func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetJobs")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -51,7 +51,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 	if err != nil {
 		logger.Error("failed to get new token", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return JobsResponse{}, err
 	}
 
 	requestPath := fmt.Sprintf("%s/jobs", s.slurmRestfulBaseURL)
@@ -60,7 +60,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return JobsResponse{}, err
 	}
 
 	httpRequest.Header.Add("X-SLURM-USER-TOKEN", slurmToken)
@@ -69,7 +69,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 	if err != nil {
 		logger.Error("failed to perform http request", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return JobsResponse{}, err
 	}
 	defer func() {
 		if cerr := response.Body.Close(); cerr != nil {
@@ -81,7 +81,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 		err = fmt.Errorf("unexpected status code: %d", response.StatusCode)
 		logger.Error("failed to get jobs", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return JobsResponse{}, err
 	}
 
 	var jobsResponse JobsResponse
@@ -89,12 +89,12 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) ([]JobResponse, 
 	if err != nil {
 		logger.Error("failed to parse response", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return JobsResponse{}, err
 	}
 
 	logger.Info("successfully got jobs", zap.Any("jobs", jobsResponse))
 
-	return jobsResponse.Jobs, nil
+	return jobsResponse, nil
 }
 
 func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest JobRequest) ([]JobResponse, error) {
