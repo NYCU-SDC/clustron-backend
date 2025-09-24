@@ -185,6 +185,32 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 		},
+		{
+			name: "Should return error when DB fails on GetPublicKeyByID",
+			user: jwt.User{
+				ID:   publicKey.UserID,
+				Role: role.User.String(),
+			},
+			body: setting.DeletePublicKeyRequest{
+				ID: publicKey.ID.String(),
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(setting.PublicKey{}, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "Should return error when ID is not a valid UUID",
+			user: jwt.User{
+				ID:   publicKey.UserID,
+				Role: role.User.String(),
+			},
+			body: setting.DeletePublicKeyRequest{
+				ID: "not-a-uuid",
+			},
+			setupMock:      func(store *mocks.Store) {},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -510,4 +536,145 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
+}
+
+func TestHandler_GetUserSettingHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		setupMock      func(store *mocks.Store)
+		userInContext  *jwt.User
+		expectedStatus int
+	}{
+		{
+			name: "Should return user setting",
+			setupMock: func(store *mocks.Store) {
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
+					UserID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+				}, nil)
+			},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when DB fails",
+			setupMock: func(store *mocks.Store) {
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, assert.AnError)
+			},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "Should return error when user is missing in context",
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  nil,
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, _ := zap.NewDevelopment()
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+			r := httptest.NewRequest(http.MethodGet, "/api/setting", nil)
+			w := httptest.NewRecorder()
+			if tc.userInContext != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.userInContext))
+			}
+			h.GetUserSettingHandler(w, r)
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
+
+func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		setupMock      func(store *mocks.Store)
+		userInContext  *jwt.User
+		expectedStatus int
+	}{
+		{
+			name: "Should return user public keys",
+			setupMock: func(store *mocks.Store) {
+				store.On("GetPublicKeysByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return([]setting.PublicKey{}, nil)
+			},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when DB fails",
+			setupMock: func(store *mocks.Store) {
+				store.On("GetPublicKeysByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(nil, assert.AnError)
+			},
+			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "Should return error when user is missing in context",
+			setupMock:      func(store *mocks.Store) {},
+			userInContext:  nil,
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, _ := zap.NewDevelopment()
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+			r := httptest.NewRequest(http.MethodGet, "/api/setting/publicKey", nil)
+			w := httptest.NewRecorder()
+			if tc.userInContext != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.userInContext))
+			}
+			h.GetUserPublicKeysHandler(w, r)
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
+
+func TestHandler_UpdateUserSettingHandler_DBErrorOnIsLinuxUsernameValid(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	store := mocks.NewStore(t)
+	userStore := mocks.NewUserStore(t)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+	// mock IsLinuxUsernameValid error
+	store.On("GetSettingByUserID", mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
+	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
+	store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, assert.AnError)
+	requestBody, _ := json.Marshal(setting.UpdateSettingRequest{
+		FullName:      "testuser",
+		LinuxUsername: "testuser",
+	})
+	r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
+	r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
+		ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+		Role: role.User.String(),
+	}))
+	w := httptest.NewRecorder()
+	h.UpdateUserSettingHandler(w, r)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestHandler_AddUserPublicKeyHandler_InvalidJSON(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	store := mocks.NewStore(t)
+	userStore := mocks.NewUserStore(t)
+	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+	invalidJSON := []byte(`{"title": "test", "publicKey": `) // malformed JSON
+	r := httptest.NewRequest(http.MethodPost, "/api/setting/publicKey", bytes.NewReader(invalidJSON))
+	r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
+		ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+		Role: role.User.String(),
+	}))
+	w := httptest.NewRecorder()
+	h.AddUserPublicKeyHandler(w, r)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
