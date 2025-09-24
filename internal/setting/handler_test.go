@@ -317,6 +317,18 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name: "Should return 500 when IsLinuxUsernameValid returns DB error",
+			body: setting.UpdateSettingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetSettingByUserID", mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
+				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -666,46 +678,3 @@ func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 		})
 	}
 }
-
-//func TestHandler_UpdateUserSettingHandler_DBErrorOnIsLinuxUsernameValid(t *testing.T) {
-//	testCases := []struct {
-//		name           string
-//		setupMock      func(store *mocks.Store)
-//		body           setting.UpdateSettingRequest
-//		expectedStatus int
-//	}{
-//		{
-//			name: "Should return 500 when IsLinuxUsernameValid returns DB error",
-//			setupMock: func(store *mocks.Store) {
-//				store.On("GetSettingByUserID", mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
-//				store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
-//				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, assert.AnError)
-//			},
-//			body: setting.UpdateSettingRequest{
-//				FullName:      "testuser",
-//				LinuxUsername: "testuser",
-//			},
-//			expectedStatus: http.StatusInternalServerError,
-//		},
-//	}
-//	for _, tc := range testCases {
-//		t.Run(tc.name, func(t *testing.T) {
-//			logger, _ := zap.NewDevelopment()
-//			store := mocks.NewStore(t)
-//			userStore := mocks.NewUserStore(t)
-//			if tc.setupMock != nil {
-//				tc.setupMock(store)
-//			}
-//			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-//			requestBody, _ := json.Marshal(tc.body)
-//			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
-//			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-//				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//				Role: role.User.String(),
-//			}))
-//			w := httptest.NewRecorder()
-//			h.UpdateUserSettingHandler(w, r)
-//			assert.Equal(t, tc.expectedStatus, w.Code)
-//		}
-//	}
-//}
