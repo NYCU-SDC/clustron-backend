@@ -149,10 +149,11 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		PublicKey: exampleValidKey,
 	}
 
-	testCase := []struct {
+	testCases := []struct {
 		name           string
 		user           jwt.User
 		body           setting.DeletePublicKeyRequest
+		setupMock      func(store *mocks.Store)
 		expectedStatus int
 	}{
 		{
@@ -163,6 +164,10 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			},
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
+				store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -175,25 +180,25 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			body: setting.DeletePublicKeyRequest{
 				ID: publicKey.ID.String(),
 			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
+			},
 			expectedStatus: http.StatusNotFound,
 		},
 	}
 
-	// Mock the dependencies
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		t.Fatalf("failed to create logger: %v", err)
-	}
-	store := mocks.NewStore(t)
-	store.On("GetPublicKeyByID", mock.Anything, publicKey.ID).Return(publicKey, nil)
-	store.On("DeletePublicKey", mock.Anything, publicKey.ID).Return(nil)
-
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-
-	for _, tc := range testCase {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
 				t.Fatalf("failed to marshal request body: %v", err)
@@ -201,9 +206,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodDelete, "/api/setting/publicKey", bytes.NewReader(requestBody))
 			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
-
 			h.DeletePublicKeyHandler(w, r)
-
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
@@ -213,6 +216,7 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 	testCases := []struct {
 		name           string
 		body           setting.UpdateSettingRequest
+		setupMock      func(store *mocks.Store)
 		expectedStatus int
 	}{
 		{
@@ -221,6 +225,17 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 				FullName:      "testuser",
 				LinuxUsername: "testuser",
 			},
+			setupMock: func(store *mocks.Store) {
+				store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
+					UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					FullName: pgtype.Text{String: "testuser", Valid: true},
+				}, nil)
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
+					UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					FullName:      pgtype.Text{String: "testuser", Valid: true},
+					LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
+				}, nil)
+			},
 			expectedStatus: http.StatusOK,
 		},
 		{
@@ -228,12 +243,26 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 			body: setting.UpdateSettingRequest{
 				FullName: "testuser",
 			},
+			setupMock: func(store *mocks.Store) {
+				store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
+					UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					FullName: pgtype.Text{String: "testuser", Valid: true},
+				}, nil)
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
+					UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					FullName:      pgtype.Text{String: "testuser", Valid: true},
+					LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
+				}, nil)
+			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Should return error when fullName is empty",
 			body: setting.UpdateSettingRequest{
 				LinuxUsername: "testuser",
+			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -243,32 +272,25 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 				FullName:      "testuser",
 				LinuxUsername: "test user",
 			},
+			setupMock: func(store *mocks.Store) {
+				store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, nil)
+			},
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
-	// Mock the dependencies
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		t.Fatalf("failed to create logger: %v", err)
-	}
-	store := mocks.NewStore(t)
-	store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
-		UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		FullName: pgtype.Text{String: "testuser", Valid: true},
-	}, nil)
-	store.On("GetSettingByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
-		UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-		FullName:      pgtype.Text{String: "testuser", Valid: true},
-		LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
-	}, nil)
-
-	userStore := mocks.NewUserStore(t)
-
-	h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
 				t.Fatalf("failed to marshal request body: %v", err)
@@ -279,7 +301,6 @@ func TestHandler_UpdateUserSettingHandler(t *testing.T) {
 				Role: role.User.String(),
 			}))
 			w := httptest.NewRecorder()
-
 			h.UpdateUserSettingHandler(w, r)
 
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)

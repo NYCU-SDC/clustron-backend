@@ -232,6 +232,11 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	if strings.TrimSpace(request.FullName) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
+		return
+	}
+
 	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
