@@ -12,6 +12,7 @@ nycu_oauth_client_id:
 nycu_oauth_client_secret:
 casbin_model_source:
 casbin_policy_source:
+redis_url:
 allow_origins:
   - origin1
   - origin2
