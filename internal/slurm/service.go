@@ -147,11 +147,11 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
 
 		var errorResponse ErrorResponse
-		err2 := ParseResponse(traceCtx, response, &errorResponse)
-		if err2 != nil {
-			logger.Error("failed to parse error response", zap.Error(err2))
-			span.RecordError(err2)
-			return nil, err2
+		err := ParseResponse(traceCtx, response, &errorResponse)
+		if err != nil {
+			logger.Error("failed to parse error response", zap.Error(err))
+			span.RecordError(err)
+			return nil, err
 		}
 		err = fmt.Errorf("unexpected status code: %d", response.StatusCode)
 		logger.Error("unexpected status code", zap.Error(err))
