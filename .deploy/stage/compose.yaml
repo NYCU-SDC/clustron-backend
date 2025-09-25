@@ -78,6 +78,16 @@ services:
     networks:
       - internal
 
+  redis:
+    image: redis:latest
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
 networks:
   internal:
   traefik:
