@@ -186,8 +186,13 @@ jobs:
                   },
                   {
                     "path": "/",
-                    "secret_name": "SLURM_BASE_URL",
-                    "env_name": "SLURM_BASE_URL"
+                    "secret_name": "SLURM_TOKEN_HELPER_URL",
+                    "env_name": "SLURM_TOKEN_HELPER_URL"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "SLURM_RESTFUL_BASE_URL",
+                    "env_name": "SLURM_RESTFUL_BASE_URL"
                   }
                 ]
               }
