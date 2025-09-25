@@ -34,3 +34,13 @@ services:
     command: --copy-service --loglevel debug
     ports:
       - "389:389"
+
+  redis:
+    image: redis:latest
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"

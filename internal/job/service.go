@@ -26,7 +26,7 @@ func NewService(logger *zap.Logger, slurmStore slurmStore) *Service {
 }
 
 func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, sortDirection, sortBy, filterBy, filterValue string) ([]slurm.JobResponse, int, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetJobs")
+	traceCtx, span := s.tracer.Start(ctx, "GetSlurmJobs")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
