@@ -65,7 +65,7 @@ type Response struct {
 	Status    string           `json:"status"`
 	User      string           `json:"user"`
 	Partition string           `json:"partition"`
-	Resource  ResourceResponse `json:"resource"`
+	Resources ResourceResponse `json:"resources"`
 }
 
 func toResponse(j slurm.JobResponse) Response {
@@ -76,7 +76,7 @@ func toResponse(j slurm.JobResponse) Response {
 		Status:    j.JobState[0],
 		User:      j.Username,
 		Partition: j.Partition,
-		Resource: ResourceResponse{
+		Resources: ResourceResponse{
 			CPU:    j.CPUs.Number,
 			Memory: j.MemoryPerCPU.Number * j.CPUs.Number,
 		},
