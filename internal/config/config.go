@@ -19,8 +19,10 @@ import (
 const DefaultSecret = "default-secret"
 
 var (
-	ErrDatabaseURLRequired = errors.New("database_url is required")
-	ErrInvalidUserRole     = errors.New("invalid user role")
+	ErrDatabaseURLRequired         = errors.New("database_url is required")
+	ErrInvalidUserRole             = errors.New("invalid user role")
+	ErrSlurmRestfulURLRequired     = errors.New("slurm_restful_base_url is required")
+	ErrSlurmTokenHelperURLRequired = errors.New("slurm_token_helper_url is required")
 )
 
 type PresetUserInfo struct {
@@ -98,6 +100,14 @@ func (c *Config) Validate() error {
 		if !role.IsValidGlobalRole(user.Role) {
 			return ErrInvalidUserRole
 		}
+	}
+
+	if c.SlurmRestfulBaseURL == "" {
+		return ErrSlurmRestfulURLRequired
+	}
+
+	if c.SlurmTokenHelperURL == "" {
+		return ErrSlurmTokenHelperURLRequired
 	}
 
 	return nil
