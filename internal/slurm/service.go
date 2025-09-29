@@ -58,7 +58,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 
 	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
 	if err != nil {
-		logger.Error("failed to create http request", zap.Error(err))
+		logger.Error("failed to create http request", zap.Error(err), zap.String("path", requestPath))
 		span.RecordError(err)
 		return JobsResponse{}, err
 	}
