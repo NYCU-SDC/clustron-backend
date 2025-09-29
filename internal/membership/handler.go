@@ -3,6 +3,7 @@ package membership
 import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/user/role"
 	"context"
 	"net/http"
 
@@ -118,7 +119,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 		Errors:             []JoinMemberErrorResponse{},
 	}
 	for _, m := range request.Members {
-		if m.Member == user.Email || m.Member == user.StudentID.String {
+		if (m.Member == user.Email || m.Member == user.StudentID.String) && !user.HasRole(role.Admin.String()) {
 			continue
 		}
 

@@ -145,30 +145,20 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	groupRole, err := s.GetByUser(traceCtx, userID, groupID)
 	roleType := "membership"
-	roleResponse := GroupRole{}
-	if err != nil {
-		// if the user is not a member of the group, check if the user is an admin
-		if errors.As(err, &handlerutil.NotFoundError{}) {
-			// if the user is an admin, return the group with admin override
-			if userRole == role.Admin.String() {
-				roleType = "adminOverride"
-			} else {
-				// if the user is not a member of the group and not an admin, return 404
-				err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), userID.String()), logger, "get group role by user id and group id")
-				span.RecordError(err)
-				return GroupRole{}, "", err
-			}
-		} else {
-			// other errors
-			return GroupRole{}, "", err
-		}
-	}
-	// if roleResponse hasn't been set, it means the user is a member of the group
-	if roleResponse == (GroupRole{}) && roleType != "adminOverride" {
-		roleResponse = groupRole
+	if userRole == role.Admin.String() {
+		roleType = "adminOverride"
+		return GroupRole{}, roleType, nil
 	}
 
-	return roleResponse, roleType, nil
+	groupRole, err := s.GetByUser(traceCtx, userID, groupID)
+	if err != nil {
+		if errors.As(err, &handlerutil.NotFoundError{}) {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), userID.String()), logger, "get group role by user id and group id")
+		}
+		span.RecordError(err)
+		return GroupRole{}, "", err
+	}
+
+	return groupRole, roleType, nil
 }
