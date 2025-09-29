@@ -67,7 +67,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 
 	response, err := s.httpClient.Do(httpRequest)
 	if err != nil {
-		logger.Error("failed to perform http request", zap.Error(err))
+		logger.Error("failed to perform http request", zap.Error(err), zap.String("path", requestPath))
 		span.RecordError(err)
 		return JobsResponse{}, err
 	}
@@ -79,7 +79,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 
 	if response.StatusCode != http.StatusOK {
 		err = fmt.Errorf("unexpected status code: %d", response.StatusCode)
-		logger.Error("failed to get jobs", zap.Error(err))
+		logger.Error("failed to get jobs", zap.Error(err), zap.String("path", requestPath))
 		span.RecordError(err)
 		return JobsResponse{}, err
 	}
