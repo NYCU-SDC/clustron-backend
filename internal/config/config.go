@@ -223,6 +223,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		SlurmTokenHelperURL:     os.Getenv("SLURM_TOKEN_HELPER_URL"),
 		SlurmRestfulBaseURL:     os.Getenv("SLURM_RESTFUL_BASE_URL"),
+		SlurmRestfulVersion:     os.Getenv("SLURM_RESTFUL_VERSION"),
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
 		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
@@ -257,6 +258,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.SlurmTokenHelperURL, "slurm_token_helper_url", "", "slurm token helper url")
 	flag.StringVar(&flagConfig.SlurmRestfulBaseURL, "slurm_restful_base_url", "", "slurm restful base url")
+	flag.StringVar(&flagConfig.SlurmRestfulVersion, "slurm_restful_version", "", "slurm restful version")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")
 	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
