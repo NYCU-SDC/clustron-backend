@@ -81,12 +81,23 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 		},
 	}
 
+	if sortBy == "" {
+		sortBy = "id"
+	}
+	if sortDirection == "" {
+		sortDirection = "asc"
+	}
+
 	sort.Slice(jobsContent, func(i, j int) bool {
 		if sortDirection == "asc" {
 			return compare[sortBy](jobsContent[i], jobsContent[j])
 		}
 		return !compare[sortBy](jobsContent[i], jobsContent[j])
 	})
+
+	if page*size > totalCount {
+		return []slurm.JobResponse{}, totalCount, nil
+	}
 
 	paginatedJobs := jobsContent[page*size : min((page+1)*size, totalCount)]
 
