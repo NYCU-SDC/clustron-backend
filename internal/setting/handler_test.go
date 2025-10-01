@@ -225,6 +225,14 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			setupMock:      func(store *mocks.Store) {},
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name: "Should return error when user is missing in context",
+			body: setting.DeletePublicKeyRequest{
+				ID: publicKey.ID.String(),
+			},
+			setupMock:      func(store *mocks.Store) {},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -244,10 +252,16 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
 			r := httptest.NewRequest(http.MethodDelete, "/api/setting/publicKey", bytes.NewReader(requestBody))
-			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
 			w := httptest.NewRecorder()
-			h.DeletePublicKeyHandler(w, r)
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			if tc.name == "Should return error when user is missing in context" {
+				assert.Panics(t, func() {
+					h.DeletePublicKeyHandler(w, r)
+				}, tc.name)
+			} else {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
+				h.DeletePublicKeyHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			}
 		})
 	}
 }

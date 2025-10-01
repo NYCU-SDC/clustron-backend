@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
-	grouprole "clustron-backend/internal/grouprole"
+	"clustron-backend/internal/grouprole"
 	grouprolemocks "clustron-backend/internal/grouprole/mocks"
 )
 
@@ -23,16 +23,12 @@ func TestHandler_CreateHandler(t *testing.T) {
 	testCases := []struct {
 		name           string
 		request        grouprole.CreateRequest
-		mockReturnRole grouprole.GroupRole
-		mockReturnErr  error
 		setupMock      func(store *grouprolemocks.Store)
 		expectedStatus int
 	}{
 		{
-			name:           "Create success",
-			request:        grouprole.CreateRequest{RoleName: "test", AccessLevel: "GROUP_OWNER"},
-			mockReturnRole: grouprole.GroupRole{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), RoleName: "test", AccessLevel: "GROUP_OWNER"},
-			mockReturnErr:  nil,
+			name:    "Create success",
+			request: grouprole.CreateRequest{RoleName: "test", AccessLevel: "GROUP_OWNER"},
 			setupMock: func(store *grouprolemocks.Store) {
 				store.On("Create", mock.Anything, mock.Anything).Return(
 					grouprole.GroupRole{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), RoleName: "test", AccessLevel: "GROUP_OWNER"}, nil,
@@ -41,10 +37,8 @@ func TestHandler_CreateHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Create store error",
-			request:        grouprole.CreateRequest{RoleName: "fail", AccessLevel: "GROUP_OWNER"},
-			mockReturnRole: grouprole.GroupRole{},
-			mockReturnErr:  errors.New("db error"),
+			name:    "Create store error",
+			request: grouprole.CreateRequest{RoleName: "fail", AccessLevel: "GROUP_OWNER"},
 			setupMock: func(store *grouprolemocks.Store) {
 				store.On("Create", mock.Anything, mock.Anything).Return(grouprole.GroupRole{}, errors.New("db error"))
 			},
