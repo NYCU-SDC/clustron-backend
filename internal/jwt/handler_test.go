@@ -62,6 +62,64 @@ func Test_RefreshTokenHandler(t *testing.T) {
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name:  "Should return error when jwtIssuer returns error (internal error)",
+			query: "e7e7e7e7-e7e7-4e7e-8e7e-e7e7e7e7e7e7",
+			setupMock: func(issuer *mocks.JWTIssuer) {
+				issuer.On("GetUserByRefreshToken", mock.Anything, uuid.MustParse("e7e7e7e7-e7e7-4e7e-8e7e-e7e7e7e7e7e7")).Return(jwt.User{}, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:  "Should return error when New returns error (token generation failure)",
+			query: "b7b7b7b7-b7b7-4b7b-8b7b-b7b7b7b7b7b7",
+			setupMock: func(issuer *mocks.JWTIssuer) {
+				jwtUser := jwt.User{
+					ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+					Email: "testuser@testuser.com",
+					Role:  "user",
+				}
+				issuer.On("GetUserByRefreshToken", mock.Anything, uuid.MustParse("b7b7b7b7-b7b7-4b7b-8b7b-b7b7b7b7b7b7")).Return(jwtUser, nil)
+				issuer.On("New", mock.Anything, jwtUser).Return("", assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:  "Should return error when GenerateRefreshToken returns error",
+			query: "c7c7c7c7-c7c7-4c7c-8c7c-c7c7c7c7c7c7",
+			setupMock: func(issuer *mocks.JWTIssuer) {
+				jwtUser := jwt.User{
+					ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+					Email: "testuser@testuser.com",
+					Role:  "user",
+				}
+				issuer.On("GetUserByRefreshToken", mock.Anything, uuid.MustParse("c7c7c7c7-c7c7-4c7c-8c7c-c7c7c7c7c7c7")).Return(jwtUser, nil)
+				issuer.On("New", mock.Anything, jwtUser).Return("123", nil)
+				issuer.On("GenerateRefreshToken", mock.Anything, jwtUser).Return(jwt.RefreshToken{}, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:  "Should return error when InactivateRefreshToken returns error",
+			query: "d7d7d7d7-d7d7-4d7d-8d7d-d7d7d7d7d7d7",
+			setupMock: func(issuer *mocks.JWTIssuer) {
+				jwtUser := jwt.User{
+					ID:    uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+					Email: "testuser@testuser.com",
+					Role:  "user",
+				}
+				issuer.On("GetUserByRefreshToken", mock.Anything, uuid.MustParse("d7d7d7d7-d7d7-4d7d-8d7d-d7d7d7d7d7d7")).Return(jwtUser, nil)
+				issuer.On("New", mock.Anything, jwtUser).Return("123", nil)
+				issuer.On("GenerateRefreshToken", mock.Anything, jwtUser).Return(jwt.RefreshToken{
+					ID:             uuid.MustParse("257f5ce3-8c87-40df-b012-73e9a5820780"),
+					UserID:         uuid.MustParse("28f0874f-cdb7-4342-9685-fe932ed1dd79"),
+					IsActive:       pgtype.Bool{Bool: true},
+					ExpirationDate: pgtype.Timestamptz{Time: time.Now()},
+				}, nil)
+				issuer.On("InactivateRefreshToken", mock.Anything, uuid.MustParse("d7d7d7d7-d7d7-4d7d-8d7d-d7d7d7d7d7d7")).Return(assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
 
 	logger := zap.NewNop()
