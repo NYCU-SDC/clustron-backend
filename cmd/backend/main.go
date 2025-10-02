@@ -8,10 +8,12 @@ import (
 	"clustron-backend/internal/cors"
 	"clustron-backend/internal/group"
 	"clustron-backend/internal/grouprole"
+	"clustron-backend/internal/job"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
+	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
@@ -141,6 +143,8 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
+	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService)
+	jobService := job.NewService(logger, slurmService)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -153,6 +157,7 @@ func main() {
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
+	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
@@ -182,6 +187,7 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 	mux.HandleFunc("POST /api/bind/oauth/{provider}", authMiddleware.HandlerFunc(authHandler.BindLoginInfo))
+	mux.HandleFunc("POST /api/internal/login", basicMiddleware.HandlerFunc(authHandler.InternalLogin))
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
@@ -221,6 +227,12 @@ func main() {
 
 	// Search
 	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))
+
+	// Slurm
+	mux.HandleFunc("GET /api/jobs", authMiddleware.HandlerFunc(jobHandler.GetAllJobsHandler))
+	mux.HandleFunc("POST /api/jobs", authMiddleware.HandlerFunc(jobHandler.CreateHandler))
+	mux.HandleFunc("GET /api/partitions", authMiddleware.HandlerFunc(jobHandler.GetPartitionsHandler))
+	mux.HandleFunc("GET /api/jobs/counts", authMiddleware.HandlerFunc(jobHandler.GetJobStateHandler))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

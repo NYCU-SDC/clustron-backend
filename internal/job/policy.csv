@@ -1,0 +1,4 @@
+p, user, /api/jobs, GET
+p, user, /api/jobs, POST
+p, user, /api/partitions, GET
+p, user, /api/jobs/counts, GET

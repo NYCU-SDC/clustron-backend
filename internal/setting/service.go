@@ -6,6 +6,7 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -190,11 +191,21 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	exists, err := s.query.ExistPublicKey(ctx, publicKey.PublicKey)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check public key exists")
+		span.RecordError(err)
+		return PublicKey{}, err
+	}
+	if exists {
+		logger.Warn("public key already exists", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+		return PublicKey{}, internal.ErrDatabaseConflict
+	}
+
 	var (
-		addedPublicKey PublicKey
-		err            error
-		userSetting    Setting
-		exists         bool
+		publicKeyLDAPExists bool
+		addedPublicKey      PublicKey
+		userSetting         Setting
 	)
 
 	saga := internal.NewSaga(s.logger)
@@ -237,7 +248,7 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 		Name: "GetUserInfo",
 		Action: func(ctx context.Context) error {
 			ldapUser, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
-			if err != nil {
+			if err != nil && !errors.Is(err, ldap.ErrUserNotFound) {
 				logger.Warn("get user by id failed", zap.Error(err))
 				return err
 			}
@@ -247,9 +258,26 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 	})
 
 	saga.AddStep(internal.SagaStep{
-		Name: "AddSSHPublicKey",
+		Name: "CheckSSHPublicKeyExists",
 		Action: func(ctx context.Context) error {
 			if exists {
+				publicKeyLDAPExists, err = s.ldapClient.ExistSSHPublicKey(publicKey.PublicKey)
+				if err != nil {
+					err = internal.ErrLDAPPublicKeyConflict
+					logger.Warn("check public key exists in LDAP failed", zap.Error(err))
+					return err
+				}
+				return nil
+			}
+			logger.Info("LDAP user does not exist, skipping checking public key existence", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "AddSSHPublicKey",
+		Action: func(ctx context.Context) error {
+			if exists && !publicKeyLDAPExists {
 				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
 				if err != nil {
 					logger.Warn("add public key to LDAP user failed", zap.Error(err))
@@ -262,7 +290,7 @@ func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyPar
 			return nil
 		},
 		Compensate: func(ctx context.Context) error {
-			if exists {
+			if exists && !publicKeyLDAPExists {
 				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
 				if err != nil {
 					logger.Warn("delete public key from LDAP user failed", zap.Error(err))

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/NYCU-SDC/summer/pkg/problem"
+	"net/http"
 	"strconv"
 )
 
@@ -22,12 +23,24 @@ var (
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
 
+	// LDAP Errors
+	ErrLDAPPublicKeyConflict = errors.New("ldap public key conflict")
+
 	// Setting Errors
 	ErrInvalidPublicKey = errors.New("invalid public key")
 )
 
 type ErrInvalidLinuxUsername struct {
 	Reason string
+}
+
+func NewConflictProblem(reason string) problem.Problem {
+	return problem.Problem{
+		Title:  "Conflict",
+		Status: http.StatusConflict,
+		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+		Detail: reason,
+	}
 }
 
 func (e ErrInvalidLinuxUsername) Error() string {
@@ -61,7 +74,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
 	case errors.Is(err, ErrDatabaseConflict):
-		return problem.NewBadRequestProblem("database conflict")
+		return NewConflictProblem("database conflict")
 	case errors.Is(err, ErrAlreadyOnboarded):
 		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):
@@ -76,6 +89,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid public key")
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
+	case errors.Is(err, ErrLDAPPublicKeyConflict):
+		return NewConflictProblem("ldap public key conflict")
 	default:
 		return problem.Problem{}
 	}

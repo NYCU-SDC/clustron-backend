@@ -33,6 +33,9 @@ func (s *Saga) Execute(ctx context.Context) error {
 			s.logger.Error("Saga step failed", zap.String("step", step.Name), zap.Error(err))
 
 			for i := len(executedSteps) - 1; i >= 0; i-- {
+				if executedSteps[i].Compensate == nil {
+					continue
+				}
 				if rollbackErr := executedSteps[i].Compensate(ctx); rollbackErr != nil {
 					s.logger.Error("Compensation step failed", zap.String("step", executedSteps[i].Name), zap.Error(rollbackErr))
 					return rollbackErr
