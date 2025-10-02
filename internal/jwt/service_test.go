@@ -88,6 +88,7 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 		expired      bool
 		expectErr    bool
 		errContains  string
+		setupMock    func()
 	}{
 		{
 			name:         "valid refresh token",
@@ -95,6 +96,13 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 			userRowVals:  []interface{}{user.ID, user.Email, user.Role, user.UidNumber, user.StudentID, user.CreatedAt, user.UpdatedAt},
 			expired:      false,
 			expectErr:    false,
+			setupMock: func() {
+				mockDB.ExpectedCalls = nil
+				refreshRow := &mockRow{vals: []interface{}{id, id, pgtype.Bool{Bool: true, Valid: true}, pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}}, err: nil}
+				mockDB.On("QueryRow", mock.Anything, "-- name: GetByID :one\nSELECT id, user_id, is_active, expiration_date FROM refresh_tokens WHERE id = $1\n", id).Return(refreshRow)
+				userRow := &mockRow{vals: []interface{}{user.ID, user.Email, user.Role, user.UidNumber, user.StudentID, user.CreatedAt, user.UpdatedAt}, err: nil}
+				mockDB.On("QueryRow", mock.Anything, "-- name: GetUserByRefreshToken :one\nSELECT u.id, u.email, u.role, u.uid_number, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1\n", id).Return(userRow).Once()
+			},
 		},
 		{
 			name:         "expired refresh token",
@@ -103,21 +111,17 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 			expired:      true,
 			expectErr:    true,
 			errContains:  "refresh token expired",
+			setupMock: func() {
+				mockDB.ExpectedCalls = nil
+				refreshRow := &mockRow{vals: []interface{}{id, id, pgtype.Bool{Bool: true, Valid: true}, pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true}}, err: nil}
+				mockDB.On("QueryRow", mock.Anything, "-- name: GetByID :one\nSELECT id, user_id, is_active, expiration_date FROM refresh_tokens WHERE id = $1\n", id).Return(refreshRow)
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockDB.ExpectedCalls = nil // clear previous expectations
-			// mock QueryRow for GetByID (refresh token)
-			refreshRow := &mockRow{vals: []interface{}{tc.refreshToken.ID, tc.refreshToken.UserID, tc.refreshToken.IsActive, tc.refreshToken.ExpirationDate}, err: nil}
-			mockDB.On("QueryRow", mock.Anything, "-- name: GetByID :one\nSELECT id, user_id, is_active, expiration_date FROM refresh_tokens WHERE id = $1\n", tc.refreshToken.ID).Return(refreshRow)
-
-			if !tc.expired {
-				userRow := &mockRow{vals: tc.userRowVals, err: nil}
-				mockDB.On("QueryRow", mock.Anything, "-- name: GetUserByRefreshToken :one\nSELECT u.id, u.email, u.role, u.uid_number, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1\n", tc.refreshToken.ID).Return(userRow).Once()
-			}
-
+			tc.setupMock()
 			result, err := s.GetUserByRefreshToken(context.Background(), tc.refreshToken.ID)
 			if tc.expectErr {
 				assert.Error(t, err)
