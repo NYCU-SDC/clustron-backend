@@ -12,6 +12,7 @@ import (
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/membership"
+	"clustron-backend/internal/redis"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/trace"
@@ -136,6 +137,7 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 
 	// Service
+	redisService := redis.NewService(logger, cfg.RedisURL)
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
@@ -143,7 +145,7 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
-	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService)
+	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 
 	// Set memberService in settingService after all dependencies are created

@@ -44,6 +44,7 @@ type Config struct {
 	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
 	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
 	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
+	RedisURL                string                    `yaml:"redis_url"          envconfig:"REDIS_URL"`
 	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
 	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
@@ -227,6 +228,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
 		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
+		RedisURL:                os.Getenv("REDIS_URL"),
 		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
 		GoogleOauthClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 		GoogleOauthClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
@@ -262,6 +264,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")
 	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
+	flag.StringVar(&flagConfig.RedisURL, "redis_url", "", "redis url")
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")

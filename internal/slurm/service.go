@@ -5,9 +5,11 @@ import (
 	"clustron-backend/internal/setting"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -15,6 +17,17 @@ import (
 	"net/http"
 	"strings"
 )
+
+type redisClient interface {
+	GetSlurmJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error)
+	SetSlurmJobs(ctx context.Context, userID uuid.UUID, jobs JobsResponse) error
+	DeleteSlurmJobs(ctx context.Context, userID uuid.UUID) error
+	GetSlurmJobStates(ctx context.Context, userID uuid.UUID) (JobStateResponse, error)
+	SetSlurmJobStates(ctx context.Context, userID uuid.UUID, jobStates JobStateResponse) error
+	DeleteSlurmJobStates(ctx context.Context, userID uuid.UUID) error
+	GetSlurmPartitions(ctx context.Context) (PartitionResponse, error)
+	SetSlurmPartitions(ctx context.Context, partitions PartitionResponse) error
+}
 
 type settingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
@@ -26,26 +39,37 @@ type Service struct {
 	slurmRestfulBaseURL string
 	slurmTokenHelperURL string
 	httpClient          *http.Client
+	redisClient         redisClient
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore) *Service {
+func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
 		logger:              logger,
 		tracer:              otel.Tracer("slurm/service"),
 		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
 		slurmTokenHelperURL: slurmTokenHelperURL,
 		httpClient:          &http.Client{},
+		redisClient:         redisClient,
 
 		settingStore: settingStore,
 	}
 }
 
 func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetJobs")
+	traceCtx, span := s.tracer.Start(ctx, "GetSlurmJobs")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	cachedJobs, err := s.redisClient.GetSlurmJobs(traceCtx, userID)
+	if err == nil {
+		logger.Info("got jobs from redis cache", zap.Any("jobs", cachedJobs))
+		span.RecordError(err)
+		return cachedJobs, nil
+	}
+
+	logger.Info("failed to get jobs from redis cache, fetching from slurm restful api", zap.Error(err))
 
 	slurmToken, err := s.GetNewToken(traceCtx, userID)
 	if err != nil {
@@ -90,6 +114,13 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 		logger.Error("failed to parse response", zap.Error(err))
 		span.RecordError(err)
 		return JobsResponse{}, err
+	}
+
+	err = s.redisClient.SetSlurmJobs(traceCtx, userID, jobsResponse)
+	if err != nil {
+		logger.Warn("failed to set jobs to redis cache", zap.Error(err))
+		span.RecordError(err)
+		return cachedJobs, nil
 	}
 
 	logger.Info("successfully got jobs", zap.Any("jobs", jobsResponse))
@@ -167,15 +198,38 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 		return nil, err
 	}
 
+	err = s.redisClient.DeleteSlurmJobs(traceCtx, userID)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		logger.Warn("failed to delete jobs from redis cache", zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+
+	err = s.redisClient.DeleteSlurmJobStates(traceCtx, userID)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		logger.Warn("failed to delete job states from redis cache", zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+
 	logger.Info("successfully got jobs", zap.Any("jobs", jobsResponse))
 
 	return jobsResponse.Jobs, nil
 }
 
 func (s Service) GetPartitions(ctx context.Context, userID uuid.UUID) (PartitionResponse, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetPartitions")
+	traceCtx, span := s.tracer.Start(ctx, "GetSlurmPartitions")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	cachePartitions, err := s.redisClient.GetSlurmPartitions(traceCtx)
+	if err == nil {
+		logger.Info("got partitions from redis cache", zap.Any("partitions", cachePartitions))
+		span.RecordError(err)
+		return cachePartitions, nil
+	}
+
+	logger.Info("failed to get partitions from redis cache, fetching from slurm restful api", zap.Error(err))
 
 	slurmToken, err := s.GetNewToken(traceCtx, userID)
 	if err != nil {
@@ -222,6 +276,13 @@ func (s Service) GetPartitions(ctx context.Context, userID uuid.UUID) (Partition
 		return PartitionResponse{}, err
 	}
 
+	err = s.redisClient.SetSlurmPartitions(traceCtx, partitionResponse)
+	if err != nil {
+		logger.Warn("failed to set partitions to redis cache", zap.Error(err))
+		span.RecordError(err)
+		return cachePartitions, nil
+	}
+
 	logger.Info("successfully got partitions", zap.Any("partitions", partitionResponse))
 	return partitionResponse, nil
 }
@@ -230,6 +291,15 @@ func (s Service) CountJobStates(ctx context.Context, userID uuid.UUID) (JobState
 	traceCtx, span := s.tracer.Start(ctx, "CountJobStates")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	cachedJobStates, err := s.redisClient.GetSlurmJobStates(traceCtx, userID)
+	if err == nil {
+		logger.Info("got job states from redis cache", zap.Any("job_states", cachedJobStates))
+		span.RecordError(err)
+		return cachedJobStates, nil
+	}
+
+	logger.Info("failed to get job states from redis cache, fetching from slurm restful api", zap.Error(err))
 
 	slurmToken, err := s.GetNewToken(traceCtx, userID)
 	if err != nil {
@@ -299,6 +369,15 @@ func (s Service) CountJobStates(ctx context.Context, userID uuid.UUID) (JobState
 			jobStateResponse.Unknown++
 		}
 	}
+
+	err = s.redisClient.SetSlurmJobStates(traceCtx, userID, jobStateResponse)
+	if err != nil {
+		logger.Warn("failed to set job states to redis cache", zap.Error(err))
+		span.RecordError(err)
+		return cachedJobStates, nil
+	}
+
+	logger.Info("successfully got job states", zap.Any("job_states", jobStateResponse))
 
 	return jobStateResponse, nil
 }
