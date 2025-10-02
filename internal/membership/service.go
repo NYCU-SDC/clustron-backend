@@ -289,18 +289,24 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	publicKeys, err := s.settingStore.GetPublicKeysByUserID(traceCtx, userId)
+	if err != nil {
+		logger.Warn("get public keys failed", zap.Error(err))
+		span.RecordError(err)
+		return MemberResponse{}, err
+	}
+
 	var (
-		exists      bool
-		ldapExists  bool
-		member      Membership
-		err         error
-		roleID      uuid.UUID
-		u           user.User
-		userSetting setting.Setting
-		groupRole   grouprole.GroupRole
-		groupName   = groupId.String()
-		uidNumber   int
-		publicKeys  []setting.PublicKey
+		exists          bool
+		ldapExists      bool
+		publicKeyExists bool
+		member          Membership
+		roleID          uuid.UUID
+		u               user.User
+		userSetting     setting.Setting
+		groupRole       grouprole.GroupRole
+		groupName       = groupId.String()
+		uidNumber       int
 	)
 
 	saga := internal.NewSaga(s.logger)
@@ -427,18 +433,6 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		},
 	})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "GetPublicKeysByUserID",
-		Action: func(ctx context.Context) error {
-			publicKeys, err = s.settingStore.GetPublicKeysByUserID(traceCtx, userId)
-			if err != nil {
-				logger.Warn("get public keys failed", zap.Error(err))
-				return err
-			}
-			return nil
-		},
-	})
-
 	if !isArchived {
 		saga.AddStep(internal.SagaStep{
 			Name: "CheckLDAPUser",
@@ -511,28 +505,45 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			},
 		})
 
-		saga.AddStep(internal.SagaStep{
-			Name: "AddPublicKeysToLDAPUser",
-			Action: func(ctx context.Context) error {
-				for _, publicKey := range publicKeys {
+		for _, publicKey := range publicKeys {
+			saga.AddStep(internal.SagaStep{
+				Name: "CheckSSHPublicKeyExists_" + publicKey.ID.String(),
+				Action: func(ctx context.Context) error {
+					publicKeyExists, err = s.ldapClient.ExistSSHPublicKey(publicKey.PublicKey)
+					if err != nil {
+						logger.Warn("check SSH public key existence failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						return err
+					}
+					return nil
+				},
+			})
+
+			saga.AddStep(internal.SagaStep{
+				Name: "AddPublicKeyToLDAPUser_" + publicKey.ID.String(),
+				Action: func(ctx context.Context) error {
+					if publicKeyExists {
+						return nil
+					}
 					err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
 					if err != nil {
 						logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
 						return err
 					}
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				for _, publicKey := range publicKeys {
+					return nil
+				},
+				Compensate: func(ctx context.Context) error {
+					if publicKeyExists {
+						return nil
+					}
 					err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
 					if err != nil {
 						logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						return err
 					}
-				}
-				return nil
-			},
-		})
+					return nil
+				},
+			})
+		}
 
 		saga.AddStep(internal.SagaStep{
 			Name: "AddUserToLDAPGroup",

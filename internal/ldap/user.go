@@ -157,6 +157,18 @@ func (c *Client) GetUsedUidNumbers() ([]string, error) {
 	return uidNumbers, nil
 }
 
+func (c *Client) ExistSSHPublicKey(publicKey string) (bool, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := fmt.Sprintf("(sshPublicKey=%s)", ldap.EscapeFilter(publicKey))
+
+	exist, err := c.entryExists(base, filter)
+	if err != nil {
+		c.Logger.Error("failed to check SSH public key existence", zap.Error(err))
+		return false, fmt.Errorf("failed to check SSH public key existence: %w", err)
+	}
+	return exist, nil
+}
+
 func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
 	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
 

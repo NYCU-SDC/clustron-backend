@@ -18,6 +18,7 @@ type LDAPClient interface {
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	GetGroupInfo(groupName string) (*ldap.Entry, error)
 	RemoveUserFromGroup(groupName, memberUid string) error
+	ExistSSHPublicKey(publicKey string) (bool, error)
 }
 
 type Client struct {
