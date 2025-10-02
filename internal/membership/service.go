@@ -25,11 +25,13 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name GroupRoleStore
 type GroupRoleStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (grouprole.GroupRole, error)
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
 }
 
+//go:generate mockery --name UserStore
 type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
@@ -39,6 +41,7 @@ type UserStore interface {
 	SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error
 }
 
+//go:generate mockery --name SettingStore
 type SettingStore interface {
 	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)

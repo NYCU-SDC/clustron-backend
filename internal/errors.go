@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"net/http"
@@ -24,6 +25,9 @@ var (
 
 	// LDAP Errors
 	ErrLDAPPublicKeyConflict = errors.New("ldap public key conflict")
+
+	// Setting Errors
+	ErrInvalidPublicKey = errors.New("invalid public key")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -40,6 +44,14 @@ func NewConflictProblem(reason string) problem.Problem {
 }
 
 func (e ErrInvalidLinuxUsername) Error() string {
+	return e.Reason
+}
+
+type ErrInvalidSetting struct {
+	Reason string
+}
+
+func (e ErrInvalidSetting) Error() string {
 	return e.Reason
 }
 
@@ -67,8 +79,14 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")
+	case errors.As(err, new(*json.SyntaxError)):
+		return problem.NewValidateProblem("invalid JSON syntax")
 	case errors.As(err, &ErrInvalidLinuxUsername{}):
 		return problem.NewValidateProblem("invalid username: " + err.Error())
+	case errors.As(err, &ErrInvalidSetting{}):
+		return problem.NewValidateProblem("invalid setting: " + err.Error())
+	case errors.Is(err, ErrInvalidPublicKey):
+		return problem.NewValidateProblem("invalid public key")
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
 	case errors.Is(err, ErrLDAPPublicKeyConflict):

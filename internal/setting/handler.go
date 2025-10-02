@@ -117,6 +117,14 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+	if strings.TrimSpace(request.FullName) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
+		return
+	}
+	if strings.TrimSpace(request.LinuxUsername) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Linux Username cannot be empty"}, logger)
+		return
+	}
 
 	// check if the linux username is valid first
 	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
@@ -224,6 +232,11 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	if strings.TrimSpace(request.FullName) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
+		return
+	}
+
 	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -302,7 +315,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 	}
 	err = validatePublicKey(request.PublicKey)
 	if err != nil {
-		handlerutil.WriteJSONResponse(w, http.StatusBadRequest, err)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidPublicKey, logger)
 		return
 	}
 
