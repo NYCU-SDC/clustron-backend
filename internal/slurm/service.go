@@ -120,7 +120,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 	if err != nil {
 		logger.Warn("failed to set jobs to redis cache", zap.Error(err))
 		span.RecordError(err)
-		return cachedJobs, nil
+		return jobsResponse, nil
 	}
 
 	logger.Info("successfully got jobs", zap.Any("jobs", jobsResponse))
@@ -280,7 +280,7 @@ func (s Service) GetPartitions(ctx context.Context, userID uuid.UUID) (Partition
 	if err != nil {
 		logger.Warn("failed to set partitions to redis cache", zap.Error(err))
 		span.RecordError(err)
-		return cachePartitions, nil
+		return partitionResponse, nil
 	}
 
 	logger.Info("successfully got partitions", zap.Any("partitions", partitionResponse))
@@ -374,7 +374,7 @@ func (s Service) CountJobStates(ctx context.Context, userID uuid.UUID) (JobState
 	if err != nil {
 		logger.Warn("failed to set job states to redis cache", zap.Error(err))
 		span.RecordError(err)
-		return cachedJobStates, nil
+		return jobStateResponse, nil
 	}
 
 	logger.Info("successfully got job states", zap.Any("job_states", jobStateResponse))
