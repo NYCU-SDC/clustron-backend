@@ -202,14 +202,14 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 	if err != nil && !errors.Is(err, redis.Nil) {
 		logger.Warn("failed to delete jobs from redis cache", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return jobsResponse.Jobs, nil
 	}
 
 	err = s.redisClient.DeleteSlurmJobStates(traceCtx, userID)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		logger.Warn("failed to delete job states from redis cache", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return jobsResponse.Jobs, nil
 	}
 
 	logger.Info("successfully got jobs", zap.Any("jobs", jobsResponse))
