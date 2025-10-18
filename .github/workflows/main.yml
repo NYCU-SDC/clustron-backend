@@ -117,7 +117,7 @@ jobs:
     steps:
       - name: Trigger n8n Snapshot Webhook
         run: |
-          curl --location --request POST 'https://webhook.eng.sdc.nycu.club/webhook/deploy' \
+          curl --location --request POST 'https://webhook.sdc.nycu.club/webhook/deploy' \
             --header 'Content-Type: application/json' \
             --header 'x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}' \
               --data-raw '{
@@ -185,7 +185,7 @@ jobs:
                 "enable": true,
                 "title": "Endpoint",
                 "name": "api.dev.clustron.sdc.nycu.club",
-                "value": "gcp-eng-deploy:internal"
+                "value": "default-eng-deploy:internal"
               }
             }
           }'
