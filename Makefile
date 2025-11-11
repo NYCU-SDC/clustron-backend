@@ -3,7 +3,7 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
-.PHONY: all prepare run build test gen
+.PHONY: all prepare run build test gen fuzz
 
 all: build
 
@@ -39,6 +39,14 @@ build: gen
 test: gen
 	@echo -e ":: $(GREEN)Running tests...$(NC)"
 	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
+
+fuzz:
+	@echo -e ":: $(GREEN) Preparing fuzz environment...$(NC)"
+	@cd ./test/fuzzing && ./prepare.sh || (echo -e "-> $(RED) Fuzz environment preparation failed$(NC)" && exit 1)
+	@echo -e ":: $(GREEN) Running fuzz tests...$(NC)"
+	@cd ./test/fuzzing && docker compose up || (echo -e "-> $(RED) Fuzz tests failed. Cleaning up$(NC)" && ./cleanup.sh && exit 1)
+	@./cleanup.sh
+	@echo -e "==> $(BLUE) Fuzz tests completed$(NC)"
 
 gen:
 	@echo -e ":: $(GREEN)Generating schema and code...$(NC)"

@@ -1,0 +1,114 @@
+name: clustron-api-fuzzing
+
+services:
+  postgres:
+    image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: clustron
+#    ports:
+#      - "5432:5432"
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    healthcheck:
+      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      LDAP_ORGANISATION: "Clustron"
+      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
+      LDAP_ADMIN_PASSWORD: "password"
+      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      KEEP_EXISTING_CONFIG: "false"
+    volumes:
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service --loglevel debug
+#    ports:
+#      - "389:389"
+
+  redis:
+    image: redis:latest
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ldap:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+    environment:
+      - ENV=dev
+      - DEBUG=false # Prevent verbose logging during fuzzing
+      - HOST=0.0.0.0
+      - SECRET=default-secret-key
+      - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
+      - BASE_URL=https://api.dev.clustron.sdc.nycu.club
+      - SLURM_TOKEN_HELPER_URL=http://103.124.75.38:8080 # TODO: change to test environment token helper url
+      - SLURM_RESTFUL_BASE_URL=http://103.124.75.38:6820 # TODO: change to test environment slurm restful url
+      - SLURM_RESTFUL_VERSION=v0.0.43
+      - MIGRATION_SOURCE=file:///app/migrations
+      - CASBIN_POLICY_SOURCE=policy.csv
+      - CASBIN_MODEL_SOURCE=model.conf
+      - ALLOW_ORIGINS=*
+      - LDAP_DEBUG=true
+      - LDAP_HOST=ldap
+      - LDAP_PORT=389
+      - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      - LDAP_BIND_PWD=password
+      - REDIS_URL=redis:6379
+
+  restler:
+    # Using the official Microsoft RESTler image
+    image: mcr.microsoft.com/restlerfuzzer/restler:latest
+    container_name: restler_fuzzer
+    # Mount the workspace to share the spec and collect results
+    volumes:
+      - ./restler_workspace:/mnt/restler
+    # Set the working directory inside the container
+    working_dir: /mnt/restler
+    # RESTler is run as a sequence of commands
+    command:
+#      ["sh", "-c", "sleep infinity"]
+      - sh
+      - -c
+      - |
+        echo 'Starting RESTler fuzzing sequence...' &&
+
+        # 1. COMPILE MODE: Generate grammar from the spec. Command for running binary is based on this post: stackoverflow.com/questions/77480166/issue-running-the-restler-image-from-docker-hub-proc-1-stat-error-related
+        dotnet /RESTler/restler/Restler.dll compile --api_spec /mnt/restler/openapi.yaml &&
+
+        # 2. FUZZ MODE: Run the fuzzer (adjust time_budget as needed)
+        dotnet /RESTler/restler/Restler.dll fuzz \
+          --grammar_file /mnt/restler/Compile/grammar.py \
+          --dictionary_file /mnt/restler/Compile/dict.json \
+          --settings /mnt/restler/engine_settings.json \
+          --no_ssl \
+          --target_ip backend \
+          --target_port 8080 \
+          --host backend:8080 \
+          --time_budget 0.05
+
+    depends_on:
+      backend:
+        condition: service_started

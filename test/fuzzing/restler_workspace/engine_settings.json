@@ -1,0 +1,15 @@
+{
+  "per_resource_settings": {},
+  "max_combinations": 20,
+  "authentication_settings": {
+    "auth_cmd": "\"sh -lc 'python3 /mnt/restler/auth.py \\\"$@\\\" 2>&1 | tee -a /mnt/restler/auth.log' auth --\"",
+    "auth_params": [
+      "474410d9-5eb9-4359-a469-4e5c7366f9ee"
+    ],
+    "token_type": "Bearer",
+    "token_location": "Header",
+    "token_name": "Authorization",
+    "token_refresh_interval": 300
+  },
+  "no_tokens_in_logs": false
+}
