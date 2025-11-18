@@ -107,7 +107,7 @@ services:
           --target_ip backend \
           --target_port 8080 \
           --host backend:8080 \
-          --time_budget 0.05
+          --time_budget 0.02
 
     depends_on:
       backend:
