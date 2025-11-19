@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users
     email           VARCHAR(255) UNIQUE NOT NULL,
     role            VARCHAR(255) NOT NULL DEFAULT 'user',
     uid_number      INTEGER UNIQUE,
+    full_name       VARCHAR(255),
     student_id      VARCHAR(50) UNIQUE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()

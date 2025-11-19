@@ -184,6 +184,24 @@ func (s *Service) UpdateStudentID(ctx context.Context, userID uuid.UUID, student
 	return updatedUser, nil
 }
 
+func (s *Service) UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateFullName")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	updatedUser, err := s.queries.UpdateFullName(traceCtx, UpdateFullNameParams{
+		ID:       userID,
+		FullName: pgtype.Text{String: fullName, Valid: fullName != ""},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user fullname")
+		span.RecordError(err)
+		return User{}, err
+	}
+
+	return updatedUser, nil
+}
+
 func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "SetupUserRole")
 	defer span.End()

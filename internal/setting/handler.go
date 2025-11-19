@@ -60,7 +60,7 @@ type PublicKeyResponse struct {
 
 //go:generate mockery --name Store
 type Store interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error)
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
@@ -156,7 +156,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	userID := user.ID
 
-	setting, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
+	ldapUserInfo, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -169,8 +169,8 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := BasicSettingResponse{
-		FullName:      setting.FullName.String,
-		LinuxUsername: setting.LinuxUsername.String,
+		FullName:      user.FullName.String,
+		LinuxUsername: ldapUserInfo.Username,
 	}
 	response.BoundLoginMethods = make([]LoginMethod, len(loginMethods))
 	for i, method := range loginMethods {
@@ -195,7 +195,7 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	oldSetting, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
+	oldLDAPUserInfo, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -211,11 +211,11 @@ func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Reques
 	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
 	var setting Setting
 	// if the linux username is already set, we keep it
-	if oldSetting.LinuxUsername.String != "" {
+	if oldLDAPUserInfo.Username != "" {
 		setting = Setting{
 			UserID:        user.ID,
 			FullName:      pgtype.Text{String: request.FullName, Valid: true},
-			LinuxUsername: oldSetting.LinuxUsername,
+			LinuxUsername: pgtype.Text{String: oldLDAPUserInfo.Username, Valid: true},
 		}
 	} else {
 		// else we update the linux username as well

@@ -136,13 +136,16 @@ func main() {
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
 
+	// Querier
+	settingQuerier := setting.New(dbPool)
+
 	// Service
 	redisService := redis.NewService(logger, cfg.RedisURL)
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
-	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
-	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
+	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
+	groupRoleService := grouprole.NewService(logger, dbPool)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)

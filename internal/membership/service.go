@@ -43,7 +43,7 @@ type UserStore interface {
 
 //go:generate mockery --name SettingStore
 type SettingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
+	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
 }
 
@@ -306,7 +306,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		member          Membership
 		roleID          uuid.UUID
 		u               user.User
-		userSetting     setting.Setting
+		ldapUserInfo    setting.LDAPUserInfo
 		groupRole       grouprole.GroupRole
 		groupName       = groupId.String()
 		uidNumber       int
@@ -402,7 +402,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	saga.AddStep(internal.SagaStep{
 		Name: "GetUserSetting",
 		Action: func(ctx context.Context) error {
-			userSetting, err = s.settingStore.GetSettingByUserID(traceCtx, userId)
+			ldapUserInfo, err = s.settingStore.GetSettingByUserID(traceCtx, userId)
 			if err != nil {
 				span.RecordError(err)
 				return databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userId.String(), logger, "failed to get user setting")
@@ -441,14 +441,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Name: "CheckLDAPUser",
 			Action: func(ctx context.Context) error {
 				// Check if the user already exists in LDAP
-				_, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
+				_, err := s.ldapClient.GetUserInfo(ldapUserInfo.Username)
 				if err != nil {
 					if errors.Is(err, ldap.ErrUserNotFound) {
-						logger.Info("user does not exist in LDAP", zap.String("username", userSetting.LinuxUsername.String))
+						logger.Info("user does not exist in LDAP", zap.String("username", ldapUserInfo.Username))
 						ldapExists = false
 						return nil
 					}
-					logger.Warn("check LDAP user existence failed", zap.String("username", userSetting.LinuxUsername.String), zap.Error(err))
+					logger.Warn("check LDAP user existence failed", zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
 				ldapExists = true
@@ -461,9 +461,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Action: func(ctx context.Context) error {
 				// Create LDAP user
 				if !ldapExists {
-					err = s.ldapClient.CreateUser(userSetting.LinuxUsername.String, userSetting.FullName.String, userSetting.FullName.String, "", strconv.Itoa(uidNumber))
+					err = s.ldapClient.CreateUser(ldapUserInfo.Username, u.FullName.String, u.FullName.String, "", strconv.Itoa(uidNumber))
 					if err != nil {
-						logger.Warn("create LDAP user failed", zap.String("username", userSetting.LinuxUsername.String), zap.Int("uid", uidNumber), zap.Error(err))
+						logger.Warn("create LDAP user failed", zap.String("username", ldapUserInfo.Username), zap.Int("uid", uidNumber), zap.Error(err))
 						return err
 					}
 				}
@@ -472,9 +472,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Compensate: func(ctx context.Context) error {
 				// If the user creation failed, we should remove the user from LDAP
 				if !ldapExists {
-					err = s.ldapClient.DeleteUser(userSetting.LinuxUsername.String)
+					err = s.ldapClient.DeleteUser(ldapUserInfo.Username)
 					if err != nil {
-						logger.Warn("delete LDAP user failed", zap.String("uid", userSetting.LinuxUsername.String), zap.Error(err))
+						logger.Warn("delete LDAP user failed", zap.String("uid", ldapUserInfo.Username), zap.Error(err))
 						return err
 					}
 				}
@@ -527,7 +527,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					if publicKeyExists {
 						return nil
 					}
-					err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+					err = s.ldapClient.AddSSHPublicKey(ldapUserInfo.Username, publicKey.PublicKey)
 					if err != nil {
 						logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
 						return err
@@ -538,7 +538,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					if publicKeyExists {
 						return nil
 					}
-					err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
+					err = s.ldapClient.DeleteSSHPublicKey(ldapUserInfo.Username, publicKey.PublicKey)
 					if err != nil {
 						logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
 						return err
@@ -552,7 +552,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Name: "AddUserToLDAPGroup",
 			Action: func(ctx context.Context) error {
 				if groupName != "" && uidNumber != 0 {
-					err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+					err = s.ldapClient.AddUserToGroup(groupName, ldapUserInfo.Username)
 					if err != nil {
 						logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.Int("uid", uidNumber), zap.Error(err))
 						return err
@@ -562,7 +562,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			},
 			Compensate: func(ctx context.Context) error {
 				if groupName != "" && uidNumber != 0 {
-					err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
+					err = s.ldapClient.RemoveUserFromGroup(groupName, ldapUserInfo.Username)
 					if err != nil {
 						logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.Error(err))
 						return err
@@ -581,7 +581,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 
 	return MemberResponse{
 		ID:        u.ID,
-		FullName:  userSetting.FullName.String,
+		FullName:  u.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role: grouprole.RoleResponse{
@@ -633,23 +633,23 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	// Remove the user from LDAP group
 	groupName := groupId.String()
-	userSetting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
+	ldapUserInfo, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
 
 	saga := internal.NewSaga(s.logger)
 	saga.AddStep(internal.SagaStep{
 		Name: "RemoveUserFromLDAPGroup",
 		Action: func(ctx context.Context) error {
-			err = s.ldapClient.RemoveUserFromGroup(groupName, userSetting.LinuxUsername.String)
+			err = s.ldapClient.RemoveUserFromGroup(groupName, ldapUserInfo.Username)
 			if err != nil {
-				logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.String("username", userSetting.LinuxUsername.String), zap.Error(err))
+				logger.Warn("remove user from LDAP group failed", zap.String("group", groupName), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
 			return nil
 		},
 		Compensate: func(ctx context.Context) error {
-			err = s.ldapClient.AddUserToGroup(groupName, userSetting.LinuxUsername.String)
+			err = s.ldapClient.AddUserToGroup(groupName, ldapUserInfo.Username)
 			if err != nil {
-				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.String("username", userSetting.LinuxUsername.String), zap.Error(err))
+				logger.Warn("add user to LDAP group failed", zap.String("group", groupName), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
 			return nil
@@ -746,19 +746,6 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		)
 	}
 
-	userSetting, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
-	if err != nil {
-		span.RecordError(err)
-		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
-			err,
-			"settings",
-			"user_id",
-			userId.String(),
-			logger,
-			"failed to get user setting",
-		)
-	}
-
 	roleResponse, err := s.groupRoleStore.GetByID(traceCtx, updatedMembership.RoleID)
 	if err != nil {
 		span.RecordError(err)
@@ -774,7 +761,7 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	return MemberResponse{
 		ID:        u.ID,
-		FullName:  userSetting.FullName.String,
+		FullName:  u.FullName.String,
 		Email:     u.Email,
 		StudentID: u.StudentID.String,
 		Role: grouprole.RoleResponse{

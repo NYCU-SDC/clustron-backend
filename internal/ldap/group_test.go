@@ -37,11 +37,11 @@ func TestClient_CreateGroup(t *testing.T) {
 			error:     ErrGroupNameExists,
 		},
 		{
-			name:      "Should return ErrGidNumberInUse when creating group with duplicate gidNumber",
+			name:      "Should return ErrGIDNumberInUse when creating group with duplicate gidNumber",
 			groupName: "another_group",
 			gidNumber: gidNumber,
 			members:   nil,
-			error:     ErrGidNumberInUse,
+			error:     ErrGIDNumberInUse,
 		},
 	}
 
