@@ -9,6 +9,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"time"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -18,9 +22,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"net/http"
-	"net/url"
-	"time"
 )
 
 type JWTIssuer interface {
@@ -108,6 +109,7 @@ func NewHandler(
 	var (
 		googleProvider OAuthProvider
 		nycuProvider   OAuthProvider
+		githubProvider OAuthProvider
 	)
 	if config.OAuthProxyBaseURL != "" {
 		googleProvider = oauthprovider.NewGoogleConfig(
@@ -118,6 +120,10 @@ func NewHandler(
 			config.NYCUOauthClientID,
 			config.NYCUOauthClientSecret,
 			fmt.Sprintf("%s/api/auth/google/callback", config.OAuthProxyBaseURL))
+		githubProvider = oauthprovider.NewGithubConfig(
+			config.GithubOauthClientID,
+			config.GithubOauthClientSecret,
+			fmt.Sprintf("%s/api/auth/github/callback", config.OAuthProxyBaseURL))
 	} else {
 		googleProvider = oauthprovider.NewGoogleConfig(
 			config.GoogleOauthClientID,
@@ -128,6 +134,11 @@ func NewHandler(
 			config.NYCUOauthClientID,
 			config.NYCUOauthClientSecret,
 			fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
+
+		githubProvider = oauthprovider.NewGithubConfig(
+			config.GithubOauthClientID,
+			config.GithubOauthClientSecret,
+			fmt.Sprintf("%s/api/oauth/github/callback", config.BaseURL))
 	}
 
 	return &Handler{
@@ -147,6 +158,7 @@ func NewHandler(
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
+			"github": githubProvider,
 		},
 	}
 }

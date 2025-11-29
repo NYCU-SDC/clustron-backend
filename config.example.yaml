@@ -8,6 +8,8 @@ oauth_proxy_base_url:
 oauth_proxy_secret:
 google_oauth_client_id:
 google_oauth_client_secret:
+github_oauth_cient_id:
+github_oauth_client_secret:
 nycu_oauth_client_id:
 nycu_oauth_client_secret:
 casbin_model_source:
