@@ -1,5 +1,7 @@
 {
-  "per_resource_settings": {},
+  "target_ip": "backend",
+  "target_port": 8080,
+  "host": "backend:8080",
   "max_combinations": 20,
   "authentication": {
     "token": {

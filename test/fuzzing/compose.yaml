@@ -12,8 +12,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
-#    ports:
-#      - "5432:5432"
 
   ldap:
     image: osixia/openldap:1.5.0
@@ -24,7 +22,7 @@ services:
       retries: 5
       start_period: 30s
     environment:
-      LDAP_LOG_LEVEL: 32768 # Log minimum debug information. Refer to https://github.com/osixia/docker-openldap?tab=readme-ov-file#defaultyaml
+#      LDAP_LOG_LEVEL: 32768 # Log minimum debug information. Refer to https://github.com/osixia/docker-openldap?tab=readme-ov-file#defaultyaml
       LDAP_ORGANISATION: "Clustron"
       LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
       LDAP_ADMIN_PASSWORD: "password"
@@ -32,9 +30,7 @@ services:
       KEEP_EXISTING_CONFIG: "false"
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
-    command: --copy-service --loglevel debug
-#    ports:
-#      - "389:389"
+    command: --copy-service
 
   redis:
     image: redis:latest
@@ -55,8 +51,6 @@ services:
         condition: service_healthy
       ldap:
         condition: service_healthy
-#    volumes:
-#      - ./migrations:/app/migrations
     environment:
       - ENV=dev
       - DEBUG=false # Prevent verbose logging during fuzzing
@@ -106,7 +100,6 @@ services:
     working_dir: /mnt/restler
     # RESTler is run as a sequence of commands
     command:
-#      ["sh", "-c", "sleep infinity"]
       - sh
       - -c
       - |
@@ -121,9 +114,6 @@ services:
           --dictionary_file /mnt/restler/Compile/dict.json \
           --settings /mnt/restler/engine_settings.json \
           --no_ssl \
-          --target_ip backend \
-          --target_port 8080 \
-          --host backend:8080 \
           --time_budget 0.02
     depends_on:
       backend:
