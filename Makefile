@@ -44,8 +44,8 @@ fuzz:
 	@echo -e ":: $(GREEN) Preparing fuzz environment...$(NC)"
 	@cd ./test/fuzzing && ./prepare.sh || (echo -e "-> $(RED) Fuzz environment preparation failed$(NC)" && exit 1)
 	@echo -e ":: $(GREEN) Running fuzz tests...$(NC)"
-	@cd ./test/fuzzing && docker compose up || (echo -e "-> $(RED) Fuzz tests failed. Cleaning up$(NC)" && ./cleanup.sh && exit 1)
-	@./cleanup.sh
+	@cd ./test/fuzzing && ./run.sh || (echo -e "-> $(RED) Fuzz tests failed. Cleaning up$(NC)" && ./cleanup.sh && exit 1)
+	@cd ./test/fuzzing && ./cleanup.sh
 	@echo -e "==> $(BLUE) Fuzz tests completed$(NC)"
 
 gen:
