@@ -97,7 +97,7 @@ func TestService_GetSettingByUserID(t *testing.T) {
 				tc.setupMock(querier, ldapClient, tc.userID, tc.ldapUID, tc.ldapEntry)
 			}
 
-			userInfo, err := service.GetSettingByUserID(context.Background(), tc.userID)
+			userInfo, err := service.GetLDAPUserInfoByUserID(context.Background(), tc.userID)
 			if tc.expectedErr != nil {
 				if err == nil || err.Error() != tc.expectedErr.Error() {
 					t.Errorf("expected error %v, got %v", tc.expectedErr, err)

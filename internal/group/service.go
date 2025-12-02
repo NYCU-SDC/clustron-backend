@@ -46,8 +46,7 @@ type UserStore interface {
 }
 
 type SettingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
-	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
+	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
 type Service struct {
@@ -479,9 +478,9 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 	})
 
 	saga.AddStep(internal.SagaStep{
-		Name: "GetSettingByUserID",
+		Name: "GetLDAPUserInfoByUserID",
 		Action: func(ctx context.Context) error {
-			_, err := s.settingStore.GetSettingByUserID(ctx, userID)
+			_, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, userID)
 			if err != nil {
 				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
 				span.RecordError(err)
@@ -627,7 +626,7 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		saga.AddStep(internal.SagaStep{
 			Name: "RemoveUsersFromLDAPGroup",
 			Action: func(ctx context.Context) error {
-				ldapUserInfo, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
@@ -643,7 +642,7 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				ldapUserInfo, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
@@ -715,7 +714,7 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 		saga.AddStep(internal.SagaStep{
 			Name: "AddUsersToLDAPGroup",
 			Action: func(ctx context.Context) error {
-				ldapUserInfo, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
@@ -731,7 +730,7 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				ldapUserInfo, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)

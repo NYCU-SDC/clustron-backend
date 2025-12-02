@@ -43,8 +43,7 @@ type UserStore interface {
 
 //go:generate mockery --name SettingStore
 type SettingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
-	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
+	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
 type Service struct {
@@ -292,7 +291,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	publicKeys, err := s.settingStore.GetPublicKeysByUserID(traceCtx, userId)
+	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
 	if err != nil {
 		logger.Warn("get public keys failed", zap.Error(err))
 		span.RecordError(err)
@@ -306,7 +305,6 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		member          Membership
 		roleID          uuid.UUID
 		u               user.User
-		ldapUserInfo    setting.LDAPUserInfo
 		groupRole       grouprole.GroupRole
 		groupName       = groupId.String()
 		uidNumber       int
@@ -402,7 +400,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	saga.AddStep(internal.SagaStep{
 		Name: "GetUserSetting",
 		Action: func(ctx context.Context) error {
-			ldapUserInfo, err = s.settingStore.GetSettingByUserID(traceCtx, userId)
+			ldapUserInfo, err = s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
 			if err != nil {
 				span.RecordError(err)
 				return databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userId.String(), logger, "failed to get user setting")
@@ -508,13 +506,13 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			},
 		})
 
-		for _, publicKey := range publicKeys {
+		for _, publicKey := range ldapUserInfo.PublicKey {
 			saga.AddStep(internal.SagaStep{
-				Name: "CheckSSHPublicKeyExists_" + publicKey.ID.String(),
+				Name: "CheckSSHPublicKeyExists",
 				Action: func(ctx context.Context) error {
-					publicKeyExists, err = s.ldapClient.ExistSSHPublicKey(publicKey.PublicKey)
+					publicKeyExists, err = s.ldapClient.ExistSSHPublicKey(publicKey)
 					if err != nil {
-						logger.Warn("check SSH public key existence failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						logger.Warn("check SSH public key existence failed", zap.String("publicKey", publicKey), zap.Error(err))
 						return err
 					}
 					return nil
@@ -522,14 +520,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			})
 
 			saga.AddStep(internal.SagaStep{
-				Name: "AddPublicKeyToLDAPUser_" + publicKey.ID.String(),
+				Name: "AddPublicKeyToLDAPUser",
 				Action: func(ctx context.Context) error {
 					if publicKeyExists {
 						return nil
 					}
-					err = s.ldapClient.AddSSHPublicKey(ldapUserInfo.Username, publicKey.PublicKey)
+					err = s.ldapClient.AddSSHPublicKey(ldapUserInfo.Username, publicKey)
 					if err != nil {
-						logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						logger.Warn("add public key to LDAP user failed", zap.String("publicKey", publicKey), zap.Error(err))
 						return err
 					}
 					return nil
@@ -538,9 +536,9 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					if publicKeyExists {
 						return nil
 					}
-					err = s.ldapClient.DeleteSSHPublicKey(ldapUserInfo.Username, publicKey.PublicKey)
+					err = s.ldapClient.DeleteSSHPublicKey(ldapUserInfo.Username, publicKey)
 					if err != nil {
-						logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey.PublicKey), zap.Error(err))
+						logger.Warn("delete public key from LDAP user failed", zap.String("publicKey", publicKey), zap.Error(err))
 						return err
 					}
 					return nil
@@ -633,7 +631,7 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 
 	// Remove the user from LDAP group
 	groupName := groupId.String()
-	ldapUserInfo, err := s.settingStore.GetSettingByUserID(traceCtx, userId)
+	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
 
 	saga := internal.NewSaga(s.logger)
 	saga.AddStep(internal.SagaStep{

@@ -27,7 +27,8 @@ var (
 	ErrLDAPPublicKeyConflict = errors.New("ldap public key conflict")
 
 	// Setting Errors
-	ErrInvalidPublicKey = errors.New("invalid public key")
+	ErrInvalidPublicKey   = errors.New("invalid public key")
+	ErrInvalidFingerprint = errors.New("invalid fingerprint")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -87,6 +88,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid setting: " + err.Error())
 	case errors.Is(err, ErrInvalidPublicKey):
 		return problem.NewValidateProblem("invalid public key")
+	case errors.Is(err, ErrInvalidFingerprint):
+		return problem.NewBadRequestProblem("invalid fingerprint")
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
 	case errors.Is(err, ErrLDAPPublicKeyConflict):

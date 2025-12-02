@@ -1,11 +1,13 @@
 package user
 
 import (
+	"clustron-backend/internal/jwt"
 	"context"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -13,7 +15,18 @@ import (
 )
 
 type Store interface {
+	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error)
 	SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error)
+}
+
+type Response struct {
+	ID       uuid.UUID `json:"id"`
+	Email    string    `json:"email"`
+	FullName string    `json:"full_name"`
+}
+
+type UpdateFullNameRequest struct {
+	FullName string `json:"full_name" validate:"required,min=1,max=255"`
 }
 
 type SearchingResponse struct {
@@ -44,6 +57,37 @@ func NewHandler(
 		store:             store,
 		paginationFactory: pagination.NewFactory[SearchingResponse](200, []string{"created_at"}),
 	}
+}
+
+func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateFullnameHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateFullnameHandler"))
+
+	userID, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req UpdateFullNameRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	updatedUser, err := h.store.UpdateFullName(traceCtx, userID.ID, req.FullName)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		ID:       updatedUser.ID,
+		Email:    updatedUser.Email,
+		FullName: updatedUser.FullName.String,
+	})
 }
 
 func (h *Handler) SearchByIdentifierHandler(w http.ResponseWriter, r *http.Request) {

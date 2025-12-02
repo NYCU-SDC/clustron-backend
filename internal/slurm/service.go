@@ -30,7 +30,7 @@ type redisClient interface {
 }
 
 type settingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
+	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
 type Service struct {
@@ -387,7 +387,7 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	ldapUserInfo, err := s.settingStore.GetSettingByUserID(ctx, userID)
+	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, userID)
 	if err != nil {
 		logger.Error("failed to get setting by user id", zap.Error(err))
 		span.RecordError(err)

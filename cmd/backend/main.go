@@ -196,13 +196,13 @@ func main() {
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
-	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
-	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+	//mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
+	//mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
 
 	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
-	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
+	mux.HandleFunc("DELETE /api/publickey/{fingerprint}", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	// Roles
 	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))
@@ -229,6 +229,9 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}/pendingMembers", authMiddleware.HandlerFunc(memberHandler.ListPendingMembersPagedHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.RemovePendingMemberHandler))
 	mux.HandleFunc("PUT /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.UpdatePendingMemberHandler))
+
+	// Users
+	mux.HandleFunc("PUT /api/users", authMiddleware.HandlerFunc(userHandler.UpdateFullNameHandler))
 
 	// Search
 	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))

@@ -48,24 +48,20 @@ type AddPublicKeyRequest struct {
 	PublicKey string `json:"publicKey" validate:"required"`
 }
 
-type DeletePublicKeyRequest struct {
-	ID string `json:"id" validate:"required,uuid"`
-}
-
 type PublicKeyResponse struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	PublicKey string `json:"publicKey"`
+	Fingerprint string `json:"fingerprint"`
+	Title       string `json:"title"`
+	PublicKey   string `json:"publicKey"`
 }
 
 //go:generate mockery --name Store
 type Store interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
+	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
 	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
-	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
-	GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error)
-	AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error)
-	DeletePublicKey(ctx context.Context, id uuid.UUID) error
+	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error)
+	GetPublicKeyByFingerprint(ctx context.Context, id uuid.UUID, fingerprint string) (LDAPPublicKey, error)
+	AddPublicKey(ctx context.Context, user uuid.UUID, publicKey string, title string) (LDAPPublicKey, error)
+	DeletePublicKey(ctx context.Context, user uuid.UUID, fingerprint string) error
 	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 }
@@ -106,7 +102,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -149,14 +145,14 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	userID := user.ID
 
-	ldapUserInfo, err := h.settingStore.GetSettingByUserID(traceCtx, userID)
+	ldapUserInfo, err := h.settingStore.GetLDAPUserInfoByUserID(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -183,72 +179,72 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateUserSettingHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	user, err := jwt.GetUserFromContext(r.Context())
-	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	oldLDAPUserInfo, err := h.settingStore.GetSettingByUserID(traceCtx, user.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	var request UpdateSettingRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
-	var setting Setting
-	// if the linux username is already set, we keep it
-	if oldLDAPUserInfo.Username != "" {
-		setting = Setting{
-			UserID:        user.ID,
-			FullName:      pgtype.Text{String: request.FullName, Valid: true},
-			LinuxUsername: pgtype.Text{String: oldLDAPUserInfo.Username, Valid: true},
-		}
-	} else {
-		// else we update the linux username as well
-		// check if the linux username is valid first
-		err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		setting = Setting{
-			UserID:        user.ID,
-			FullName:      pgtype.Text{String: request.FullName, Valid: true},
-			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
-		}
-	}
-
-	if strings.TrimSpace(request.FullName) == "" {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
-		return
-	}
-
-	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	response := BasicSettingResponse{
-		FullName:      updatedSetting.FullName.String,
-		LinuxUsername: updatedSetting.LinuxUsername.String,
-	}
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-}
+//func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Request) {
+//	traceCtx, span := h.tracer.Start(r.Context(), "UpdateUserSettingHandler")
+//	defer span.End()
+//	logger := logutil.WithContext(traceCtx, h.logger)
+//
+//	user, err := jwt.GetUserFromContext(r.Context())
+//	if err != nil {
+//		logger.Error("Can't find user in context, this should never happen")
+//		h.problemWriter.WriteError(traceCtx, w, err, logger)
+//		return
+//	}
+//
+//	oldLDAPUserInfo, err := h.settingStore.GetLDAPUserInfoByUserID(traceCtx, user.ID)
+//	if err != nil {
+//		h.problemWriter.WriteError(traceCtx, w, err, logger)
+//		return
+//	}
+//
+//	var request UpdateSettingRequest
+//	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+//	if err != nil {
+//		h.problemWriter.WriteError(traceCtx, w, err, logger)
+//		return
+//	}
+//
+//	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
+//	var setting Setting
+//	// if the linux username is already set, we keep it
+//	if oldLDAPUserInfo.Username != "" {
+//		setting = Setting{
+//			UserID:        user.ID,
+//			FullName:      pgtype.Text{String: request.FullName, Valid: true},
+//			LinuxUsername: pgtype.Text{String: oldLDAPUserInfo.Username, Valid: true},
+//		}
+//	} else {
+//		// else we update the linux username as well
+//		// check if the linux username is valid first
+//		err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
+//		if err != nil {
+//			h.problemWriter.WriteError(traceCtx, w, err, logger)
+//			return
+//		}
+//		setting = Setting{
+//			UserID:        user.ID,
+//			FullName:      pgtype.Text{String: request.FullName, Valid: true},
+//			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
+//		}
+//	}
+//
+//	if strings.TrimSpace(request.FullName) == "" {
+//		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
+//		return
+//	}
+//
+//	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
+//	if err != nil {
+//		h.problemWriter.WriteError(traceCtx, w, err, logger)
+//		return
+//	}
+//
+//	response := BasicSettingResponse{
+//		FullName:      updatedSetting.FullName.String,
+//		LinuxUsername: updatedSetting.LinuxUsername.String,
+//	}
+//	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+//}
 
 func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetUserPublicKeysHandler")
@@ -257,7 +253,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -285,9 +281,9 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 
 	for i, publicKey := range publicKeys {
 		response[i] = PublicKeyResponse{
-			ID:        publicKey.ID.String(),
-			Title:     publicKey.Title,
-			PublicKey: publicKey.PublicKey[:min(length, int64(len(publicKey.PublicKey)))],
+			Fingerprint: publicKey.Fingerprint,
+			PublicKey:   publicKey.PublicKey[:min(length, int64(len(publicKey.PublicKey)))],
+			Title:       publicKey.Title,
 		}
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -300,7 +296,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -319,21 +315,16 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	publicKey := CreatePublicKeyParams{
-		UserID:    userID,
-		Title:     request.Title,
-		PublicKey: request.PublicKey,
-	}
-
-	addedPublicKey, err := h.settingStore.AddPublicKey(traceCtx, publicKey)
+	addedPublicKey, err := h.settingStore.AddPublicKey(traceCtx, userID, request.PublicKey, request.Title)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	response := PublicKeyResponse{
-		Title:     addedPublicKey.Title,
-		PublicKey: addedPublicKey.PublicKey,
+		Fingerprint: addedPublicKey.Fingerprint,
+		Title:       addedPublicKey.Title,
+		PublicKey:   addedPublicKey.PublicKey,
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -345,38 +336,20 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	userID := user.ID
 
-	var request DeletePublicKeyRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	publicKeyID, err := uuid.Parse(request.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	fingerprint := r.PathValue("fingerprint")
+	if fingerprint == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFingerprint, logger)
 		return
 	}
 
-	// Check if the public key belongs to the user
-	publicKey, err := h.settingStore.GetPublicKeyByID(traceCtx, publicKeyID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	if publicKey.UserID != userID {
-		logger.Warn("Public key id does not match user id", zap.String("userID", userID.String()), zap.String("publicKeyID", request.ID))
-		handlerutil.WriteJSONResponse(w, http.StatusNotFound, nil)
-		return
-	}
-
-	err = h.settingStore.DeletePublicKey(traceCtx, publicKeyID)
+	err = h.settingStore.DeletePublicKey(traceCtx, userID, fingerprint)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
