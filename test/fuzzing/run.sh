@@ -7,6 +7,7 @@ docker compose up --abort-on-container-exit --no-attach backend
 docker compose down
 
 # Copy the bug_buckets directory to the report folder so that parser can find it
+mkdir ./reports
 cp -r ./restler_workspace/Fuzz/RestlerResults/*/bug_buckets ./reports/bug_buckets
 mkdir -p ./reports/dist
 
