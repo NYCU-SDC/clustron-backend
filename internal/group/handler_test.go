@@ -1,5 +1,178 @@
 package group_test
 
+import (
+	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"clustron-backend/internal"
+	"clustron-backend/internal/group"
+	"clustron-backend/internal/group/mocks"
+	"clustron-backend/internal/grouprole"
+	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/membership"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
+)
+
+func TestHandler_CreateHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		user           jwt.User
+		requestBody    string // Using raw JSON string to test malformed requests
+		setupMocks     func(*mocks.Store, *mocks.MemberStore)
+		wantStatus     int
+		wantError      bool
+		wantErrorTitle string
+	}{
+		{
+			name: "Should create group with valid request",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+				Role: "admin",
+			},
+			requestBody: `{
+				"title": "Test Group",
+				"description": "Test Description",
+				"members": [],
+				"links": []
+			}`,
+			setupMocks: func(store *mocks.Store, memberStore *mocks.MemberStore) {
+				store.On("Create", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), group.CreateParams{
+					Title:       "Test Group",
+					Description: pgtype.Text{String: "Test Description", Valid: true},
+				}).Return(group.Group{
+					ID:          uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
+					Title:       "Test Group",
+					Description: pgtype.Text{String: "Test Description", Valid: true},
+					IsArchived:  pgtype.Bool{Valid: true},
+					CreatedAt:   pgtype.Timestamptz{Valid: true},
+					UpdatedAt:   pgtype.Timestamptz{Valid: true},
+				}, nil)
+
+				store.On("GetByID", mock.Anything, uuid.MustParse(string(grouprole.RoleOwner))).Return(grouprole.GroupRole{
+					ID:          uuid.MustParse(string(grouprole.RoleOwner)),
+					RoleName:    "group_owner",
+					AccessLevel: string(grouprole.AccessLevelOwner),
+				}, nil)
+
+				memberStore.On("Join", mock.Anything, uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"), uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), uuid.MustParse(string(grouprole.RoleOwner)), false).Return(membership.MemberResponse{}, nil)
+			},
+			wantStatus: http.StatusCreated,
+			wantError:  false,
+		},
+		{
+			name: "Should return 400 when member field contains object instead of string (bug fixed)",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+				Role: "admin",
+			},
+			requestBody: `{
+				"title": "fuzzstring",
+				"description": "fuzzstring",
+				"members": [
+					{
+						"member": {
+							"fuzz": false
+						},
+						"roleId": "fuzzstring"
+					}
+				],
+				"links": [
+					{
+						"title": "fuzzstring",
+						"url": "fuzzstring"
+					}
+				]
+			}`,
+			setupMocks: func(store *mocks.Store, memberStore *mocks.MemberStore) {
+				// No mocks needed as this should fail during JSON unmarshaling
+			},
+			wantStatus: http.StatusBadRequest,
+			wantError:  true,
+		},
+		{
+			name: "Should return 400 when roleId is not a valid UUID (bug fixed)",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+				Role: "admin",
+			},
+			requestBody: `{
+				"title": "Test Group",
+				"description": "Test Description",
+				"members": [
+					{
+						"member": "test@example.com",
+						"roleId": "invalid-uuid"
+					}
+				],
+				"links": []
+			}`,
+			setupMocks: func(store *mocks.Store, memberStore *mocks.MemberStore) {
+				// No mocks needed as this should fail during JSON unmarshaling
+			},
+			wantStatus: http.StatusBadRequest,
+			wantError:  true,
+		},
+		{
+			name: "Should return 403 for non-admin/organizer user",
+			user: jwt.User{
+				ID:   uuid.MustParse("a9e0fd99-10de-4ad1-b519-e8430ed089e9"),
+				Role: "user",
+			},
+			requestBody: `{
+				"title": "Test Group",
+				"description": "Test Description",
+				"members": [],
+				"links": []
+			}`,
+			setupMocks: func(store *mocks.Store, memberStore *mocks.MemberStore) {
+				// No mocks needed as this should fail authorization check
+			},
+			wantStatus: http.StatusForbidden,
+			wantError:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+
+			store := mocks.NewStore(t)
+			memberStore := mocks.NewMemberStore(t)
+
+			if tc.setupMocks != nil {
+				tc.setupMocks(store, memberStore)
+			}
+
+			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, memberStore)
+
+			// Create request
+			r := httptest.NewRequest(http.MethodPost, "/groups", bytes.NewBufferString(tc.requestBody))
+			r.Header.Set("Content-Type", "application/json")
+			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, tc.user))
+			w := httptest.NewRecorder()
+
+			// Execute
+			h.CreateHandler(w, r)
+
+			// Assert
+			assert.Equal(t, tc.wantStatus, w.Code)
+		})
+	}
+}
+
 // Todo: Move test to service layer
 //func TestHandler_CreateHandler(t *testing.T) {
 //	testCases := []struct {

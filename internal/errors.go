@@ -3,9 +3,12 @@ package internal
 import (
 	"encoding/json"
 	"errors"
-	"github.com/NYCU-SDC/summer/pkg/problem"
 	"net/http"
 	"strconv"
+
+	"github.com/google/uuid"
+
+	"github.com/NYCU-SDC/summer/pkg/problem"
 )
 
 var (
@@ -91,6 +94,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("binding account conflict")
 	case errors.Is(err, ErrLDAPPublicKeyConflict):
 		return NewConflictProblem("ldap public key conflict")
+	case uuid.IsInvalidLengthError(err):
+		return problem.NewValidateProblem("invalid UUID format: " + err.Error())
 	default:
 		return problem.Problem{}
 	}
