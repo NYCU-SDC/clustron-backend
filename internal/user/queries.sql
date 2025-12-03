@@ -38,11 +38,6 @@ UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING *;
 -- name: UpdateStudentID :one
 UPDATE users SET student_id = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
--- name: ListUidNumbers :many
-SELECT uid_number FROM users WHERE uid_number IS NOT NULL ORDER BY uid_number;
-
--- name: SetUidNumber :exec
-UPDATE users SET uid_number = $2 WHERE id = $1;
 
 -- name: UpdateFullName :one
 UPDATE users SET full_name = $2, updated_at = now() WHERE id = $1 RETURNING *;

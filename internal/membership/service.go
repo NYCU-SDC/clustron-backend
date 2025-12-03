@@ -37,8 +37,6 @@ type UserStore interface {
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
 	ExistsByIdentifier(ctx context.Context, identifier string) (bool, error)
-	GetAvailableUidNumber(ctx context.Context) (int, error)
-	SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error
 }
 
 //go:generate mockery --name SettingStore
@@ -421,19 +419,6 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		},
 	})
 
-	saga.AddStep(internal.SagaStep{
-		Name: "GetAvailableUidNumber",
-		Action: func(ctx context.Context) error {
-			uidNumber, err = s.userStore.GetAvailableUidNumber(traceCtx)
-			if err != nil {
-				logger.Warn("get available uid number failed", zap.Error(err))
-				return err
-			}
-			logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
-			return nil
-		},
-	})
-
 	if !isArchived {
 		saga.AddStep(internal.SagaStep{
 			Name: "CheckLDAPUser",
@@ -475,32 +460,6 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 						logger.Warn("delete LDAP user failed", zap.String("uid", ldapUserInfo.Username), zap.Error(err))
 						return err
 					}
-				}
-				return nil
-			},
-		})
-
-		saga.AddStep(internal.SagaStep{
-			Name: "SetUidNumber",
-			Action: func(ctx context.Context) error {
-				if !u.UidNumber.Valid {
-					err = s.userStore.SetUidNumber(traceCtx, userId, uidNumber)
-					if err != nil {
-						logger.Warn("set uid number failed", zap.Error(err))
-						return err
-					}
-					return nil
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				if !u.UidNumber.Valid {
-					err = s.userStore.SetUidNumber(traceCtx, userId, 0)
-					if err != nil {
-						logger.Warn("clear uid number failed", zap.Error(err))
-						return err
-					}
-					return nil
 				}
 				return nil
 			},

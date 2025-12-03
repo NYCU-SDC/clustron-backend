@@ -41,8 +41,6 @@ type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
-	GetAvailableUidNumber(ctx context.Context) (int, error)
-	SetUidNumber(ctx context.Context, userID uuid.UUID, uidNumber int) error
 }
 
 type SettingStore interface {
@@ -448,7 +446,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 		groupName string
 		err       error
 		gidNumber int
-		uidNumber int
 	)
 
 	saga := internal.NewSaga(s.logger)
@@ -499,19 +496,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 				return err
 			}
 			logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "GetAvailableUidNumber",
-		Action: func(ctx context.Context) error {
-			uidNumber, err = s.userStore.GetAvailableUidNumber(ctx)
-			if err != nil {
-				logger.Warn("get available uid number failed", zap.Error(err))
-				return err
-			}
-			logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
 			return nil
 		},
 	})
