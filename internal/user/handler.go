@@ -64,7 +64,7 @@ func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) 
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "UpdateFullnameHandler"))
 
-	userID, err := jwt.GetUserFromContext(traceCtx)
+	user, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -77,7 +77,7 @@ func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	updatedUser, err := h.store.UpdateFullName(traceCtx, userID.ID, req.FullName)
+	updatedUser, err := h.store.UpdateFullName(traceCtx, user.ID, req.FullName)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
