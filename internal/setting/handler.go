@@ -27,11 +27,6 @@ type OnboardingRequest struct {
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
 }
 
-type UpdateSettingRequest struct {
-	FullName      string `json:"fullName" validate:"required"`
-	LinuxUsername string `json:"linuxUsername" validate:"excludesall= \t\r\n"`
-}
-
 type LoginMethod struct {
 	Provider string `json:"provider"`
 	Email    string `json:"email"`
@@ -57,7 +52,6 @@ type PublicKeyResponse struct {
 //go:generate mockery --name Store
 type Store interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
-	UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error)
 	GetPublicKeyByFingerprint(ctx context.Context, id uuid.UUID, fingerprint string) (LDAPPublicKey, error)
 	AddPublicKey(ctx context.Context, user uuid.UUID, publicKey string, title string) (LDAPPublicKey, error)
@@ -178,73 +172,6 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
-
-//func (h *Handler) UpdateUserSettingHandler(w http.ResponseWriter, r *http.Request) {
-//	traceCtx, span := h.tracer.Start(r.Context(), "UpdateUserSettingHandler")
-//	defer span.End()
-//	logger := logutil.WithContext(traceCtx, h.logger)
-//
-//	user, err := jwt.GetUserFromContext(r.Context())
-//	if err != nil {
-//		logger.Error("Can't find user in context, this should never happen")
-//		h.problemWriter.WriteError(traceCtx, w, err, logger)
-//		return
-//	}
-//
-//	oldLDAPUserInfo, err := h.settingStore.GetLDAPUserInfoByUserID(traceCtx, user.ID)
-//	if err != nil {
-//		h.problemWriter.WriteError(traceCtx, w, err, logger)
-//		return
-//	}
-//
-//	var request UpdateSettingRequest
-//	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
-//	if err != nil {
-//		h.problemWriter.WriteError(traceCtx, w, err, logger)
-//		return
-//	}
-//
-//	// TODO: allow updating linux username (after we have a solution to manage ldap users and the home directory in remote lab)
-//	var setting Setting
-//	// if the linux username is already set, we keep it
-//	if oldLDAPUserInfo.Username != "" {
-//		setting = Setting{
-//			UserID:        user.ID,
-//			FullName:      pgtype.Text{String: request.FullName, Valid: true},
-//			LinuxUsername: pgtype.Text{String: oldLDAPUserInfo.Username, Valid: true},
-//		}
-//	} else {
-//		// else we update the linux username as well
-//		// check if the linux username is valid first
-//		err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
-//		if err != nil {
-//			h.problemWriter.WriteError(traceCtx, w, err, logger)
-//			return
-//		}
-//		setting = Setting{
-//			UserID:        user.ID,
-//			FullName:      pgtype.Text{String: request.FullName, Valid: true},
-//			LinuxUsername: pgtype.Text{String: request.LinuxUsername, Valid: true},
-//		}
-//	}
-//
-//	if strings.TrimSpace(request.FullName) == "" {
-//		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Full Name cannot be empty"}, logger)
-//		return
-//	}
-//
-//	updatedSetting, err := h.settingStore.UpdateSetting(traceCtx, user.ID, setting)
-//	if err != nil {
-//		h.problemWriter.WriteError(traceCtx, w, err, logger)
-//		return
-//	}
-//
-//	response := BasicSettingResponse{
-//		FullName:      updatedSetting.FullName.String,
-//		LinuxUsername: updatedSetting.LinuxUsername.String,
-//	}
-//	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-//}
 
 func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetUserPublicKeysHandler")

@@ -196,8 +196,7 @@ func main() {
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
-	//mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
-	//mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
+	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 
 	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))

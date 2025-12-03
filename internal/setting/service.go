@@ -40,6 +40,7 @@ type LDAPClient interface {
 	ExistSSHPublicKey(publicKey string) (bool, error)
 	AddSSHPublicKey(uid string, publicKey string) error
 	DeleteSSHPublicKey(uid string, publicKey string) error
+	ExistUser(uid string) (bool, error)
 }
 
 //go:generate mockery --name Querier
@@ -47,9 +48,6 @@ type Querier interface {
 	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error
 	ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error)
-	CreateSetting(ctx context.Context, arg CreateSettingParams) (Setting, error)
-	GetSetting(ctx context.Context, userID uuid.UUID) (Setting, error)
-	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (Setting, error)
 	GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKey(ctx context.Context, id uuid.UUID) (PublicKey, error)
 	ExistPublicKey(ctx context.Context, publicKey string) (bool, error)
@@ -188,53 +186,6 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 	}
 
 	return ldapUserInfo, nil
-}
-
-func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	exist, err := s.query.ExistByUserID(ctx, userID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "check setting exists")
-		span.RecordError(err)
-		return Setting{}, err
-	}
-
-	var setting Setting
-	if !exist {
-		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, FullName: fullName})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create setting")
-			span.RecordError(err)
-			return Setting{}, err
-		}
-	} else {
-		setting, err = s.query.GetSetting(ctx, userID)
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
-			span.RecordError(err)
-			return Setting{}, err
-		}
-	}
-
-	return setting, nil
-}
-
-func (s *Service) UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "update setting")
-		span.RecordError(err)
-		return Setting{}, err
-	}
-
-	return updatedSetting, nil
 }
 
 func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error) {
@@ -468,9 +419,9 @@ func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.query.ExistByLinuxUsername(ctx, pgtype.Text{String: linuxUsername, Valid: true})
+	exists, err := s.ldapClient.ExistUser(linuxUsername)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
+		logger.Error("failed to check linux username existence in LDAP", zap.String("linuxUsername", linuxUsername), zap.Error(err))
 		span.RecordError(err)
 		return false, err
 	}

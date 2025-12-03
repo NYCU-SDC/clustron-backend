@@ -271,14 +271,6 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// CreateInfo a new setting for the user
-	_, err = h.settingStore.FindOrCreateSetting(traceCtx, loginInfo.UserID, pgtype.Text{String: userInfo.GetUserInfo().Name, Valid: true})
-	if err != nil {
-		logger.Error("Failed to create setting for user", zap.Error(err))
-		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
-		return
-	}
-
 	// Get user with loginInfo
 	loginUser, err := h.userStore.GetByID(traceCtx, loginInfo.UserID)
 	if err != nil {

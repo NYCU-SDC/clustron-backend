@@ -115,6 +115,18 @@ func (c *Client) GetUserInfoByUIDNumber(uidNumber string) (*ldap.Entry, error) {
 	return result.Entries[0], nil
 }
 
+func (c *Client) ExistUser(uid string) (bool, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
+
+	exist, err := c.entryExists(base, filter)
+	if err != nil {
+		c.Logger.Error("failed to check user existence", zap.String("uid", uid), zap.Error(err))
+		return false, fmt.Errorf("failed to check user existence: %w", err)
+	}
+	return exist, nil
+}
+
 func (c *Client) UpdateUser(uid string, cn string, sn string) error {
 	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
