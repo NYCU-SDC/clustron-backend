@@ -122,91 +122,115 @@ jobs:
 
       - name: Process PR body for webhook
         run: |
-          PR_TYPE=$(echo "${{ steps.extract.outputs.type_block }}" | jq -R -s @json)
-          PR_PURPOSE=$(echo "${{ steps.extract.outputs.purpose_block }}" | jq -R -s @json)
-          echo "PR_TYPE=$PR_TYPE" >> $GITHUB_ENV
-          echo "PR_PURPOSE=$PR_PURPOSE" >> $GITHUB_ENV
+          PR_TYPE=$(jq -Rs . << 'EOF'
+          ${{ steps.extract.outputs.type_block }}
+          EOF
+          )
+          
+          PR_PURPOSE=$(jq -Rs . << 'EOF'
+          ${{ steps.extract.outputs.purpose_block }}
+          EOF
+          )
+          
+          {
+            echo "PR_TYPE=$PR_TYPE"
+            echo "PR_PURPOSE=$PR_PURPOSE"
+          } >> "$GITHUB_ENV"
 
       - name: Trigger n8n Snapshot Webhook
         run: |
+          json=$(jq -n \
+            --arg title "Clustron" \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${{ github.head_ref || github.ref_name }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg pr_number "${{ github.event.number }}" \
+            --arg pr_title "${{ github.event.pull_request.title }}" \
+            --arg pr_type "$PR_TYPE" \
+            --arg pr_purpose "$PR_PURPOSE" \
+            '{
+              source: {
+                title: $title,
+                repo: $repo,
+                branch: $branch,
+                commit: $commit,
+                pr_number: $pr_number,
+                pr_title: $pr_title,
+                pr_type: $pr_type,
+                pr_purpose: $pr_purpose
+              },
+              method: "deploy",
+              metadata: {
+                environment: "snapshot",
+                component: "backend"
+              },
+              setup: {
+                inject_secret: {
+                  enable: true,
+                  project: "clustron",
+                  environment: "snapshot",
+                  secrets: [
+                    {
+                      path: "/google-oauth",
+                      secret_name: "CLIENT_ID",
+                      env_name: "GOOGLE_OAUTH_CLIENT_ID"
+                    },
+                    {
+                      path: "/google-oauth",
+                      secret_name: "CLIENT_SECRET",
+                      env_name: "GOOGLE_OAUTH_CLIENT_SECRET"
+                    },
+                    {
+                      path: "/nycu-oauth",
+                      secret_name: "CLIENT_ID",
+                      env_name: "NYCU_OAUTH_CLIENT_ID"
+                    },
+                    {
+                      path: "/nycu-oauth",
+                      secret_name: "CLIENT_SECRET",
+                      env_name: "NYCU_OAUTH_CLIENT_SECRET"
+                    },
+                    {
+                      path: "/",
+                      secret_name: "JWT_SECRET",
+                      env_name: "SECRET"
+                    },
+                    {
+                      path: "/",
+                      secret_name: "OAUTH_PROXY_TOKEN",
+                      env_name: "OAUTH_PROXY_SECRET"
+                    },
+                    {
+                      path: "/",
+                      secret_name: "SLURM_TOKEN_HELPER_URL",
+                      env_name: "SLURM_TOKEN_HELPER_URL"
+                    },
+                    {
+                      path: "/",
+                      secret_name: "SLURM_RESTFUL_BASE_URL",
+                      env_name: "SLURM_RESTFUL_BASE_URL"
+                    }
+                  ]
+                }
+              },
+              post: {
+                notify_discord: {
+                  enable: true,
+                  channel: "clustron-activity"
+                },
+                setup_domain: {
+                  enable: true,
+                  title: "Endpoint",
+                  name: "api.pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club",
+                  value: "default-eng-deploy:internal"
+                }
+              }
+            }')
+          
+          echo "===== JSON to send ====="
+          echo "$json"
+          
           curl --location --request POST 'https://webhook.sdc.nycu.club/webhook/deploy' \
             --header 'Content-Type: application/json' \
             --header 'x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}' \
-              --data-raw '{
-            "source": {
-              "title": "Clustron",
-              "repo": "${{ github.repository }}",
-              "branch": "${{ github.head_ref || github.ref_name }}",
-              "commit": "${{ github.sha }}",
-              "pr_number": "${{ github.event.number }}",
-              "pr_title": "${{ github.event.pull_request.title }}",
-              "pr_type": ${{ env.PR_TYPE }},
-              "pr_purpose": ${{ env.PR_PURPOSE }}
-            },
-            "method": "deploy",
-            "metadata": {
-              "environment": "snapshot",
-              "component": "backend"
-            },
-            "setup": {
-              "inject_secret": {
-                "enable": true,
-                "project": "clustron",
-                "environment": "snapshot",
-                "secrets": [
-                  {
-                    "path": "/google-oauth",
-                    "secret_name": "CLIENT_ID",
-                    "env_name": "GOOGLE_OAUTH_CLIENT_ID"
-                  },
-                  {
-                    "path": "/google-oauth",
-                    "secret_name": "CLIENT_SECRET",
-                    "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
-                  },
-                  {
-                    "path": "/nycu-oauth",
-                    "secret_name": "CLIENT_ID",
-                    "env_name": "NYCU_OAUTH_CLIENT_ID"
-                  },
-                  {
-                    "path": "/nycu-oauth",
-                    "secret_name": "CLIENT_SECRET",
-                    "env_name": "NYCU_OAUTH_CLIENT_SECRET"
-                  },
-                  {
-                    "path": "/",
-                    "secret_name": "JWT_SECRET",
-                    "env_name": "SECRET"
-                  },
-                  {
-                    "path": "/",
-                    "secret_name": "OAUTH_PROXY_TOKEN",
-                    "env_name": "OAUTH_PROXY_SECRET"
-                  },
-                  {
-                    "path": "/",
-                    "secret_name": "SLURM_TOKEN_HELPER_URL",
-                    "env_name": "SLURM_TOKEN_HELPER_URL"
-                  },
-                  {
-                    "path": "/",
-                    "secret_name": "SLURM_RESTFUL_BASE_URL",
-                    "env_name": "SLURM_RESTFUL_BASE_URL"
-                  }
-                ]
-              }
-            },
-            "post": {
-              "notify_discord": {
-                "enable": true,
-                "channel": "clustron-activity"
-              },
-              "setup_domain": {
-                "enable": true,
-                "title": "Endpoint",
-                "name": "api.pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club",
-                "value": "default-eng-deploy:internal"
-              }
-            }
-          }'
+            --data "$json"
