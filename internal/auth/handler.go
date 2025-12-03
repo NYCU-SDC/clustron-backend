@@ -5,7 +5,6 @@ import (
 	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
-	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
@@ -15,7 +14,6 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -39,10 +37,6 @@ type JWTStore interface {
 
 type UserStore interface {
 	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
-}
-
-type SettingStore interface {
-	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (setting.Setting, error)
 }
 
 type Store interface {
@@ -92,12 +86,11 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	userStore    UserStore
-	jwtIssuer    JWTIssuer
-	jwtStore     JWTStore
-	settingStore SettingStore
-	store        Store
-	provider     map[string]OAuthProvider
+	userStore UserStore
+	jwtIssuer JWTIssuer
+	jwtStore  JWTStore
+	store     Store
+	provider  map[string]OAuthProvider
 }
 
 func NewHandler(
@@ -110,8 +103,7 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
-	store Store,
-	settingStore SettingStore) *Handler {
+	store Store) *Handler {
 
 	var (
 		googleProvider OAuthProvider
@@ -148,11 +140,10 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 
-		userStore:    userStore,
-		jwtIssuer:    jwtIssuer,
-		jwtStore:     jwtStore,
-		settingStore: settingStore,
-		store:        store,
+		userStore: userStore,
+		jwtIssuer: jwtIssuer,
+		jwtStore:  jwtStore,
+		store:     store,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
