@@ -6,6 +6,7 @@ import (
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
+	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
@@ -221,114 +222,6 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 	}
 }
 
-//func TestHandler_UpdateUserSettingHandler(t *testing.T) {
-//	testCases := []struct {
-//		name           string
-//		body           setting.UpdateSettingRequest
-//		setupMock      func(store *mocks.Store)
-//		expectedStatus int
-//	}{
-//		{
-//			name: "Should update user setting",
-//			body: setting.UpdateSettingRequest{
-//				FullName:      "testuser",
-//				LinuxUsername: "testuser",
-//			},
-//			setupMock: func(store *mocks.Store) {
-//				store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
-//					UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//					FullName: pgtype.Text{String: "testuser", Valid: true},
-//				}, nil)
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
-//					UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//					FullName:      pgtype.Text{String: "testuser", Valid: true},
-//					LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
-//				}, nil)
-//			},
-//			expectedStatus: http.StatusOK,
-//		},
-//		{
-//			name: "Should update user setting without linux username",
-//			body: setting.UpdateSettingRequest{
-//				FullName: "testuser",
-//			},
-//			setupMock: func(store *mocks.Store) {
-//				store.On("UpdateSetting", mock.Anything, mock.Anything, mock.Anything).Return(setting.Setting{
-//					UserID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//					FullName: pgtype.Text{String: "testuser", Valid: true},
-//				}, nil)
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
-//					UserID:        uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//					FullName:      pgtype.Text{String: "testuser", Valid: true},
-//					LinuxUsername: pgtype.Text{String: "testuser", Valid: true},
-//				}, nil)
-//			},
-//			expectedStatus: http.StatusOK,
-//		},
-//		{
-//			name: "Should return error when fullName is empty",
-//			body: setting.UpdateSettingRequest{
-//				LinuxUsername: "testuser",
-//			},
-//			setupMock: func(store *mocks.Store) {
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, nil)
-//			},
-//			expectedStatus: http.StatusBadRequest,
-//		},
-//		{
-//			name: "Should return error when linux username contain space",
-//			body: setting.UpdateSettingRequest{
-//				FullName:      "testuser",
-//				LinuxUsername: "test user",
-//			},
-//			setupMock: func(store *mocks.Store) {
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, nil)
-//			},
-//			expectedStatus: http.StatusBadRequest,
-//		},
-//		{
-//			name: "Should return 500 when IsLinuxUsernameValid returns DB error",
-//			body: setting.UpdateSettingRequest{
-//				FullName:      "testuser",
-//				LinuxUsername: "testuser",
-//			},
-//			setupMock: func(store *mocks.Store) {
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, mock.Anything).Return(setting.Setting{}, nil)
-//				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, assert.AnError)
-//			},
-//			expectedStatus: http.StatusInternalServerError,
-//		},
-//	}
-//
-//	for _, tc := range testCases {
-//		t.Run(tc.name, func(t *testing.T) {
-//			logger, err := zap.NewDevelopment()
-//			if err != nil {
-//				t.Fatalf("failed to create logger: %v", err)
-//			}
-//			store := mocks.NewStore(t)
-//			userStore := mocks.NewUserStore(t)
-//			if tc.setupMock != nil {
-//				tc.setupMock(store)
-//			}
-//			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-//			requestBody, err := json.Marshal(tc.body)
-//			if err != nil {
-//				t.Fatalf("failed to marshal request body: %v", err)
-//			}
-//			r := httptest.NewRequest(http.MethodPut, "/api/setting", bytes.NewReader(requestBody))
-//			r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, jwt.User{
-//				ID:   uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//				Role: role.User.String(),
-//			}))
-//			w := httptest.NewRecorder()
-//			h.UpdateUserSettingHandler(w, r)
-//
-//			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
-//		})
-//	}
-//}
-
 func TestHandler_OnboardingHandler(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -533,64 +426,69 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 	}
 }
 
-//func TestHandler_GetUserSettingHandler(t *testing.T) {
-//	testCases := []struct {
-//		name           string
-//		setupMock      func(store *mocks.Store, userStore *mocks.UserStore)
-//		userInContext  *jwt.User
-//		expectedStatus int
-//	}{
-//		{
-//			name: "Should return user setting",
-//			setupMock: func(store *mocks.Store, userStore *mocks.UserStore) {
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{
-//					UserID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"),
-//				}, nil)
-//				userStore.On("ListLoginMethodsByID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return([]user.ListLoginMethodsRow{}, nil)
-//			},
-//			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
-//			expectedStatus: http.StatusOK,
-//		},
-//		{
-//			name: "Should return error when DB fails",
-//			setupMock: func(store *mocks.Store, userStore *mocks.UserStore) {
-//				store.On("GetLDAPUserInfoByUserID", mock.Anything, uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e")).Return(setting.Setting{}, assert.AnError)
-//			},
-//			userInContext:  &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
-//			expectedStatus: http.StatusInternalServerError,
-//		},
-//		{
-//			name:           "Should return error when user is missing in context",
-//			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore) {},
-//			userInContext:  nil,
-//			expectedStatus: http.StatusInternalServerError,
-//		},
-//	}
-//	for _, tc := range testCases {
-//		t.Run(tc.name, func(t *testing.T) {
-//			logger, _ := zap.NewDevelopment()
-//			store := mocks.NewStore(t)
-//			userStore := mocks.NewUserStore(t)
-//			if tc.setupMock != nil {
-//				tc.setupMock(store, userStore)
-//			}
-//			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
-//			r := httptest.NewRequest(http.MethodGet, "/api/setting", nil)
-//			w := httptest.NewRecorder()
-//			if tc.userInContext != nil {
-//				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.userInContext))
-//			}
-//			if tc.userInContext == nil {
-//				assert.Panics(t, func() {
-//					h.GetUserSettingHandler(w, r)
-//				}, tc.name)
-//			} else {
-//				h.GetUserSettingHandler(w, r)
-//				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
-//			}
-//		})
-//	}
-//}
+func TestHandler_GetUserSettingHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		user           *jwt.User
+		setupMock      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User)
+		expectedStatus int
+	}{
+		{
+			name: "Should return user setting",
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, userStore *mocks.UserStore, jwtUser *jwt.User) {
+				store.On("GetLDAPUserInfoByUserID", mock.Anything, jwtUser.ID).Return(setting.LDAPUserInfo{
+					Username: "testuser",
+					PublicKey: []string{
+						"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..",
+						"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB..",
+					},
+				}, nil)
+				userStore.On("ListLoginMethodsByID", mock.Anything, jwtUser.ID).Return([]user.ListLoginMethodsRow{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when DB fails",
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, userStore *mocks.UserStore, jwtUser *jwt.User) {
+				store.On("GetLDAPUserInfoByUserID", mock.Anything, jwtUser.ID).Return(setting.LDAPUserInfo{}, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "Should return error when user is missing in context",
+			user:           nil,
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, jwtUser *jwt.User) {},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, _ := zap.NewDevelopment()
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+			if tc.setupMock != nil {
+				tc.setupMock(store, userStore, tc.user)
+			}
+			h := setting.NewHandler(logger, validator.New(), problem.New(), store, userStore)
+			r := httptest.NewRequest(http.MethodGet, "/api/setting", nil)
+			w := httptest.NewRecorder()
+			if tc.user != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+			}
+
+			h.GetUserSettingHandler(w, r)
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
 
 func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 	testCases := []struct {
