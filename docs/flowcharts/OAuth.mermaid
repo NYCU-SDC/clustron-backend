@@ -1,0 +1,20 @@
+flowchart TD
+    A[User requests login] -->|Frontend directs to '/api/login/oauth/provider'| B[GET /api/login/oauth/provider]
+    B --> C[Oauth2Start Handler]
+    C --> D{Validate provider: must be 'google' or 'nycu'}
+    D -- Invalid --> E[Return 400 Bad Request]
+    D -- Valid --> F[Create callback token including redirect information. For oauth proxy to read]
+    F --> G[Build OAuth2 authorization URL]
+    G --> H[Redirect user to OAuth2 provider's authorization URL]
+    H --> I[User authenticates with OAuth2 provider]
+    I --> J[OAuth2 provider redirects back to '/api/login/oauth/provider/callback' with authorization code]
+    J --> K[GET /api/login/oauth/provider/callback]
+    K --> L[Callback Handler]
+    L --> M[Parse callback info]
+    M --> N[Exchange code for access token]
+    N --> O[Use access token to fetch user info from OAuth2 provider]
+    O --> P{Find or create user}
+    P -- Create --> Q[Initialize user settings]
+    P --> R[Generate JWT token]
+    Q --> R
+    R --> S[Redirect user to the callback URL provided earlier. With JWT token and refresh token as query parameters]
