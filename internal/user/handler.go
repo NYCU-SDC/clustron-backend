@@ -59,6 +59,25 @@ func NewHandler(
 	}
 }
 
+func (h *Handler) GetMeHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetMeHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "GetMeHandler"))
+
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		logger.Error("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		ID:       user.ID,
+		Email:    user.Email,
+		FullName: user.FullName.String,
+	})
+}
+
 func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UpdateFullnameHandler")
 	defer span.End()
@@ -66,7 +85,7 @@ func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) 
 
 	user, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
+		logger.Error("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
