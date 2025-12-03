@@ -112,6 +112,11 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	}
 
 	uidNumber, err := s.GetAvailableUIDNumber(traceCtx)
+	if err != nil {
+		logger.Error("failed to get available uid number", zap.String("userID", userID.String()), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to get available uid number: %w", err)
+	}
 
 	// Create User Entry
 	err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
