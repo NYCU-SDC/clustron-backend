@@ -1,6 +1,7 @@
 package user
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -12,8 +13,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"net/http"
+	"strings"
 )
 
+//go:generate mockery --name=Store
 type Store interface {
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error)
 	SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error)
@@ -93,6 +96,11 @@ func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) 
 	var req UpdateFullNameRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	req.FullName = strings.TrimSpace(req.FullName)
+	if err := h.validator.Struct(req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFullName, logger)
 		return
 	}
 
