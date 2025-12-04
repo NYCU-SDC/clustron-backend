@@ -97,6 +97,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 		},
 		{
 			name: "Should return error when user is missing in context",
+			user: nil,
 			body: setting.AddPublicKeyRequest{
 				Title:     "Test Title",
 				PublicKey: exampleValidKey,
@@ -141,10 +142,13 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+				h.AddUserPublicKeyHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.AddUserPublicKeyHandler(w, r)
+				}, tc.name)
 			}
-
-			h.AddUserPublicKeyHandler(w, r)
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
 }
@@ -214,10 +218,13 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+				h.DeletePublicKeyHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.DeletePublicKeyHandler(w, r)
+				}, tc.name)
 			}
-
-			h.DeletePublicKeyHandler(w, r)
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
 }
@@ -482,10 +489,13 @@ func TestHandler_GetUserSettingHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+				h.GetUserSettingHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.GetUserSettingHandler(w, r)
+				}, tc.name)
 			}
-
-			h.GetUserSettingHandler(w, r)
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
 }
@@ -536,10 +546,13 @@ func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+				h.GetUserPublicKeysHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.GetUserPublicKeysHandler(w, r)
+				}, tc.name)
 			}
-
-			h.GetUserPublicKeysHandler(w, r)
-			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
 }

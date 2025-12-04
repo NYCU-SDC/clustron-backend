@@ -96,7 +96,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.Error("Can't find user in context, this should never happen")
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -139,7 +139,7 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.Error("Can't find user in context, this should never happen")
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -180,7 +180,7 @@ func (h *Handler) GetUserPublicKeysHandler(w http.ResponseWriter, r *http.Reques
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.Error("Can't find user in context, this should never happen")
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -223,7 +223,7 @@ func (h *Handler) AddUserPublicKeyHandler(w http.ResponseWriter, r *http.Request
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.Error("Can't find user in context, this should never happen")
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -263,7 +263,7 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 
 	user, err := jwt.GetUserFromContext(r.Context())
 	if err != nil {
-		logger.Error("Can't find user in context, this should never happen")
+		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
