@@ -4,7 +4,6 @@ import (
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
 	"context"
-	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -45,9 +44,8 @@ func TestService_GetSettingByUserID(t *testing.T) {
 			},
 
 			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry) {
-				ldapUIDStr := fmt.Sprintf("%d", ldapUID)
 				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
-				ldapClient.On("GetUserInfoByUIDNumber", ldapUIDStr).Return(entry, nil)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(entry, nil)
 			},
 		},
 		{
@@ -77,9 +75,8 @@ func TestService_GetSettingByUserID(t *testing.T) {
 			},
 
 			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry) {
-				ldapUIDStr := fmt.Sprintf("%d", ldapUID)
 				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
-				ldapClient.On("GetUserInfoByUIDNumber", ldapUIDStr).Return(entry, nil)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(entry, nil)
 			},
 		},
 	}

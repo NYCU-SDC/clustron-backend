@@ -110,7 +110,7 @@ func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
 
 	if len(result.Entries) == 0 {
 		c.Logger.Warn("user not found", zap.Int64("uidNumber", uidNumber))
-		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, uidNumber)
+		return nil, fmt.Errorf("%w: %d", ErrUserNotFound, uidNumber)
 	}
 	return result.Entries[0], nil
 }
