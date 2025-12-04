@@ -15,8 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const StartUidNumber = 10000
-
 type Service struct {
 	queries   *Queries
 	logger    *zap.Logger
