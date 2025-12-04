@@ -408,7 +408,7 @@ func (s *Service) DeletePublicKey(ctx context.Context, userID uuid.UUID, fingerp
 		}
 	}
 
-	err = fmt.Errorf("public key with fingerprint %s not found for user %s", fingerprint, userID.String())
+	err = ldaputil.ErrPublicKeyNotFound
 	logger.Warn("public key not found", zap.String("fingerprint", fingerprint), zap.String("userID", userID.String()))
 	span.RecordError(err)
 	return err

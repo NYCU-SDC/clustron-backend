@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
+	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
 	"clustron-backend/internal/user"
@@ -188,6 +189,33 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 			fingerprint:    "",
 			setupMock:      func(store *mocks.Store, user *jwt.User) {},
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return not found when LDAP user not found",
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			fingerprint: "mock-fingerprint",
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("DeletePublicKey", mock.Anything,
+					user.ID,
+					publicKey.Fingerprint,
+				).Return(ldaputil.ErrUserNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "Should return not found when fingerprint not found",
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			fingerprint: "non-existing-fingerprint",
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("DeletePublicKey", mock.Anything, user.ID, mock.Anything).Return(ldaputil.ErrPublicKeyNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name:           "Should return error when user is missing in context",
@@ -520,7 +548,10 @@ func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 		},
 		{
 			name: "Should return error when DB fails",
-			user: &jwt.User{ID: uuid.MustParse("7942c917-4770-43c1-a56a-952186b9970e"), Role: role.User.String()},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
 			setupMock: func(store *mocks.Store, user *jwt.User) {
 				store.On("GetPublicKeysByUserID", mock.Anything, user.ID).Return(nil, assert.AnError)
 			},
