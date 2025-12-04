@@ -34,7 +34,7 @@ type UserStore interface {
 //go:generate mockery --name LDAPClient
 type LDAPClient interface {
 	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
-	GetUserInfoByUIDNumber(uidNumber string) (*ldap.Entry, error)
+	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
 	GetAllUIDNumbers() ([]string, error)
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	ExistSSHPublicKey(publicKey string) (bool, error)
@@ -169,15 +169,14 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 		return LDAPUserInfo{}, err
 	}
 
-	ldapUIDStr := fmt.Sprintf("%d", ldapUID)
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDStr)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
 			return LDAPUserInfo{}, err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return LDAPUserInfo{}, err
 	}
@@ -205,15 +204,14 @@ func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) (
 		return nil, err
 	}
 
-	ldapUIDStr := fmt.Sprintf("%d", ldapUID)
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDStr)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
 			return nil, err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return nil, err
 	}
@@ -253,15 +251,14 @@ func (s *Service) GetPublicKeyByFingerprint(ctx context.Context, userID uuid.UUI
 		return LDAPPublicKey{}, err
 	}
 
-	ldapUIDStr := fmt.Sprintf("%d", ldapUID)
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDStr)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
 			return LDAPPublicKey{}, err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return LDAPPublicKey{}, err
 	}
@@ -304,15 +301,14 @@ func (s *Service) AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey 
 		return LDAPPublicKey{}, err
 	}
 
-	ldapUIDStr := fmt.Sprintf("%d", ldapUID)
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDStr)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
 			return LDAPPublicKey{}, err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return LDAPPublicKey{}, err
 	}
@@ -378,15 +374,14 @@ func (s *Service) DeletePublicKey(ctx context.Context, userID uuid.UUID, fingerp
 		return err
 	}
 
-	ldapUIDStr := fmt.Sprintf("%d", ldapUID)
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDStr)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
 			return err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.String("ldapUID", ldapUIDStr), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return err
 	}

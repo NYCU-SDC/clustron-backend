@@ -95,21 +95,21 @@ func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 	return result.Entries[0], nil
 }
 
-func (c *Client) GetUserInfoByUIDNumber(uidNumber string) (*ldap.Entry, error) {
+func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
-	filter := fmt.Sprintf("(uidNumber=%s)", ldap.EscapeFilter(uidNumber))
+	filter := fmt.Sprintf("(uidNumber=%s)", ldap.EscapeFilter(fmt.Sprint(uidNumber)))
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
 	}
 
 	result, err := c.SearchByFilter(base, filter, attributes)
 	if err != nil {
-		c.Logger.Error("failed to search user", zap.String("uidNumber", uidNumber), zap.Error(err))
+		c.Logger.Error("failed to search user", zap.Int64("uidNumber", uidNumber), zap.Error(err))
 		return nil, fmt.Errorf("failed to search user: %w", err)
 	}
 
 	if len(result.Entries) == 0 {
-		c.Logger.Warn("user not found", zap.String("uidNumber", uidNumber))
+		c.Logger.Warn("user not found", zap.Int64("uidNumber", uidNumber))
 		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, uidNumber)
 	}
 	return result.Entries[0], nil
