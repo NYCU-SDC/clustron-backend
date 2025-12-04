@@ -158,8 +158,14 @@ func (h *Handler) GetUserSettingHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	userInfo, err := h.userStore.GetByID(traceCtx, userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	response := BasicSettingResponse{
-		FullName:      user.FullName.String,
+		FullName:      userInfo.FullName.String,
 		LinuxUsername: ldapUserInfo.Username,
 	}
 	response.BoundLoginMethods = make([]LoginMethod, len(loginMethods))

@@ -26,6 +26,7 @@ import (
 
 //go:generate mockery --name UserStore
 type UserStore interface {
+	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (user.User, error)
 	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
