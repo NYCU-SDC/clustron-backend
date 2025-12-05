@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"clustron-backend/internal/ldap"
 	"encoding/json"
 	"errors"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -23,11 +24,12 @@ var (
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
 
-	// LDAP Errors
-	ErrLDAPPublicKeyConflict = errors.New("ldap public key conflict")
-
 	// Setting Errors
-	ErrInvalidPublicKey = errors.New("invalid public key")
+	ErrInvalidPublicKey   = errors.New("invalid public key")
+	ErrInvalidFingerprint = errors.New("invalid fingerprint")
+
+	// User Errors
+	ErrInvalidFullName = errors.New("invalid full name")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -87,10 +89,37 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid setting: " + err.Error())
 	case errors.Is(err, ErrInvalidPublicKey):
 		return problem.NewValidateProblem("invalid public key")
+	case errors.Is(err, ErrInvalidFingerprint):
+		return problem.NewBadRequestProblem("invalid fingerprint")
 	case errors.Is(err, ErrBindingAccountConflict):
 		return problem.NewBadRequestProblem("binding account conflict")
-	case errors.Is(err, ErrLDAPPublicKeyConflict):
-		return NewConflictProblem("ldap public key conflict")
+	case errors.Is(err, ErrInvalidFullName):
+		return problem.NewValidateProblem("invalid full name")
+	// LDAP Client Errors
+	case errors.Is(err, ldap.ErrGIDNumberInUse):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrGroupNameExists):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrGroupConstraintViolation):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserNotInGroup):
+		return problem.NewNotFoundProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserAlreadyInGroup):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserNoGroup):
+		return problem.NewNotFoundProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserExists):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrUIDNumberInUse):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserNotFound):
+		return problem.NewNotFoundProblem(err.Error())
+	case errors.Is(err, ldap.ErrUserConstraintViolation):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ldap.ErrPublicKeyNotFound):
+		return problem.NewNotFoundProblem(err.Error())
+	case errors.Is(err, ldap.ErrPublicKeyExists):
+		return NewConflictProblem(err.Error())
 	default:
 		return problem.Problem{}
 	}

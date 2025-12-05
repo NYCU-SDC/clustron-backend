@@ -2,7 +2,7 @@
 SELECT
     m.group_id,
     m.user_id,
-    s.full_name,
+    u.full_name,
     u.email,
     u.student_id,
     m.role_id,
@@ -11,7 +11,6 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
 ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
@@ -20,7 +19,7 @@ LIMIT @Size OFFSET @Skip;
 SELECT
     m.group_id,
     m.user_id,
-    s.full_name,
+    u.full_name,
     u.email,
     u.student_id,
     m.role_id,
@@ -29,7 +28,6 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-JOIN settings AS s ON s.user_id = u.id
 WHERE group_id = $1
 ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;

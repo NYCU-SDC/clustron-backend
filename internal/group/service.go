@@ -41,13 +41,10 @@ type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
-	GetAvailableUidNumber(ctx context.Context) (int, error)
-	SetUidNumber(ctx context.Context, userID uuid.UUID, uidNumber int) error
 }
 
 type SettingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
-	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]setting.PublicKey, error)
+	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
 type Service struct {
@@ -449,7 +446,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 		groupName string
 		err       error
 		gidNumber int
-		uidNumber int
 	)
 
 	saga := internal.NewSaga(s.logger)
@@ -479,9 +475,9 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 	})
 
 	saga.AddStep(internal.SagaStep{
-		Name: "GetSettingByUserID",
+		Name: "GetLDAPUserInfoByUserID",
 		Action: func(ctx context.Context) error {
-			_, err := s.settingStore.GetSettingByUserID(ctx, userID)
+			_, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, userID)
 			if err != nil {
 				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userID.String(), logger, "failed to get user setting")
 				span.RecordError(err)
@@ -500,19 +496,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, group CreatePara
 				return err
 			}
 			logger.Info("gidNumber", zap.Int("gidNumber", gidNumber))
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "GetAvailableUidNumber",
-		Action: func(ctx context.Context) error {
-			uidNumber, err = s.userStore.GetAvailableUidNumber(ctx)
-			if err != nil {
-				logger.Warn("get available uid number failed", zap.Error(err))
-				return err
-			}
-			logger.Info("uidNumber", zap.Int("uidNumber", uidNumber))
 			return nil
 		},
 	})
@@ -627,32 +610,32 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		saga.AddStep(internal.SagaStep{
 			Name: "RemoveUsersFromLDAPGroup",
 			Action: func(ctx context.Context) error {
-				userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
 					return err
 				}
 
-				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), userSetting.LinuxUsername.String)
+				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), ldapUserInfo.Username)
 				if err != nil {
-					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
 					return err
 				}
 
-				err = s.ldapClient.AddUserToGroup(group.ID.String(), userSetting.LinuxUsername.String)
+				err = s.ldapClient.AddUserToGroup(group.ID.String(), ldapUserInfo.Username)
 				if err != nil {
-					logger.Error("add user back to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+					logger.Error("add user back to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
@@ -715,32 +698,32 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 		saga.AddStep(internal.SagaStep{
 			Name: "AddUsersToLDAPGroup",
 			Action: func(ctx context.Context) error {
-				userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
 					return err
 				}
 
-				err = s.ldapClient.AddUserToGroup(group.ID.String(), userSetting.LinuxUsername.String)
+				err = s.ldapClient.AddUserToGroup(group.ID.String(), ldapUserInfo.Username)
 				if err != nil {
-					logger.Error("add user to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+					logger.Error("add user to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				userSetting, err := s.settingStore.GetSettingByUserID(ctx, member.UserID)
+				ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, member.UserID)
 				if err != nil {
 					err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", member.UserID.String(), logger, "failed to get user setting")
 					span.RecordError(err)
 					return err
 				}
 
-				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), userSetting.LinuxUsername.String)
+				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), ldapUserInfo.Username)
 				if err != nil {
-					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", userSetting.LinuxUsername.String), zap.Error(err))
+					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}

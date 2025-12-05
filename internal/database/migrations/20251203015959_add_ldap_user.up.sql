@@ -1,0 +1,7 @@
+ALTER TABLE users
+ADD COLUMN full_name VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS ldap_user (
+    id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
+    uid_number BIGINT UNIQUE NOT NULL
+);

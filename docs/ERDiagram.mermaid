@@ -3,8 +3,7 @@ erDiagram
     users ||--o{ refresh_tokens : "owns"
     users ||--o{ login_info : "has linked accounts"
     users ||--o{ login_tokens : "generates"
-    users ||--|| settings : "has (1:1)"
-    users ||--o{ public_keys : "owns"
+    users ||--|| ldap_user : "has(1:1)"
 
     %% Group Core
     groups ||--o{ links : "contains"
@@ -22,7 +21,7 @@ erDiagram
         UUID id PK
         VARCHAR email
         VARCHAR role
-        INTEGER uid_number
+        VARCHAR full_name
         VARCHAR student_id
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
@@ -45,6 +44,11 @@ erDiagram
         TIMESTAMPTZ updated_at
     }
 
+    ldap_user {
+        UUID id PK, FK
+        BIGINT uid_number
+    }
+
     login_tokens {
         UUID id PK
         UUID user_id FK
@@ -53,19 +57,6 @@ erDiagram
         BOOLEAN is_active
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
-    }
-
-    settings {
-        UUID user_id PK, FK
-        VARCHAR full_name
-        VARCHAR linux_username
-    }
-
-    public_keys {
-        UUID id PK
-        UUID user_id FK
-        VARCHAR title
-        TEXT public_key
     }
 
     groups {

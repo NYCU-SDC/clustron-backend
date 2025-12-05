@@ -34,10 +34,10 @@ func TestClient_CreateUser(t *testing.T) {
 			error:     ErrUserExists,
 		},
 		{
-			name:      "Should return ErrUidNumberInUse for duplicate uidNumber",
+			name:      "Should return ErrUIDNumberInUse for duplicate uidNumber",
 			uid:       "another_user",
 			uidNumber: uidNumber,
-			error:     ErrUidNumberInUse,
+			error:     ErrUIDNumberInUse,
 		},
 	}
 
@@ -197,7 +197,7 @@ func TestClient_GetUsedUidNumbers(t *testing.T) {
 				require.NoError(t, client.CreateUser(fmt.Sprintf("user_%s", uid), "CN", "SN", pubkey1, uid))
 			}
 
-			uids, err := client.GetUsedUidNumbers()
+			uids, err := client.GetUsedUIDNumbers()
 			require.NoError(t, err)
 
 			fmt.Println(uids)

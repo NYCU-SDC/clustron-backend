@@ -12,3 +12,8 @@ CREATE TABLE IF NOT EXISTS public_keys (
     title VARCHAR(255) NOT NULL,
     public_key TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ldap_user (
+    id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
+    uid_number BIGINT UNIQUE NOT NULL
+);
