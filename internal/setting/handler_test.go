@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgtype"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -481,6 +482,11 @@ func TestHandler_GetUserSettingHandler(t *testing.T) {
 						"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..",
 						"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB..",
 					},
+				}, nil)
+				userStore.On("GetByID", mock.Anything, jwtUser.ID).Return(user.User{
+					ID:       jwtUser.ID,
+					Role:     role.User.String(),
+					FullName: pgtype.Text{String: "Test User", Valid: true},
 				}, nil)
 				userStore.On("ListLoginMethodsByID", mock.Anything, jwtUser.ID).Return([]user.ListLoginMethodsRow{}, nil)
 			},
