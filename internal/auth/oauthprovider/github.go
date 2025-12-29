@@ -80,7 +80,7 @@ func (g *GithubConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 	return &GithubUserInfo{
 		UserInfo: UserInfo{
 			ID:    strconv.FormatInt(userInfo.ID, 10),
-			Email: userInfo.Email,
+			Email: userInfo.Login,
 			Name:  displayName,
 		},
 	}, nil
