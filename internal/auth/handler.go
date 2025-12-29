@@ -119,7 +119,7 @@ func NewHandler(
 		nycuProvider = oauthprovider.NewNYCUConfig(
 			config.NYCUOauthClientID,
 			config.NYCUOauthClientSecret,
-			fmt.Sprintf("%s/api/auth/google/callback", config.OAuthProxyBaseURL))
+			fmt.Sprintf("%s/api/auth/nycu/callback", config.OAuthProxyBaseURL))
 		githubProvider = oauthprovider.NewGithubConfig(
 			config.GithubOauthClientID,
 			config.GithubOauthClientSecret,
