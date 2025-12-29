@@ -9,9 +9,11 @@ func (p ProviderType) String() string {
 const (
 	ProviderTypeGoogle ProviderType = "GOOGLE"
 	ProviderTypeNYCU   ProviderType = "NYCU"
+	ProviderTypeGithub ProviderType = "GITHUB"
 )
 
 var ProviderTypesMap = map[string]ProviderType{
 	"google": ProviderTypeGoogle,
 	"nycu":   ProviderTypeNYCU,
+	"github": ProviderTypeGithub,
 }
