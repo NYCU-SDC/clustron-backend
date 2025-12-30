@@ -10,10 +10,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/go-ldap/ldap/v3"
-	"golang.org/x/crypto/ssh"
 	"strconv"
 	"strings"
+
+	"github.com/go-ldap/ldap/v3"
+	"golang.org/x/crypto/ssh"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -336,8 +337,9 @@ func (s *Service) AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey 
 		oldFingerprint := base64.RawStdEncoding.EncodeToString(oldHash[:])
 
 		if strings.EqualFold(fingerprint, oldFingerprint) {
+			err = ldaputil.ErrPublicKeyExists
 			logger.Warn("public key already exists in LDAP", zap.String("userID", userID.String()))
-			return LDAPPublicKey{}, fmt.Errorf("public key already exists")
+			return LDAPPublicKey{}, err
 		}
 	}
 
@@ -351,6 +353,10 @@ func (s *Service) AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey 
 	// add the public key to LDAP
 	err = s.ldapClient.AddSSHPublicKey(ldapEntry.GetAttributeValue("uid"), publicKey)
 	if err != nil {
+		if errors.Is(err, ldaputil.ErrPublicKeyExists) {
+			logger.Warn("public key already exists in LDAP", zap.String("userID", userID.String()))
+			return LDAPPublicKey{}, err
+		}
 		logger.Error("failed to add SSH public key to LDAP", zap.String("userID", userID.String()), zap.Error(err))
 		span.RecordError(err)
 		return LDAPPublicKey{}, fmt.Errorf("failed to add SSH public key to LDAP: %w", err)

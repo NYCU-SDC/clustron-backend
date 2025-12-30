@@ -12,10 +12,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgtype"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
@@ -96,6 +97,25 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 			},
 			setupMock:      func(store *mocks.Store, user *jwt.User) {},
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when public key already exists",
+			body: setting.AddPublicKeyRequest{
+				Title:     "Test Title",
+				PublicKey: exampleValidKey,
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("AddPublicKey", mock.Anything,
+					user.ID,
+					exampleValidKey,
+					"Test Title",
+				).Return(setting.LDAPPublicKey{}, ldaputil.ErrPublicKeyExists)
+			},
+			expectedStatus: http.StatusConflict,
 		},
 		{
 			name: "Should return error when user is missing in context",

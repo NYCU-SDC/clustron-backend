@@ -5,12 +5,13 @@ import (
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
 	"context"
+	"testing"
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zaptest"
-	"testing"
 )
 
 var exampleFingerprint = "Sr7R03NsrTQ3vXO7XcRZzpJfixXJnwZXPi48i6XsLOY"
@@ -511,6 +512,19 @@ func Test_AddPublicKey(t *testing.T) {
 			expectedHasErr: true,
 			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newKey string) {
 				store.On("GetUIDByUserID", mock.Anything, userID).Return(int64(0), assert.AnError)
+			},
+		},
+		{
+			name:           "LDAP public key already exists",
+			userID:         uuid.New(),
+			newPublicKey:   exampleValidKey,
+			title:          "title",
+			ldapUID:        10001,
+			ldapEntry:      exampleLDAPEntry,
+			expectedHasErr: true,
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newKey string) {
+				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(entry, ldaputil.ErrPublicKeyExists)
 			},
 		},
 	}
