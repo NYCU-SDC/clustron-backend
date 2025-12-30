@@ -27,3 +27,9 @@ INSERT INTO public_keys (user_id, title, public_key) VALUES ($1, $2, $3) RETURNI
 
 -- name: DeletePublicKey :exec
 DELETE FROM public_keys WHERE id = $1;
+
+-- name: GetUIDByUserID :one
+SELECT uid_number FROM ldap_user WHERE id = $1;
+
+-- name: CreateLDAPUser :exec
+INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);

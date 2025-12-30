@@ -18,7 +18,7 @@ func (c *Client) CreateGroup(groupName string, gidNumber string, memberUids []st
 	}
 	if exist {
 		c.Logger.Warn("gidNumber already exists", zap.String("gidNumber", gidNumber))
-		return fmt.Errorf("%w: %s", ErrGidNumberInUse, gidNumber)
+		return fmt.Errorf("%w: %s", ErrGIDNumberInUse, gidNumber)
 	}
 
 	filter = fmt.Sprintf("(cn=%s)", ldap.EscapeFilter(groupName))

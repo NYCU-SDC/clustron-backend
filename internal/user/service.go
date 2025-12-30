@@ -15,8 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const StartUidNumber = 10000
-
 type Service struct {
 	queries   *Queries
 	logger    *zap.Logger
@@ -184,6 +182,24 @@ func (s *Service) UpdateStudentID(ctx context.Context, userID uuid.UUID, student
 	return updatedUser, nil
 }
 
+func (s *Service) UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateFullName")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	updatedUser, err := s.queries.UpdateFullName(traceCtx, UpdateFullNameParams{
+		ID:       userID,
+		FullName: pgtype.Text{String: fullName, Valid: fullName != ""},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user fullname")
+		span.RecordError(err)
+		return User{}, err
+	}
+
+	return updatedUser, nil
+}
+
 func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "SetupUserRole")
 	defer span.End()
@@ -210,66 +226,6 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	}
 
 	return userRole, nil
-}
-
-/*
-To find the lowest unused uidNumber >= StartUidNumber for LDAP users.
-It queries all used uidNumbers, builds a set, and returns the first available one.
-*/
-func (s *Service) GetAvailableUidNumber(ctx context.Context) (int, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetAvailableUidNumber")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	usedUidNumbers, err := s.queries.ListUidNumbers(ctx)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to get available uid number")
-		span.RecordError(err)
-		return 0, err
-	}
-
-	next := StartUidNumber
-	usedSet := make(map[int32]struct{}, len(usedUidNumbers))
-	for _, n := range usedUidNumbers {
-		usedSet[int32(n.Int32)] = struct{}{}
-	}
-
-	for {
-		if _, ok := usedSet[int32(next)]; !ok {
-			return int(next), nil
-		}
-		next++
-	}
-}
-
-func (s *Service) SetUidNumber(ctx context.Context, id uuid.UUID, uidNumber int) error {
-	traceCtx, span := s.tracer.Start(ctx, "SetUidNumber")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	if uidNumber == 0 {
-		err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
-			ID:        id,
-			UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: false},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
-			span.RecordError(err)
-			return err
-		}
-	} else {
-		err := s.queries.SetUidNumber(traceCtx, SetUidNumberParams{
-			ID:        id,
-			UidNumber: pgtype.Int4{Int32: int32(uidNumber), Valid: true},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "set uid number")
-			span.RecordError(err)
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (s *Service) ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]ListLoginMethodsRow, error) {
