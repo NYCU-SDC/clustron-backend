@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -38,6 +39,11 @@ type JWTStore interface {
 
 type UserStore interface {
 	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
+}
+
+type SettingStore interface {
+	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (setting.Setting, error)
+	AddPublicKey(ctx context.Context, publicKey setting.CreatePublicKeyParams) (setting.PublicKey, error)
 }
 
 type Store interface {
@@ -248,6 +254,60 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if provider.Name() == "github" {
+		if bindingUser == uuid.Nil {
+			err := errors.New("github login is not supported, please login first")
+			logger.Warn("User tried to login with GitHub", zap.Error(err))
+			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "github_login_not_supported"), http.StatusTemporaryRedirect)
+			return
+		}
+
+		githubProvider, ok := provider.(*oauthprovider.GithubConfig)
+		if !ok {
+			logger.Error("Invalid GitHub provider configuration")
+			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "internal_error"), http.StatusTemporaryRedirect)
+			return
+		}
+
+		keys, err := githubProvider.GetSSHKeys(traceCtx, token)
+		if err != nil {
+			logger.Error("Failed to fetch GitHub keys", zap.Error(err))
+			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "failed_to_fetch_keys"), http.StatusTemporaryRedirect)
+			return
+		}
+
+		importCount := 0
+		duplicateCount := 0
+
+		for _, key := range keys {
+			title := fmt.Sprintf("%s (GitHub)", key.Title)
+			_, err := h.settingStore.AddPublicKey(traceCtx, setting.CreatePublicKeyParams{UserID: bindingUser, Title: title, PublicKey: key.Key})
+			if errors.Is(err, internal.ErrDatabaseConflict) {
+				duplicateCount++
+			} else if err != nil {
+				logger.Warn("Failed to add GitHub key", zap.String("title", title), zap.Error(err))
+			} else {
+				importCount++
+			}
+		}
+		logger.Debug("Imported GitHub keys", zap.Int("success count", importCount), zap.Int("duplicate count", duplicateCount), zap.String("userID", bindingUser.String()))
+
+		targetURL := redirectTo
+		if targetURL == "" {
+			targetURL = "/"
+		}
+
+		separator := "?"
+		if strings.Contains(targetURL, "?") {
+			separator = "&"
+		}
+
+		targetURL = fmt.Sprintf("%s%simported=%d&duplicates=%d", targetURL, separator, importCount, duplicateCount)
+
+		http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
+		return
+	}
+
 	userInfo, err := provider.GetUserInfo(traceCtx, token)
 	if err != nil {
 		logger.Error("Failed to get user info", zap.Error(err))
@@ -300,7 +360,6 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
 }
 
-// BindLoginInfo binds the login information to the request context
 func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "BindLoginInfo")
 	defer span.End()
@@ -524,4 +583,53 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, refreshTokenCookie)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
+}
+
+func (h *Handler) ImportGithubKeysHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ImportGithubKeys")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrUnauthorized, logger)
+		return
+	}
+
+	providerName := "github"
+	provider := h.provider[providerName]
+	if provider == nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: provider not found: %s", internal.ErrProviderNotFound, providerName), logger)
+		return
+	}
+
+	redirectTo := r.URL.Query().Get("c")
+	frontendRedirectTo := r.URL.Query().Get("r")
+	if redirectTo == "" {
+		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
+	}
+	if frontendRedirectTo != "" {
+		redirectTo = fmt.Sprintf("%s?r=%s", redirectTo, frontendRedirectTo)
+	}
+
+	token, err := h.store.CreateToken(traceCtx, redirectTo, jwtUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, h.appName, h.environment, callback, redirectTo, token.ID.String())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
+		return
+	}
+
+	authURL := provider.Config().AuthCodeURL(proxyState, oauth2.AccessTypeOffline)
+
+	result := &BindLoginInfoResponse{
+		Url: authURL,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, result)
 }

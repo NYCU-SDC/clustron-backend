@@ -21,6 +21,12 @@ type githubUserResponse struct {
 	Email string `json:"email"`
 }
 
+type GitHubKeyResponse struct {
+	ID    int    `json:"id"`
+	Key   string `json:"key"`
+	Title string `json:"title"`
+}
+
 type GithubUserInfo struct {
 	UserInfo
 }
@@ -40,6 +46,7 @@ func NewGithubConfig(clientID, clientSecret, redirectURL string) *GithubConfig {
 			Scopes: []string{
 				"read:user",
 				"user:email",
+				"read:public_key",
 			},
 			Endpoint: github.Endpoint,
 		},
@@ -84,4 +91,26 @@ func (g *GithubConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 			Name:  displayName,
 		},
 	}, nil
+}
+
+func (g *GithubConfig) GetSSHKeys(ctx context.Context, token *oauth2.Token) ([]GitHubKeyResponse, error) {
+	client := g.config.Client(ctx, token)
+	// 呼叫 GitHub API 獲取使用者的公鑰
+	resp, err := client.Get("https://api.github.com/user/keys")
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(resp.Body)
+
+	var keys []GitHubKeyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&keys); err != nil {
+		return nil, err
+	}
+
+	return keys, nil
 }
