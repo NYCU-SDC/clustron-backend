@@ -156,7 +156,7 @@ func main() {
 
 	// Handler
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService)
+	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService, userService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
