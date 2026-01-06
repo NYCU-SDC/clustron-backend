@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
@@ -42,8 +43,7 @@ type UserStore interface {
 }
 
 type SettingStore interface {
-	FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (setting.Setting, error)
-	AddPublicKey(ctx context.Context, publicKey setting.CreatePublicKeyParams) (setting.PublicKey, error)
+	AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey string, title string) (setting.LDAPPublicKey, error)
 }
 
 type Store interface {
@@ -93,11 +93,12 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	userStore UserStore
-	jwtIssuer JWTIssuer
-	jwtStore  JWTStore
-	store     Store
-	provider  map[string]OAuthProvider
+	userStore    UserStore
+	jwtIssuer    JWTIssuer
+	jwtStore     JWTStore
+	store        Store
+	settingStore SettingStore
+	provider     map[string]OAuthProvider
 }
 
 func NewHandler(
@@ -110,7 +111,8 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
-	store Store) *Handler {
+	store Store,
+	settingStore SettingStore) *Handler {
 
 	var (
 		googleProvider OAuthProvider
@@ -157,10 +159,11 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 
-		userStore: userStore,
-		jwtIssuer: jwtIssuer,
-		jwtStore:  jwtStore,
-		store:     store,
+		userStore:    userStore,
+		jwtIssuer:    jwtIssuer,
+		jwtStore:     jwtStore,
+		store:        store,
+		settingStore: settingStore,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
@@ -281,7 +284,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 		for _, key := range keys {
 			title := fmt.Sprintf("%s (GitHub)", key.Title)
-			_, err := h.settingStore.AddPublicKey(traceCtx, setting.CreatePublicKeyParams{UserID: bindingUser, Title: title, PublicKey: key.Key})
+			_, err := h.settingStore.AddPublicKey(traceCtx, bindingUser, title, key.Key)
 			if errors.Is(err, internal.ErrDatabaseConflict) {
 				duplicateCount++
 			} else if err != nil {
