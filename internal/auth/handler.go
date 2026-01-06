@@ -284,7 +284,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 		for _, key := range keys {
 			title := fmt.Sprintf("%s (GitHub)", key.Title)
-			_, err := h.settingStore.AddPublicKey(traceCtx, bindingUser, title, key.Key)
+			_, err := h.settingStore.AddPublicKey(traceCtx, bindingUser, key.Key, title)
 			if errors.Is(err, internal.ErrDatabaseConflict) {
 				duplicateCount++
 			} else if err != nil {
