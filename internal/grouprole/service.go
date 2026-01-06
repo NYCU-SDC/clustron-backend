@@ -2,7 +2,6 @@ package grouprole
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
@@ -16,23 +15,17 @@ import (
 	"go.uber.org/zap"
 )
 
-type SettingStore interface {
-	GetSettingByUserID(ctx context.Context, userID uuid.UUID) (setting.Setting, error)
-}
-
 type Service struct {
-	logger       *zap.Logger
-	tracer       trace.Tracer
-	queries      *Queries
-	settingStore SettingStore
+	logger  *zap.Logger
+	tracer  trace.Tracer
+	queries *Queries
 }
 
-func NewService(logger *zap.Logger, db DBTX, settingStore SettingStore) *Service {
+func NewService(logger *zap.Logger, db DBTX) *Service {
 	return &Service{
-		logger:       logger,
-		tracer:       otel.Tracer("group/service"),
-		queries:      New(db),
-		settingStore: settingStore,
+		logger:  logger,
+		tracer:  otel.Tracer("group/service"),
+		queries: New(db),
 	}
 }
 

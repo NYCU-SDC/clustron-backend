@@ -93,15 +93,15 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 		{
 			name:         "valid refresh token",
 			refreshToken: jwt.RefreshToken{ID: id, UserID: id, IsActive: pgtype.Bool{Bool: true, Valid: true}, ExpirationDate: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}},
-			userRowVals:  []interface{}{user.ID, user.Email, user.Role, user.UidNumber, user.StudentID, user.CreatedAt, user.UpdatedAt},
+			userRowVals:  []interface{}{user.ID, user.Email, user.Role, user.FullName, user.StudentID, user.CreatedAt, user.UpdatedAt},
 			expired:      false,
 			expectErr:    false,
 			setupMock: func() {
 				mockDB.ExpectedCalls = nil
 				refreshRow := &mockRow{vals: []interface{}{id, id, pgtype.Bool{Bool: true, Valid: true}, pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}}, err: nil}
 				mockDB.On("QueryRow", mock.Anything, "-- name: GetByID :one\nSELECT id, user_id, is_active, expiration_date FROM refresh_tokens WHERE id = $1\n", id).Return(refreshRow)
-				userRow := &mockRow{vals: []interface{}{user.ID, user.Email, user.Role, user.UidNumber, user.StudentID, user.CreatedAt, user.UpdatedAt}, err: nil}
-				mockDB.On("QueryRow", mock.Anything, "-- name: GetUserByRefreshToken :one\nSELECT u.id, u.email, u.role, u.uid_number, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1\n", id).Return(userRow).Once()
+				userRow := &mockRow{vals: []interface{}{user.ID, user.Email, user.Role, user.FullName, user.StudentID, user.CreatedAt, user.UpdatedAt}, err: nil}
+				mockDB.On("QueryRow", mock.Anything, "-- name: GetUserByRefreshToken :one\nSELECT u.id, u.email, u.role, u.full_name, u.student_id, u.created_at, u.updated_at FROM refresh_tokens r JOIN users u ON r.user_id = u.id WHERE r.id = $1\n", id).Return(userRow).Once()
 			},
 		},
 		{

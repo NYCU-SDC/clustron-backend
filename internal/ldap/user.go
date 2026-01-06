@@ -31,7 +31,7 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	}
 	if exist {
 		c.Logger.Warn("uidNumber already exists", zap.String("uidNumber", uidNumber))
-		return fmt.Errorf("%w: %s", ErrUidNumberInUse, uidNumber)
+		return fmt.Errorf("%w: %s", ErrUIDNumberInUse, uidNumber)
 	}
 
 	// create user
@@ -95,6 +95,38 @@ func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 	return result.Entries[0], nil
 }
 
+func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := fmt.Sprintf("(uidNumber=%s)", ldap.EscapeFilter(fmt.Sprint(uidNumber)))
+	attributes := []string{
+		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
+	}
+
+	result, err := c.SearchByFilter(base, filter, attributes)
+	if err != nil {
+		c.Logger.Error("failed to search user", zap.Int64("uidNumber", uidNumber), zap.Error(err))
+		return nil, fmt.Errorf("failed to search user: %w", err)
+	}
+
+	if len(result.Entries) == 0 {
+		c.Logger.Warn("user not found", zap.Int64("uidNumber", uidNumber))
+		return nil, fmt.Errorf("%w: %d", ErrUserNotFound, uidNumber)
+	}
+	return result.Entries[0], nil
+}
+
+func (c *Client) ExistUser(uid string) (bool, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
+
+	exist, err := c.entryExists(base, filter)
+	if err != nil {
+		c.Logger.Error("failed to check user existence", zap.String("uid", uid), zap.Error(err))
+		return false, fmt.Errorf("failed to check user existence: %w", err)
+	}
+	return exist, nil
+}
+
 func (c *Client) UpdateUser(uid string, cn string, sn string) error {
 	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
@@ -135,7 +167,7 @@ func (c *Client) DeleteUser(uid string) error {
 	return nil
 }
 
-func (c *Client) GetUsedUidNumbers() ([]string, error) {
+func (c *Client) GetUsedUIDNumbers() ([]string, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
 	filter := "(uidNumber=*)"
 	attributes := []string{"uidNumber"}
@@ -218,4 +250,26 @@ func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
 
 	c.Logger.Info("SSH public key deleted", zap.String("uid", uid))
 	return nil
+}
+
+func (c *Client) GetAllUIDNumbers() ([]string, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := "(uidNumber=*)"
+	attributes := []string{"uidNumber"}
+
+	result, err := c.SearchByFilter(base, filter, attributes)
+	if err != nil {
+		c.Logger.Error("failed to search for uidNumbers", zap.Error(err))
+		return nil, fmt.Errorf("failed to retrieve uidNumbers: %w", err)
+	}
+
+	var uidNumbers []string
+	for _, entry := range result.Entries {
+		uid := entry.GetAttributeValue("uidNumber")
+		if uid != "" {
+			uidNumbers = append(uidNumbers, uid)
+		}
+	}
+
+	return uidNumbers, nil
 }

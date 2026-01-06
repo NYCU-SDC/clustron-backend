@@ -1,0 +1,4 @@
+ALTER TABLE users
+DROP COLUMN full_name;
+
+DROP TABLE IF EXISTS ldap_user;

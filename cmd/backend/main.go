@@ -136,13 +136,16 @@ func main() {
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
 
+	// Querier
+	settingQuerier := setting.New(dbPool)
+
 	// Service
 	redisService := redis.NewService(logger, cfg.RedisURL)
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
 	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
-	settingService := setting.NewService(logger, dbPool, userService, ldapClient)
-	groupRoleService := grouprole.NewService(logger, dbPool, settingService)
+	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
+	groupRoleService := grouprole.NewService(logger, dbPool)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
@@ -153,7 +156,7 @@ func main() {
 
 	// Handler
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
+	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService, userService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
@@ -194,13 +197,12 @@ func main() {
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
-	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(settingHandler.UpdateUserSettingHandler))
 
 	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
-	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 	mux.HandleFunc("GET /api/publickey/import", authMiddleware.HandlerFunc(authHandler.ImportGithubKeysHandler))
+	mux.HandleFunc("DELETE /api/publickey/{fingerprint}", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	// Roles
 	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))
@@ -227,6 +229,10 @@ func main() {
 	mux.HandleFunc("GET /api/groups/{group_id}/pendingMembers", authMiddleware.HandlerFunc(memberHandler.ListPendingMembersPagedHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.RemovePendingMemberHandler))
 	mux.HandleFunc("PUT /api/groups/{group_id}/pendingMembers/{pending_id}", authMiddleware.HandlerFunc(memberHandler.UpdatePendingMemberHandler))
+
+	// Users
+	mux.HandleFunc("GET /api/users/me", authMiddleware.HandlerFunc(userHandler.GetMeHandler))
+	mux.HandleFunc("PUT /api/users", authMiddleware.HandlerFunc(userHandler.UpdateFullNameHandler))
 
 	// Search
 	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))

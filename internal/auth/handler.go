@@ -5,7 +5,6 @@ import (
 	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
-	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
@@ -20,7 +19,6 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -95,12 +93,11 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	userStore    UserStore
-	jwtIssuer    JWTIssuer
-	jwtStore     JWTStore
-	settingStore SettingStore
-	store        Store
-	provider     map[string]OAuthProvider
+	userStore UserStore
+	jwtIssuer JWTIssuer
+	jwtStore  JWTStore
+	store     Store
+	provider  map[string]OAuthProvider
 }
 
 func NewHandler(
@@ -113,8 +110,7 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
-	store Store,
-	settingStore SettingStore) *Handler {
+	store Store) *Handler {
 
 	var (
 		googleProvider OAuthProvider
@@ -161,11 +157,10 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 
-		userStore:    userStore,
-		jwtIssuer:    jwtIssuer,
-		jwtStore:     jwtStore,
-		settingStore: settingStore,
-		store:        store,
+		userStore: userStore,
+		jwtIssuer: jwtIssuer,
+		jwtStore:  jwtStore,
+		store:     store,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
@@ -337,14 +332,6 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
 			return
 		}
-	}
-
-	// CreateInfo a new setting for the user
-	_, err = h.settingStore.FindOrCreateSetting(traceCtx, loginInfo.UserID, pgtype.Text{String: userInfo.GetUserInfo().Name, Valid: true})
-	if err != nil {
-		logger.Error("Failed to create setting for user", zap.Error(err))
-		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, err), http.StatusTemporaryRedirect)
-		return
 	}
 
 	// Get user with loginInfo

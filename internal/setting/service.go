@@ -2,11 +2,19 @@ package setting
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/ldap"
+	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/go-ldap/ldap/v3"
+	"golang.org/x/crypto/ssh"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -19,8 +27,35 @@ import (
 
 //go:generate mockery --name UserStore
 type UserStore interface {
+	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (user.User, error)
 	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
+}
+
+//go:generate mockery --name LDAPClient
+type LDAPClient interface {
+	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
+	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
+	GetAllUIDNumbers() ([]string, error)
+	GetUserInfo(uid string) (*ldap.Entry, error)
+	ExistSSHPublicKey(publicKey string) (bool, error)
+	AddSSHPublicKey(uid string, publicKey string) error
+	DeleteSSHPublicKey(uid string, publicKey string) error
+	ExistUser(uid string) (bool, error)
+}
+
+//go:generate mockery --name Querier
+type Querier interface {
+	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error
+	ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error)
+	GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
+	GetPublicKey(ctx context.Context, id uuid.UUID) (PublicKey, error)
+	ExistPublicKey(ctx context.Context, publicKey string) (bool, error)
+	CreatePublicKey(ctx context.Context, arg CreatePublicKeyParams) (PublicKey, error)
+	DeletePublicKey(ctx context.Context, id uuid.UUID) error
+	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
 }
 
 type MembershipService interface {
@@ -30,17 +65,17 @@ type MembershipService interface {
 type Service struct {
 	logger            *zap.Logger
 	tracer            trace.Tracer
-	query             *Queries
+	query             Querier
 	userStore         UserStore
 	membershipService MembershipService
-	ldapClient        ldap.LDAPClient
+	ldapClient        LDAPClient
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore UserStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, querier Querier, userStore UserStore, ldapClient LDAPClient) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("setting/service"),
-		query:  New(db),
+		query:  querier,
 
 		userStore:  userStore,
 		ldapClient: ldapClient,
@@ -63,22 +98,52 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 		return internal.ErrAlreadyOnboarded
 	}
 
-	// update user's setting
-	_, err := s.UpdateSetting(traceCtx, userID, Setting{
-		UserID:        userID,
-		FullName:      fullName,
-		LinuxUsername: linuxUsername,
-	})
+	// update User's FullName
+	updatedUser, err := s.userStore.UpdateFullName(traceCtx, userID, fullName.String)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
+	logger.Info("updated user's full name", zap.String("userID", userID.String()), zap.String("fullName", updatedUser.FullName.String))
 
 	// set up the user's role
 	_, err = s.userStore.SetupUserRole(traceCtx, userID)
 	if err != nil {
 		span.RecordError(err)
 		return err
+	}
+
+	uidNumber, err := s.GetAvailableUIDNumber(traceCtx)
+	if err != nil {
+		logger.Error("failed to get available uid number", zap.String("userID", userID.String()), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to get available uid number: %w", err)
+	}
+
+	// Create User Entry
+	err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
+	if err != nil {
+		logger.Error("failed to create LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to create LDAP user: %w", err)
+	}
+
+	uidNumberInt, err := strconv.ParseInt(uidNumber, 10, 64)
+	if err != nil {
+		logger.Error("failed to parse uidNumber to int64", zap.String("uidNumber", uidNumber), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to parse uidNumber to int64: %w", err)
+	}
+
+	// Store ldap_user
+	err = s.query.CreateLDAPUser(traceCtx, CreateLDAPUserParams{
+		ID:        userID,
+		UidNumber: uidNumberInt,
+	})
+	if err != nil {
+		logger.Error("failed to create ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to create ldap_user record: %w", err)
 	}
 
 	// Process pending memberships after user onboarding
@@ -94,264 +159,266 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	return nil
 }
 
-func (s *Service) GetSettingByUserID(ctx context.Context, userID uuid.UUID) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetSettingByUserID")
+func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetLDAPUserInfoByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	setting, err := s.query.GetSetting(ctx, userID)
+	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
-		return Setting{}, err
+		return LDAPUserInfo{}, err
 	}
 
-	return setting, nil
-}
-
-func (s *Service) FindOrCreateSetting(ctx context.Context, userID uuid.UUID, fullName pgtype.Text) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	exist, err := s.query.ExistByUserID(ctx, userID)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "check setting exists")
-		span.RecordError(err)
-		return Setting{}, err
-	}
-
-	var setting Setting
-	if !exist {
-		setting, err = s.query.CreateSetting(ctx, CreateSettingParams{UserID: userID, FullName: fullName})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create setting")
-			span.RecordError(err)
-			return Setting{}, err
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			return LDAPUserInfo{}, err
 		}
-	} else {
-		setting, err = s.query.GetSetting(ctx, userID)
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "get setting by user id")
-			span.RecordError(err)
-			return Setting{}, err
-		}
-	}
-
-	return setting, nil
-}
-
-func (s *Service) UpdateSetting(ctx context.Context, userID uuid.UUID, setting Setting) (Setting, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateSetting")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	updatedSetting, err := s.query.UpdateSetting(ctx, UpdateSettingParams(setting))
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", userID.String(), logger, "update setting")
+		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
-		return Setting{}, err
+		return LDAPUserInfo{}, err
 	}
 
-	return updatedSetting, nil
+	username := ldapEntry.GetAttributeValue("uid")
+	publicKeys := ldapEntry.GetAttributeValues("sshPublicKey")
+
+	ldapUserInfo := LDAPUserInfo{
+		Username:  username,
+		PublicKey: publicKeys,
+	}
+
+	return ldapUserInfo, nil
 }
 
-func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PublicKey, error) {
+func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeysByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	publicKeys, err := s.query.GetPublicKeys(ctx, userID)
+	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", userID.String(), logger, "get public keys by user id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
 		return nil, err
+	}
+
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			return nil, err
+		}
+		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+
+	publicKeyStrs := ldapEntry.GetAttributeValues("sshPublicKey")
+
+	publicKeys := make([]LDAPPublicKey, len(publicKeyStrs))
+	for i, keyStr := range publicKeyStrs {
+		pubKey, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(keyStr))
+		if err != nil {
+			logger.Warn("failed to parse SSH public key", zap.String("publicKey", keyStr), zap.Error(err))
+			continue
+		}
+
+		hash := sha256.Sum256(pubKey.Marshal())
+		fingerprint := base64.RawStdEncoding.EncodeToString(hash[:])
+
+		publicKeys[i] = LDAPPublicKey{
+			Fingerprint: fingerprint,
+			PublicKey:   keyStr,
+			Title:       comment,
+		}
 	}
 
 	return publicKeys, err
 }
 
-func (s *Service) GetPublicKeyByID(ctx context.Context, id uuid.UUID) (PublicKey, error) {
+func (s *Service) GetPublicKeyByFingerprint(ctx context.Context, userID uuid.UUID, fingerprint string) (LDAPPublicKey, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetPublicKeyByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	publicKey, err := s.query.GetPublicKey(ctx, id)
+	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", id.String(), logger, "get public key by id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
-		return PublicKey{}, err
+		return LDAPPublicKey{}, err
 	}
 
-	return publicKey, nil
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			return LDAPPublicKey{}, err
+		}
+		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
+		span.RecordError(err)
+		return LDAPPublicKey{}, err
+	}
+
+	publicKeyStrs := ldapEntry.GetAttributeValues("sshPublicKey")
+
+	for _, keyStr := range publicKeyStrs {
+		pubKey, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(keyStr))
+		if err != nil {
+			logger.Warn("failed to parse SSH public key", zap.String("publicKey", keyStr), zap.Error(err))
+			continue
+		}
+
+		hash := sha256.Sum256(pubKey.Marshal())
+		calculatedFingerprint := base64.RawStdEncoding.EncodeToString(hash[:])
+		if strings.EqualFold(calculatedFingerprint, fingerprint) {
+			return LDAPPublicKey{
+				Fingerprint: calculatedFingerprint,
+				PublicKey:   keyStr,
+				Title:       comment,
+			}, nil
+		}
+	}
+
+	err = fmt.Errorf("public key with fingerprint %s not found for user %s", fingerprint, userID.String())
+	logger.Warn("public key not found", zap.String("fingerprint", fingerprint), zap.String("userID", userID.String()))
+	span.RecordError(err)
+	return LDAPPublicKey{}, err
 }
 
-func (s *Service) AddPublicKey(ctx context.Context, publicKey CreatePublicKeyParams) (PublicKey, error) {
+func (s *Service) AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey string, title string) (LDAPPublicKey, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddPublicKey")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.query.ExistPublicKey(ctx, publicKey.PublicKey)
+	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check public key exists")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
-		return PublicKey{}, err
-	}
-	if exists {
-		logger.Warn("public key already exists", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-		return PublicKey{}, internal.ErrDatabaseConflict
+		return LDAPPublicKey{}, err
 	}
 
-	var (
-		publicKeyLDAPExists bool
-		addedPublicKey      PublicKey
-		userSetting         Setting
-	)
-
-	saga := internal.NewSaga(s.logger)
-
-	saga.AddStep(internal.SagaStep{
-		Name: "AddPublicKey",
-		Action: func(ctx context.Context) error {
-			addedPublicKey, err = s.query.CreatePublicKey(ctx, publicKey)
-			if err != nil {
-				err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", publicKey.UserID.String(), logger, "add public key")
-				span.RecordError(err)
-				return err
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if err := s.query.DeletePublicKey(ctx, addedPublicKey.ID); err != nil {
-				err = databaseutil.WrapDBErrorWithKeyValue(err, "public_keys", "id", addedPublicKey.ID.String(), logger, "compensate delete public key")
-				span.RecordError(err)
-				return err
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "GetSettingByUserID",
-		Action: func(ctx context.Context) error {
-			userSetting, err = s.GetSettingByUserID(ctx, publicKey.UserID)
-			if err != nil {
-				err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
-				span.RecordError(err)
-				return err
-			}
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "GetUserInfo",
-		Action: func(ctx context.Context) error {
-			ldapUser, err := s.ldapClient.GetUserInfo(userSetting.LinuxUsername.String)
-			if err != nil && !errors.Is(err, ldap.ErrUserNotFound) {
-				logger.Warn("get user by id failed", zap.Error(err))
-				return err
-			}
-			exists = ldapUser != nil
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "CheckSSHPublicKeyExists",
-		Action: func(ctx context.Context) error {
-			if exists {
-				publicKeyLDAPExists, err = s.ldapClient.ExistSSHPublicKey(publicKey.PublicKey)
-				if err != nil {
-					err = internal.ErrLDAPPublicKeyConflict
-					logger.Warn("check public key exists in LDAP failed", zap.Error(err))
-					return err
-				}
-				return nil
-			}
-			logger.Info("LDAP user does not exist, skipping checking public key existence", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "AddSSHPublicKey",
-		Action: func(ctx context.Context) error {
-			if exists && !publicKeyLDAPExists {
-				err = s.ldapClient.AddSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("add public key to LDAP user failed", zap.Error(err))
-					return err
-				}
-				logger.Info("add public key to LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-				return nil
-			}
-			logger.Info("LDAP user does not exist, skipping adding public key", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			if exists && !publicKeyLDAPExists {
-				err = s.ldapClient.DeleteSSHPublicKey(userSetting.LinuxUsername.String, publicKey.PublicKey)
-				if err != nil {
-					logger.Warn("delete public key from LDAP user failed", zap.Error(err))
-					return err
-				}
-				logger.Info("delete public key from LDAP user successfully", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-				return nil
-			}
-			logger.Info("LDAP user does not exist, skipping deleting public key", zap.String("userID", publicKey.UserID.String()), zap.String("publicKey", publicKey.PublicKey))
-			return nil
-		},
-	})
-
-	err = saga.Execute(traceCtx)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
-		logger.Error("saga execution failed", zap.Error(err))
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			return LDAPPublicKey{}, err
+		}
+		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
-		return PublicKey{}, err
+		return LDAPPublicKey{}, err
 	}
 
-	return addedPublicKey, nil
+	pubKey, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(publicKey))
+	if err != nil {
+		logger.Warn("failed to parse SSH public key", zap.String("publicKey", publicKey), zap.Error(err))
+		span.RecordError(err)
+		return LDAPPublicKey{}, fmt.Errorf("failed to parse SSH public key: %w", err)
+	}
+	hash := sha256.Sum256(pubKey.Marshal())
+	fingerprint := base64.RawStdEncoding.EncodeToString(hash[:])
+
+	// check if the public key already exists in LDAP
+	publicKeyStrs := ldapEntry.GetAttributeValues("sshPublicKey")
+
+	for _, keyStr := range publicKeyStrs {
+		oldPubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyStr))
+		if err != nil {
+			logger.Warn("failed to parse SSH public key", zap.String("publicKey", keyStr), zap.Error(err))
+			continue
+		}
+		oldHash := sha256.Sum256(oldPubKey.Marshal())
+		oldFingerprint := base64.RawStdEncoding.EncodeToString(oldHash[:])
+
+		if strings.EqualFold(fingerprint, oldFingerprint) {
+			err = ldaputil.ErrPublicKeyExists
+			logger.Warn("public key already exists in LDAP", zap.String("userID", userID.String()))
+			return LDAPPublicKey{}, err
+		}
+	}
+
+	// re-construct the public key with title
+	if title != "" {
+		publicKey = fmt.Sprintf("%s %s", strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pubKey))), title)
+	} else {
+		publicKey = fmt.Sprintf("%s %s", strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pubKey))), comment)
+	}
+
+	// add the public key to LDAP
+	err = s.ldapClient.AddSSHPublicKey(ldapEntry.GetAttributeValue("uid"), publicKey)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrPublicKeyExists) {
+			logger.Warn("public key already exists in LDAP", zap.String("userID", userID.String()))
+			return LDAPPublicKey{}, err
+		}
+		logger.Error("failed to add SSH public key to LDAP", zap.String("userID", userID.String()), zap.Error(err))
+		span.RecordError(err)
+		return LDAPPublicKey{}, fmt.Errorf("failed to add SSH public key to LDAP: %w", err)
+	}
+
+	return LDAPPublicKey{
+		Fingerprint: fingerprint,
+		PublicKey:   publicKey,
+		Title:       title,
+	}, nil
 }
 
-func (s *Service) DeletePublicKey(ctx context.Context, id uuid.UUID) error {
+func (s *Service) DeletePublicKey(ctx context.Context, userID uuid.UUID, fingerprint string) error {
 	traceCtx, span := s.tracer.Start(ctx, "DeletePublicKey")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	publicKey, err := s.GetPublicKeyByID(ctx, id)
+	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "get public key by id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
 		return err
 	}
 
-	settings, err := s.GetSettingByUserID(ctx, publicKey.UserID)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", publicKey.UserID.String(), logger, "get setting by user id")
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			return err
+		}
+		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
 
-	// check if the user LDAP user exists, if exists, delete the public key to the user
-	user, err := s.ldapClient.GetUserInfo(settings.LinuxUsername.String)
-	if err != nil {
-		logger.Warn("get user by id failed", zap.Error(err))
-	} else if user != nil {
-		err = s.ldapClient.DeleteSSHPublicKey(settings.LinuxUsername.String, publicKey.PublicKey)
+	publicKeyStrs := ldapEntry.GetAttributeValues("sshPublicKey")
+
+	for _, keyStr := range publicKeyStrs {
+		pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyStr))
 		if err != nil {
-			logger.Warn("delete the public key from LDAP user failed", zap.Error(err))
+			logger.Warn("failed to parse SSH public key", zap.String("publicKey", keyStr), zap.Error(err))
+			continue
+		}
+		hash := sha256.Sum256(pubKey.Marshal())
+		calculatedFingerprint := base64.RawStdEncoding.EncodeToString(hash[:])
+		if strings.EqualFold(calculatedFingerprint, fingerprint) {
+			// delete the public key from LDAP
+			err = s.ldapClient.DeleteSSHPublicKey(ldapEntry.GetAttributeValue("uid"), keyStr)
+			if err != nil {
+				logger.Error("failed to delete SSH public key from LDAP", zap.String("userID", userID.String()), zap.Error(err))
+				span.RecordError(err)
+				return fmt.Errorf("failed to delete SSH public key from LDAP: %w", err)
+			}
+			return nil
 		}
 	}
 
-	err = s.query.DeletePublicKey(ctx, id)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "id", id.String(), logger, "delete public key")
-		span.RecordError(err)
-		return err
-	}
-
-	return nil
+	err = ldaputil.ErrPublicKeyNotFound
+	logger.Warn("public key not found", zap.String("fingerprint", fingerprint), zap.String("userID", userID.String()))
+	span.RecordError(err)
+	return err
 }
 
 func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error) {
@@ -359,12 +426,47 @@ func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.query.ExistByLinuxUsername(ctx, pgtype.Text{String: linuxUsername, Valid: true})
+	exists, err := s.ldapClient.ExistUser(linuxUsername)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check linux username exists")
+		logger.Error("failed to check linux username existence in LDAP", zap.String("linuxUsername", linuxUsername), zap.Error(err))
 		span.RecordError(err)
 		return false, err
 	}
 
 	return exists, nil
+}
+
+func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAvailableUidNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	uidNumbers, err := s.ldapClient.GetAllUIDNumbers()
+	if err != nil {
+		logger.Error("failed to get all uid numbers from LDAP", zap.Error(err))
+		span.RecordError(err)
+		return "", err
+	}
+
+	uidNumbersMap := make(map[int]bool)
+	for _, uidStr := range uidNumbers {
+		var uid int
+		_, err := fmt.Sscanf(uidStr, "%d", &uid)
+		if err != nil {
+			logger.Warn("failed to parse uid number", zap.String("uidStr", uidStr), zap.Error(err))
+			continue
+		}
+		uidNumbersMap[uid] = true
+	}
+
+	for uid := 10000; uid < 60000; uid++ {
+		if !uidNumbersMap[uid] {
+			return fmt.Sprintf("%d", uid), nil
+		}
+	}
+
+	err = fmt.Errorf("no available uid number found")
+	logger.Error("failed to find available uid number", zap.Error(err))
+	span.RecordError(err)
+	return "", err
 }

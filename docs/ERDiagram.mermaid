@@ -1,0 +1,100 @@
+erDiagram
+    %% User Core
+    users ||--o{ refresh_tokens : "owns"
+    users ||--o{ login_info : "has linked accounts"
+    users ||--o{ login_tokens : "generates"
+    users ||--|| ldap_user : "has(1:1)"
+
+    %% Group Core
+    groups ||--o{ links : "contains"
+
+    %% Membership / Many-to-Many Relations
+    users ||--o{ memberships : "joins"
+    groups ||--o{ memberships : "has members"
+    group_role ||--o{ memberships : "defines role"
+
+    %% Pending / Invitations
+    groups ||--o{ pending_memberships : "has pending invites"
+    group_role ||--o{ pending_memberships : "defines role for"
+
+    users {
+        UUID id PK
+        VARCHAR email
+        VARCHAR role
+        VARCHAR full_name
+        VARCHAR student_id
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    refresh_tokens {
+        UUID id PK
+        UUID user_id FK
+        BOOLEAN is_active
+        TIMESTAMPTZ expiration_date
+    }
+
+    login_info {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR providerType
+        VARCHAR identifier
+        VARCHAR email
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    ldap_user {
+        UUID id PK, FK
+        BIGINT uid_number
+    }
+
+    login_tokens {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR callback
+        TIMESTAMPTZ expires_at
+        BOOLEAN is_active
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    groups {
+        UUID id PK
+        VARCHAR title
+        TEXT description
+        BOOLEAN is_archived
+        INTEGER gid_number
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    links {
+        UUID id PK
+        UUID group_id FK
+        VARCHAR title
+        TEXT url
+    }
+
+    group_role {
+        UUID id PK
+        VARCHAR role_name
+        VARCHAR access_level
+    }
+
+    memberships {
+        UUID user_id PK, FK
+        UUID group_id PK, FK
+        UUID role_id FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    pending_memberships {
+        UUID id PK
+        TEXT user_identifier
+        UUID group_id FK
+        UUID role_id FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
