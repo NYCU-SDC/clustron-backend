@@ -191,7 +191,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// System status
-	mux.HandleFunc("GET /api/system/info", basicMiddleware.HandlerFunc(systemStatusHandler.GetSystemInfoHandler))
+	mux.HandleFunc("GET /api/setup/status", basicMiddleware.HandlerFunc(systemStatusHandler.GetSystemInfoHandler))
 
 	// Auth
 	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
