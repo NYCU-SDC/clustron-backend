@@ -4,9 +4,10 @@ import (
 	"clustron-backend/internal/ldap"
 	"encoding/json"
 	"errors"
-	"github.com/NYCU-SDC/summer/pkg/problem"
 	"net/http"
 	"strconv"
+
+	"github.com/NYCU-SDC/summer/pkg/problem"
 )
 
 var (
@@ -29,7 +30,8 @@ var (
 	ErrInvalidFingerprint = errors.New("invalid fingerprint")
 
 	// User Errors
-	ErrInvalidFullName = errors.New("invalid full name")
+	ErrInvalidFullName   = errors.New("invalid full name")
+	ErrInvalidUUIDFormat = errors.New("invalid user ID format")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -95,6 +97,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("binding account conflict")
 	case errors.Is(err, ErrInvalidFullName):
 		return problem.NewValidateProblem("invalid full name")
+	case errors.Is(err, ErrInvalidUUIDFormat):
+		return problem.NewBadRequestProblem("invalid user ID format")
 	// LDAP Client Errors
 	case errors.Is(err, ldap.ErrGIDNumberInUse):
 		return NewConflictProblem(err.Error())
