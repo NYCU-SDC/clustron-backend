@@ -6,6 +6,8 @@ import (
 	"clustron-backend/internal/user"
 	"context"
 	"fmt"
+	"time"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -13,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"time"
 )
 
 type Service struct {
@@ -30,7 +31,7 @@ type Service struct {
 type userStore interface {
 	Create(ctx context.Context, email, studentID string) (user.User, error)
 	ExistsByIdentifier(ctx context.Context, identifier string) (bool, error)
-	UpdateRoleByID(ctx context.Context, userID uuid.UUID, role string) error
+	UpdateRoleByID(ctx context.Context, userID uuid.UUID, role string) (user.User, error)
 	UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (user.User, error)
 }
 
