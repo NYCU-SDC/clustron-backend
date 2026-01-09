@@ -45,7 +45,7 @@ func (m *Middleware) EnsureSystemSetupMiddleware(next http.HandlerFunc) http.Han
 
 		if !isSetup {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPreconditionFailed)
+			w.WriteHeader(http.StatusServiceUnavailable)
 			_, err := w.Write([]byte(`{"code": "system_not_setup", "message": "System is not initialized yet. Please register the first admin user."}`))
 			if err != nil {
 				return
