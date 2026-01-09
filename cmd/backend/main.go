@@ -232,6 +232,8 @@ func main() {
 	// Users
 	mux.HandleFunc("GET /api/users/me", authMiddleware.HandlerFunc(userHandler.GetMeHandler))
 	mux.HandleFunc("PUT /api/users", authMiddleware.HandlerFunc(userHandler.UpdateFullNameHandler))
+	mux.HandleFunc("GET /api/allUsers", authMiddleware.HandlerFunc(userHandler.ListUserHandler))
+	mux.HandleFunc("PUT /api/users/{user_id}/globalRole", authMiddleware.HandlerFunc(userHandler.UpdateUserRoleHandler))
 
 	// Search
 	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))

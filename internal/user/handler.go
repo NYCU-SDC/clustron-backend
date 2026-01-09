@@ -4,6 +4,10 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
+	"math"
+	"net/http"
+	"strings"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -12,20 +16,22 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
-	"strings"
 )
 
 //go:generate mockery --name=Store
 type Store interface {
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error)
 	SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error)
+	ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRow, int, error)
+	UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) (User, error)
 }
 
 type Response struct {
-	ID       uuid.UUID `json:"id"`
-	Email    string    `json:"email"`
-	FullName string    `json:"full_name"`
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	FullName  string    `json:"full_name"`
+	StudentID string    `json:"studentId"`
+	Role      string    `json:"role"`
 }
 
 type UpdateFullNameRequest struct {
@@ -75,9 +81,11 @@ func (h *Handler) GetMeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
-		ID:       user.ID,
-		Email:    user.Email,
-		FullName: user.FullName.String,
+		ID:        user.ID,
+		Email:     user.Email,
+		FullName:  user.FullName.String,
+		StudentID: user.StudentID.String,
+		Role:      strings.ToUpper(user.Role),
 	})
 }
 
@@ -143,4 +151,119 @@ func (h *Handler) SearchByIdentifierHandler(w http.ResponseWriter, r *http.Reque
 
 	pageResponse := h.paginationFactory.NewResponse(response, totalCount, pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
+}
+
+type ListUserItem struct {
+	ID        uuid.UUID `json:"id"`
+	FullName  string    `json:"fullName"`
+	Email     string    `json:"email"`
+	StudentID string    `json:"studentId"`
+	Role      string    `json:"role"`
+}
+
+type ListUserResponse struct {
+	Items       []ListUserItem `json:"items"`
+	TotalPages  int            `json:"totalPages"`
+	TotalItems  int            `json:"totalItems"`
+	CurrentPage int            `json:"currentPage"`
+	PageSize    int            `json:"pageSize"`
+	HasNextPage bool           `json:"hasNextPage"`
+}
+
+func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListUserHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "ListUserHandler"))
+
+	pageRequest, err := h.paginationFactory.GetRequest(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	query := r.URL.Query()
+	search := query.Get("search")
+	roleFilter := query.Get("role")
+	sort := query.Get("sort")
+	sortBy := query.Get("sortBy")
+
+	items, totalCount, err := h.store.ListUsers(traceCtx, ListUsersServiceParams{
+		Page:   pageRequest.Page,
+		Size:   pageRequest.Size,
+		Search: search,
+		Role:   roleFilter,
+		Sort:   sort,
+		SortBy: sortBy,
+	})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// 轉換成 Response 格式
+	responseItems := make([]ListUserItem, len(items))
+	for i, item := range items {
+		responseItems[i] = ListUserItem{
+			ID:        item.ID,
+			FullName:  item.FullName.String,
+			Email:     item.Email,
+			StudentID: item.StudentID.String,
+			Role:      strings.ToUpper(item.Role),
+		}
+	}
+
+	// 計算分頁資訊
+	totalPages := 0
+	if pageRequest.Size > 0 {
+		totalPages = int(math.Ceil(float64(totalCount) / float64(pageRequest.Size)))
+	}
+
+	response := ListUserResponse{
+		Items:       responseItems,
+		TotalPages:  totalPages,
+		TotalItems:  totalCount,
+		CurrentPage: pageRequest.Page,
+		PageSize:    pageRequest.Size,
+		HasNextPage: pageRequest.Page+1 < totalPages,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+type UpdateUserRoleRequest struct {
+	Role string `json:"role" validate:"required"`
+}
+
+func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateUserRoleHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateUserRoleHandler"))
+
+	idStr := r.PathValue("user_id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUUIDFormat, logger)
+		return
+	}
+
+	var req UpdateUserRoleRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	req.Role = strings.ToLower(req.Role)
+	updatedUser, err := h.store.UpdateRoleByID(traceCtx, id, req.Role)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		ID:        updatedUser.ID,
+		Email:     updatedUser.Email,
+		FullName:  updatedUser.FullName.String,
+		StudentID: updatedUser.StudentID.String,
+		Role:      strings.ToUpper(updatedUser.Role),
+	})
 }
