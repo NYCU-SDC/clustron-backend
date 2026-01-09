@@ -24,17 +24,17 @@ func NewHandler(logger *zap.Logger, service *user.Service, problemWriter *proble
 }
 
 type SystemInfoResponse struct {
-	IsSystemSetup bool `json:"is_system_setup"`
+	AdminAccountCreated bool `json:"adminAccountCreated"`
 }
 
 func (h *Handler) GetSystemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	isSetup, err := h.service.HasAdmin(r.Context())
+	adminExists, err := h.service.HasAdmin(r.Context())
 	if err != nil {
 		h.problemWriter.WriteError(r.Context(), w, err, h.logger)
 		return
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, SystemInfoResponse{
-		IsSystemSetup: isSetup,
+		AdminAccountCreated: adminExists,
 	})
 }
