@@ -60,3 +60,9 @@ FROM users
 WHERE email ILIKE @Query || '%' OR student_id ILIKE @Query || '%'
 ORDER BY identifier
 LIMIT @Size OFFSET @Skip;
+
+-- name: CheckAdminExists :one
+SELECT EXISTS (
+    SELECT 1 FROM users WHERE role = 'admin'
+) AS exists;
+

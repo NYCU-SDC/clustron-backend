@@ -15,6 +15,7 @@ import (
 	"clustron-backend/internal/redis"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/slurm"
+	"clustron-backend/internal/system"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
@@ -163,6 +164,7 @@ func main() {
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
+	systemStatusHandler := system.NewHandler(logger, userService, problemWriter)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
@@ -172,6 +174,7 @@ func main() {
 	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
 	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
+	systemStatusMiddleware := system.NewMiddleware(logger, userService)
 
 	// Basic Middleware (Tracing and Recover)
 	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
@@ -180,11 +183,15 @@ func main() {
 	// Auth Middleware (JWT and Role filtering)
 	authMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	authMiddleware = authMiddleware.Append(traceMiddleware.TraceMiddleWare)
+	authMiddleware = authMiddleware.Append(systemStatusMiddleware.EnsureSystemSetupMiddleware)
 	authMiddleware = authMiddleware.Append(jwtMiddleware.HandlerFunc)
 	authMiddleware = authMiddleware.Append(roleMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
+
+	// System status
+	mux.HandleFunc("GET /api/system/info", basicMiddleware.HandlerFunc(systemStatusHandler.GetSystemInfoHandler))
 
 	// Auth
 	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
