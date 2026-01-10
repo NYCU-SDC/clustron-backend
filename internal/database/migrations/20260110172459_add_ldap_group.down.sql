@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS ldap_groups;
+ALTER TABLE groups
+ADD gid_number INTEGER UNIQUE;
