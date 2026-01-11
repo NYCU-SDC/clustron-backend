@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -43,26 +44,29 @@ func (s *Service) GetAll(ctx context.Context) ([]GroupRole, error) {
 	return roles, nil
 }
 
-func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, error) {
+func (s *Service) Create(ctx context.Context, roleName string, level AccessLevel) (GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateGroupRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	exists, err := s.queries.ExistsByRoleName(ctx, roleName)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", roleName, logger, "check if group role exists")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
 	if exists {
-		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
+		err = fmt.Errorf("role %s already exists, %w", roleName, internal.ErrDatabaseConflict)
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
 
-	createdRole, err := s.queries.Create(ctx, role)
+	createdRole, err := s.queries.Create(ctx, CreateParams{
+		RoleName:    roleName,
+		AccessLevel: level.String(),
+	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "create group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", roleName, logger, "create group role")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
@@ -70,14 +74,18 @@ func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, err
 	return createdRole, nil
 }
 
-func (s *Service) Update(ctx context.Context, role UpdateParams) (GroupRole, error) {
+func (s *Service) Update(ctx context.Context, roleID uuid.UUID, roleName string, level AccessLevel) (GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	updatedRole, err := s.queries.Update(ctx, role)
+	updatedRole, err := s.queries.Update(ctx, UpdateParams{
+		ID:          roleID,
+		RoleName:    roleName,
+		AccessLevel: level.String(),
+	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", role.ID.String(), logger, "update group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleID.String(), logger, "update group role")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
