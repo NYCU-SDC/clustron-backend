@@ -189,6 +189,11 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	sort := query.Get("sort")
 	sortBy := query.Get("sortBy")
 
+	if sortBy != "fullName" && sortBy != "studentID" && sortBy != "email" {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("not supported sortBy string"), logger)
+		return
+	}
+
 	items, totalCount, err := h.store.ListUsers(traceCtx, ListUsersServiceParams{
 		Page:   pageRequest.Page,
 		Size:   pageRequest.Size,
@@ -202,7 +207,6 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 轉換成 Response 格式
 	responseItems := make([]ListUserItem, len(items))
 	for i, item := range items {
 		responseItems[i] = ListUserItem{
