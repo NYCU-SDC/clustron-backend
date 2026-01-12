@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
+	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
@@ -285,7 +286,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		for _, key := range keys {
 			title := fmt.Sprintf("%s (GitHub)", key.Title)
 			_, err := h.settingStore.AddPublicKey(traceCtx, bindingUser, key.Key, title)
-			if errors.Is(err, internal.ErrDatabaseConflict) {
+			if errors.Is(err, ldaputil.ErrPublicKeyExists) {
 				duplicateCount++
 			} else if err != nil {
 				logger.Warn("Failed to add GitHub key", zap.String("title", title), zap.Error(err))
