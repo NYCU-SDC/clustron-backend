@@ -3,7 +3,9 @@ package user
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"math"
 	"net/http"
 	"strings"
@@ -212,7 +214,6 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 計算分頁資訊
 	totalPages := 0
 	if pageRequest.Size > 0 {
 		totalPages = int(math.Ceil(float64(totalCount) / float64(pageRequest.Size)))
@@ -253,6 +254,10 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	req.Role = strings.ToLower(req.Role)
+	if !role.IsValidGlobalRole(req.Role) {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
+	}
+
 	updatedUser, err := h.store.UpdateRoleByID(traceCtx, id, req.Role)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
