@@ -2,7 +2,7 @@
 
 set -e
 
-docker compose down
+docker compose down  -v
 docker compose pull
 docker compose up -d --wait
 
