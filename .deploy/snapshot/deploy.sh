@@ -5,11 +5,8 @@ set -e
 error_handling() {
     cd ~
     if [ -d "$VERSION" ]; then
-        cd "$VERSION"
         docker logs "$VERSION"
         docker compose down
-        cd ..
-        rm -r "$VERSION"
     fi
     exit 1
 }
@@ -19,10 +16,7 @@ export VERSION="pr-$PR_NUMBER"
 enable_error_handling="false"
 [ ! -d "$VERSION" ] && enable_error_handling="true"
 
-mkdir -p "$VERSION" || true
-envsubst < "./compose.yaml" > "./"$VERSION"/compose.yaml"
-cp -r ./ldif "./"$VERSION"/ldif"
-cd "$VERSION"
+envsubst < "./compose.yaml" > "./compose.yaml"
 
 docker compose down
 docker compose pull
