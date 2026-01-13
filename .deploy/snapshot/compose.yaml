@@ -20,7 +20,7 @@ services:
       - NYCU_OAUTH_CLIENT_ID=${NYCU_OAUTH_CLIENT_ID}
       - NYCU_OAUTH_CLIENT_SECRET=${NYCU_OAUTH_CLIENT_SECRET}
       - SECRET=${SECRET}
-      - OAUTH_PROXY_BASE_URL=https://oauth-proxy.eng.sdc.nycu.club
+      - OAUTH_PROXY_BASE_URL=https://oauth-proxy.sdc.nycu.club
       - OAUTH_PROXY_SECRET=${OAUTH_PROXY_SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
