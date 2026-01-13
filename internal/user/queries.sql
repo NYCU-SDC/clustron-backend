@@ -72,8 +72,8 @@ ORDER BY
     CASE WHEN sqlc.narg('sort_by')::text = 'fullName' AND sqlc.narg('sort')::text = 'desc' THEN full_name END DESC,
     CASE WHEN sqlc.narg('sort_by')::text = 'email' AND sqlc.narg('sort')::text = 'asc' THEN email END ASC,
     CASE WHEN sqlc.narg('sort_by')::text = 'email' AND sqlc.narg('sort')::text = 'desc' THEN email END DESC,
-    CASE WHEN sqlc.narg('sort_by')::text = 'studentID' AND sqlc.narg('sort')::text = 'asc' THEN student_id END ASC,
-    CASE WHEN sqlc.narg('sort_by')::text = 'studentID' AND sqlc.narg('sort')::text = 'desc' THEN student_id END DESC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'asc' THEN student_id END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'desc' THEN student_id END DESC,
     created_at DESC
 LIMIT $1 OFFSET $2;
 
