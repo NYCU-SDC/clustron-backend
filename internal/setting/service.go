@@ -338,7 +338,7 @@ func (s *Service) AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey 
 
 		if strings.EqualFold(fingerprint, oldFingerprint) {
 			err = ldaputil.ErrPublicKeyExists
-			logger.Warn("public key already exists in LDAP", zap.String("userID", userID.String()))
+			logger.Debug("public key already exists in LDAP", zap.String("userID", userID.String()))
 			return LDAPPublicKey{}, err
 		}
 	}

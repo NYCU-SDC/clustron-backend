@@ -607,11 +607,8 @@ func (h *Handler) ImportGithubKeysHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	redirectTo := r.URL.Query().Get("c")
 	frontendRedirectTo := r.URL.Query().Get("r")
-	if redirectTo == "" {
-		redirectTo = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
-	}
+	redirectTo := fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
 	if frontendRedirectTo != "" {
 		redirectTo = fmt.Sprintf("%s?r=%s", redirectTo, frontendRedirectTo)
 	}
