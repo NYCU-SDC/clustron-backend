@@ -1,8 +1,8 @@
-name: clustron-$VERSION
+name: clustron-${VERSION}
 
 services:
   backend:
-    image: "nycusdc/clustron-backend:$VERSION"
+    image: "nycusdc/clustron-backend:${VERSION}"
     networks:
       - internal
       - traefik
@@ -14,7 +14,7 @@ services:
     environment:
       - ENV=snapshot
       - HOST=0.0.0.0
-      - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
+      - BASE_URL=https://api.${VERSION}.clustron.sdc.nycu.club
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - NYCU_OAUTH_CLIENT_ID=${NYCU_OAUTH_CLIENT_ID}
@@ -23,7 +23,7 @@ services:
       - OAUTH_PROXY_BASE_URL=https://oauth-proxy.sdc.nycu.club
       - OAUTH_PROXY_SECRET=${OAUTH_PROXY_SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
-      - BASE_URL=https://api.$VERSION.clustron.sdc.nycu.club
+      - BASE_URL=https://api.${VERSION}.clustron.sdc.nycu.club
       - SLURM_TOKEN_HELPER_URL=${SLURM_TOKEN_HELPER_URL}
       - SLURM_RESTFUL_BASE_URL=${SLURM_RESTFUL_BASE_URL}
       - SLURM_RESTFUL_VERSION=v0.0.43
@@ -43,11 +43,11 @@ services:
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.clustron-backend-$VERSION.rule=Host(`api.$VERSION.clustron.sdc.nycu.club`)"
-      - "traefik.http.routers.clustron-backend-$VERSION.entrypoints=websecure"
-      - "traefik.http.routers.clustron-backend-$VERSION.tls=true"
-      - "traefik.http.routers.clustron-backend-$VERSION.tls.certresolver=cloudflare"
-      - "traefik.http.services.clustron-backend-$VERSION.loadbalancer.server.port=8080"
+      - "traefik.http.routers.clustron-backend-${VERSION}.rule=Host(`api.${VERSION}.clustron.sdc.nycu.club`)"
+      - "traefik.http.routers.clustron-backend-${VERSION}.entrypoints=websecure"
+      - "traefik.http.routers.clustron-backend-${VERSION}.tls=true"
+      - "traefik.http.routers.clustron-backend-${VERSION}.tls.certresolver=cloudflare"
+      - "traefik.http.services.clustron-backend-${VERSION}.loadbalancer.server.port=8080"
 
 
   postgres:

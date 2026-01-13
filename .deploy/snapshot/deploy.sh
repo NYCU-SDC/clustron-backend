@@ -16,8 +16,6 @@ export VERSION="pr-$PR_NUMBER"
 enable_error_handling="false"
 [ ! -d "$VERSION" ] && enable_error_handling="true"
 
-envsubst < "./compose.yaml" > "./compose.yaml"
-
 docker compose down
 docker compose pull
 if [ "$enable_error_handling" == "true" ]; then
