@@ -21,6 +21,7 @@ enable_error_handling="false"
 
 mkdir -p "$VERSION" || true
 envsubst < "./compose.yaml" > "./"$VERSION"/compose.yaml"
+cp -r ./ldif "./"$VERSION"/ldif"
 cd "$VERSION"
 
 docker compose down
