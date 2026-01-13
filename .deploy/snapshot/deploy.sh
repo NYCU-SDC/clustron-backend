@@ -7,7 +7,7 @@ error_handling() {
     if [ -d "$VERSION" ]; then
         cd "$VERSION"
         docker logs "$VERSION"
-        docker compose down -v
+        docker compose down
         cd ..
         rm -r "$VERSION"
     fi
@@ -23,7 +23,7 @@ mkdir -p "$VERSION" || true
 envsubst < "./compose.yaml" > "./"$VERSION"/compose.yaml"
 cd "$VERSION"
 
-docker compose down -v
+docker compose down
 docker compose pull
 if [ "$enable_error_handling" == "true" ]; then
     docker compose up -d --wait || error_handling
