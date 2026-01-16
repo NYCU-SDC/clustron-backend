@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Trigger n8n Snapshot Webhook
         run: |
-          curl -X POST https://webhook.eng.sdc.nycu.club/webhook/snapshot \
+          curl -X POST https://webhook.sdc.nycu.club/webhook/snapshot \
             -H "Content-Type: application/json" \
             -d '{
               "pr_number": "${{ github.event.number }}",
