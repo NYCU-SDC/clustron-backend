@@ -13,6 +13,7 @@ import (
 	"clustron-backend/internal/ldap"
 	"clustron-backend/internal/membership"
 	"clustron-backend/internal/redis"
+	"clustron-backend/internal/module"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/trace"
@@ -150,6 +151,7 @@ func main() {
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
+	moduleService := module.NewService(logger, dbPool)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -163,6 +165,7 @@ func main() {
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
+	moduleHandler := module.NewHandler(moduleService, validator, logger, problemWriter)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
@@ -232,6 +235,13 @@ func main() {
 	// Users
 	mux.HandleFunc("GET /api/users/me", authMiddleware.HandlerFunc(userHandler.GetMeHandler))
 	mux.HandleFunc("PUT /api/users", authMiddleware.HandlerFunc(userHandler.UpdateFullNameHandler))
+
+	// Modules
+	mux.HandleFunc("GET /api/modules", authMiddleware.HandlerFunc(moduleHandler.List))
+	mux.HandleFunc("POST /api/modules", authMiddleware.HandlerFunc(moduleHandler.Create))
+	mux.HandleFunc("GET /api/modules/{id}", authMiddleware.HandlerFunc(moduleHandler.Get))
+	mux.HandleFunc("PUT /api/modules/{id}", authMiddleware.HandlerFunc(moduleHandler.Update))
+	mux.HandleFunc("DELETE /api/modules/{id}", authMiddleware.HandlerFunc(moduleHandler.Delete))
 
 	// Search
 	mux.HandleFunc("GET /api/searchUser", authMiddleware.HandlerFunc(userHandler.SearchByIdentifierHandler))
