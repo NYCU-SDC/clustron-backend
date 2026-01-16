@@ -627,3 +627,98 @@ func Test_DeletePublicKey(t *testing.T) {
 		})
 	}
 }
+
+func TestService_ChangePassword(t *testing.T) {
+	testCases := []struct {
+		name           string
+		userID         uuid.UUID
+		newPassword    string
+		ldapUID        int64
+		ldapEntry      *ldap.Entry
+		expectedHasErr bool
+		setupMock      func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newPassword string)
+	}{
+		{
+			name:        "Change password successfully",
+			userID:      uuid.New(),
+			newPassword: "NewSecurePassword123!",
+			ldapUID:     10001,
+			ldapEntry: &ldap.Entry{
+				Attributes: []*ldap.EntryAttribute{
+					{Name: "uid", Values: []string{"testuser"}},
+				},
+			},
+			expectedHasErr: false,
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newPassword string) {
+				// 1. Service asks DB for the LDAP UID Number
+				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
+
+				// 2. Service asks LDAP for the User Entry (to get the 'uid' string)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(entry, nil)
+
+				// 3. Service performs the password update using the 'uid' string
+				ldapClient.On("UpdateUserPassword", "testuser", newPassword).Return(nil)
+			},
+		},
+		{
+			name:           "Return ErrUserNotFound if user missing in LDAP",
+			userID:         uuid.New(),
+			newPassword:    "password",
+			ldapUID:        10001,
+			expectedHasErr: true,
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newPassword string) {
+				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(nil, ldaputil.ErrUserNotFound)
+			},
+		},
+		{
+			name:        "Return error if LDAP update fails",
+			userID:      uuid.New(),
+			newPassword: "password",
+			ldapUID:     10001,
+			ldapEntry: &ldap.Entry{
+				Attributes: []*ldap.EntryAttribute{
+					{Name: "uid", Values: []string{"testuser"}},
+				},
+			},
+			expectedHasErr: true,
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, ldapUID int64, entry *ldap.Entry, newPassword string) {
+				store.On("GetUIDByUserID", mock.Anything, userID).Return(ldapUID, nil)
+				ldapClient.On("GetUserInfoByUIDNumber", ldapUID).Return(entry, nil)
+				ldapClient.On("UpdateUserPassword", "testuser", newPassword).Return(assert.AnError)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Initialize Mocks
+			querier := new(mocks.Querier)
+			userStore := new(mocks.UserStore)
+			ldapClient := new(mocks.LDAPClient)
+			logger := zaptest.NewLogger(t)
+
+			// Initialize Service
+			service := setting.NewService(logger, querier, userStore, ldapClient)
+
+			// Setup Expectations
+			if tc.setupMock != nil {
+				tc.setupMock(querier, ldapClient, tc.userID, tc.ldapUID, tc.ldapEntry, tc.newPassword)
+			}
+
+			// Execution
+			err := service.ChangePassword(context.Background(), tc.userID, tc.newPassword)
+
+			// Assertion
+			if tc.expectedHasErr {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

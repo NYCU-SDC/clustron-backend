@@ -49,6 +49,10 @@ type PublicKeyResponse struct {
 	PublicKey   string `json:"publicKey"`
 }
 
+type ChangePasswordRequest struct {
+	NewPassword string `json:"newPassword" validate:"required,min=8"`
+}
+
 //go:generate mockery --name Store
 type Store interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
@@ -58,6 +62,7 @@ type Store interface {
 	DeletePublicKey(ctx context.Context, user uuid.UUID, fingerprint string) error
 	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
 
 type Handler struct {
@@ -343,4 +348,43 @@ func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string
 		}
 	}
 	return nil
+}
+
+func (h *Handler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ChangePasswordHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request ChangePasswordRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if !isValidPassword(request.NewPassword) {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidPassword, logger)
+		return
+	}
+
+	err = h.settingStore.ChangePassword(traceCtx, user.ID, request.NewPassword)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
+}
+
+func isValidPassword(pass string) bool {
+	hasLetter := regexp.MustCompile(`[a-zA-Z]`).MatchString(pass)
+	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(pass)
+	return hasLetter && hasNumber
 }
