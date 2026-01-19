@@ -259,56 +259,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if provider.Name() == "github" {
-		if bindingUser == uuid.Nil {
-			err := errors.New("github login is not supported, please login first")
-			logger.Warn("User tried to login with GitHub", zap.Error(err))
-			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "github_login_not_supported"), http.StatusTemporaryRedirect)
-			return
-		}
-
-		githubProvider, ok := provider.(*oauthprovider.GithubConfig)
-		if !ok {
-			logger.Error("Invalid GitHub provider configuration")
-			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "internal_error"), http.StatusTemporaryRedirect)
-			return
-		}
-
-		keys, err := githubProvider.GetSSHKeys(traceCtx, token)
-		if err != nil {
-			logger.Error("Failed to fetch GitHub keys", zap.Error(err))
-			http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "failed_to_fetch_keys"), http.StatusTemporaryRedirect)
-			return
-		}
-
-		importCount := 0
-		duplicateCount := 0
-
-		for _, key := range keys {
-			title := fmt.Sprintf("%s (GitHub)", key.Title)
-			_, err := h.settingStore.AddPublicKey(traceCtx, bindingUser, key.Key, title)
-			if errors.Is(err, ldaputil.ErrPublicKeyExists) {
-				duplicateCount++
-			} else if err != nil {
-				logger.Warn("Failed to add GitHub key", zap.String("title", title), zap.Error(err))
-			} else {
-				importCount++
-			}
-		}
-		logger.Debug("Imported GitHub keys", zap.Int("success count", importCount), zap.Int("duplicate count", duplicateCount), zap.String("userID", bindingUser.String()))
-
-		targetURL := redirectTo
-		if targetURL == "" {
-			targetURL = "/"
-		}
-
-		separator := "?"
-		if strings.Contains(targetURL, "?") {
-			separator = "&"
-		}
-
-		targetURL = fmt.Sprintf("%s%simported=%d&duplicates=%d", targetURL, separator, importCount, duplicateCount)
-
-		http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
+		h.handleGithubCallback(traceCtx, w, r, provider, token, callbackInfo, logger)
 		return
 	}
 
@@ -362,6 +313,62 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
+}
+
+func (h *Handler) handleGithubCallback(traceCtx context.Context, w http.ResponseWriter, r *http.Request, provider OAuthProvider, token *oauth2.Token, info callbackInfo, logger *zap.Logger) {
+	callback := info.callback.String()
+
+	if info.bindingUser == uuid.Nil {
+		err := errors.New("github login is not supported, please login first")
+		logger.Warn("User tried to login with GitHub", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "github_login_not_supported"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	githubProvider, ok := provider.(*oauthprovider.GithubConfig)
+	if !ok {
+		logger.Error("Invalid GitHub provider configuration")
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "internal_error"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	keys, err := githubProvider.GetSSHKeys(traceCtx, token)
+	if err != nil {
+		logger.Error("Failed to fetch GitHub keys", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "failed_to_fetch_keys"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	importCount := 0
+	duplicateCount := 0
+
+	for _, key := range keys {
+		title := fmt.Sprintf("%s (GitHub)", key.Title)
+		_, err := h.settingStore.AddPublicKey(traceCtx, info.bindingUser, key.Key, title)
+		if errors.Is(err, ldaputil.ErrPublicKeyExists) {
+			duplicateCount++
+		} else if err != nil {
+			logger.Warn("Failed to add GitHub key", zap.String("title", title), zap.Error(err))
+		} else {
+			importCount++
+		}
+	}
+	logger.Debug("Imported GitHub keys", zap.Int("success count", importCount), zap.Int("duplicate count", duplicateCount), zap.String("userID", info.bindingUser.String()))
+
+	targetURL := info.redirectTo
+	if targetURL == "" {
+		targetURL = "/"
+	}
+
+	separator := "?"
+	if strings.Contains(targetURL, "?") {
+		separator = "&"
+	}
+
+	targetURL = fmt.Sprintf("%s%simported=%d&duplicates=%d", targetURL, separator, importCount, duplicateCount)
+
+	http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
+	return
 }
 
 func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {

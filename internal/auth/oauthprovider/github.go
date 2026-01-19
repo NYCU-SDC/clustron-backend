@@ -95,7 +95,6 @@ func (g *GithubConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (Us
 
 func (g *GithubConfig) GetSSHKeys(ctx context.Context, token *oauth2.Token) ([]GitHubKeyResponse, error) {
 	client := g.config.Client(ctx, token)
-	// 呼叫 GitHub API 獲取使用者的公鑰
 	resp, err := client.Get("https://api.github.com/user/keys")
 	if err != nil {
 		return nil, err
