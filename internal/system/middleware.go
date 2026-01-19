@@ -1,19 +1,25 @@
 package system
 
 import (
-	"clustron-backend/internal/user"
+	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
 
-type Middleware struct {
-	logger  *zap.Logger
-	service *user.Service
+type userStore interface {
+	HasAdmin(ctx context.Context) (bool, error)
 }
 
-func NewMiddleware(logger *zap.Logger, service *user.Service) *Middleware {
+type Middleware struct {
+	logger  *zap.Logger
+	service userStore
+	isSetup atomic.Bool
+}
+
+func NewMiddleware(logger *zap.Logger, service userStore) *Middleware {
 	return &Middleware{
 		logger:  logger,
 		service: service,
@@ -22,11 +28,17 @@ func NewMiddleware(logger *zap.Logger, service *user.Service) *Middleware {
 
 func (m *Middleware) EnsureSystemSetupMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if m.isSetup.Load() {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		allowedPaths := []string{
 			"/api/system/info",
 			"/api/login",
 			"/api/oauth",
 			"/api/internal/login",
+			"/api/onboarding",
 		}
 
 		for _, path := range allowedPaths {
@@ -53,6 +65,7 @@ func (m *Middleware) EnsureSystemSetupMiddleware(next http.HandlerFunc) http.Han
 			return
 		}
 
+		m.isSetup.Store(true)
 		next.ServeHTTP(w, r)
 	})
 }
