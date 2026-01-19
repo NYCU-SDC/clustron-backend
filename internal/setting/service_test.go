@@ -628,7 +628,7 @@ func Test_DeletePublicKey(t *testing.T) {
 	}
 }
 
-func TestService_ChangePassword(t *testing.T) {
+func TestService_UpdatePassword(t *testing.T) {
 	testCases := []struct {
 		name           string
 		userID         uuid.UUID
@@ -707,7 +707,7 @@ func TestService_ChangePassword(t *testing.T) {
 			}
 
 			// Execution
-			err := service.ChangePassword(context.Background(), tc.userID, tc.newPassword)
+			err := service.UpdatePassword(context.Background(), tc.userID, tc.newPassword)
 
 			// Assertion
 			if tc.expectedHasErr {

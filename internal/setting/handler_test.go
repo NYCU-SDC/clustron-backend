@@ -614,17 +614,17 @@ func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 	}
 }
 
-func TestHandler_ChangePasswordHandler(t *testing.T) {
+func TestHandler_UpdatePasswordHandler(t *testing.T) {
 	testCases := []struct {
 		name           string
-		body           setting.ChangePasswordRequest
+		body           setting.UpdatePasswordRequest
 		user           *jwt.User
 		setupMock      func(store *mocks.Store, user *jwt.User)
 		expectedStatus int
 	}{
 		{
 			name: "Should update password successfully",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "NewSecurePassword123",
 			},
 			user: &jwt.User{
@@ -632,13 +632,13 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 				Role: role.User.String(),
 			},
 			setupMock: func(store *mocks.Store, user *jwt.User) {
-				store.On("ChangePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(nil)
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Should return error when password is too short",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "Short1", // Less than 8 chars
 			},
 			user: &jwt.User{
@@ -650,7 +650,7 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 		},
 		{
 			name: "Should return error when password has no numbers",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "PasswordOnlyLetters",
 			},
 			user: &jwt.User{
@@ -662,7 +662,7 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 		},
 		{
 			name: "Should return error when password has no letters",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "1234567890",
 			},
 			user: &jwt.User{
@@ -674,7 +674,7 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 		},
 		{
 			name: "Should return Not Found if user not found in LDAP",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "NewSecurePassword123",
 			},
 			user: &jwt.User{
@@ -682,13 +682,13 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 				Role: role.User.String(),
 			},
 			setupMock: func(store *mocks.Store, user *jwt.User) {
-				store.On("ChangePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(ldaputil.ErrUserNotFound)
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(ldaputil.ErrUserNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name: "Should return Internal Server Error on store failure",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "NewSecurePassword123",
 			},
 			user: &jwt.User{
@@ -696,13 +696,13 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 				Role: role.User.String(),
 			},
 			setupMock: func(store *mocks.Store, user *jwt.User) {
-				store.On("ChangePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(assert.AnError)
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "Should return error when user is missing in context",
-			body: setting.ChangePasswordRequest{
+			body: setting.UpdatePasswordRequest{
 				NewPassword: "NewSecurePassword123",
 			},
 			user:           nil,
@@ -729,11 +729,11 @@ func TestHandler_ChangePasswordHandler(t *testing.T) {
 
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
-				h.ChangePasswordHandler(w, r)
+				h.UpdatePasswordHandler(w, r)
 				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 			} else {
 				assert.Panics(t, func() {
-					h.ChangePasswordHandler(w, r)
+					h.UpdatePasswordHandler(w, r)
 				}, tc.name)
 			}
 		})

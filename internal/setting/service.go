@@ -472,8 +472,8 @@ func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
 	return "", err
 }
 
-func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
-	traceCtx, span := s.tracer.Start(ctx, "ChangePassword")
+func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
+	traceCtx, span := s.tracer.Start(ctx, "UpdatePassword")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 

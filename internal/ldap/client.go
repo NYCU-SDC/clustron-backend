@@ -21,7 +21,6 @@ type LDAPClient interface {
 	RemoveUserFromGroup(groupName, memberUid string) error
 	ExistSSHPublicKey(publicKey string) (bool, error)
 	GetAllUIDNumbers() ([]string, error)
-	UpdateUserPassword(uid string, password string) error
 }
 
 type Client struct {

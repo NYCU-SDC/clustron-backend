@@ -49,7 +49,7 @@ type PublicKeyResponse struct {
 	PublicKey   string `json:"publicKey"`
 }
 
-type ChangePasswordRequest struct {
+type UpdatePasswordRequest struct {
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
@@ -62,7 +62,7 @@ type Store interface {
 	DeletePublicKey(ctx context.Context, user uuid.UUID, fingerprint string) error
 	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
-	ChangePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
 
 type Handler struct {
@@ -350,8 +350,8 @@ func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string
 	return nil
 }
 
-func (h *Handler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ChangePasswordHandler")
+func (h *Handler) UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdatePasswordHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -362,7 +362,7 @@ func (h *Handler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var request ChangePasswordRequest
+	var request UpdatePasswordRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -374,7 +374,7 @@ func (h *Handler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = h.settingStore.ChangePassword(traceCtx, user.ID, request.NewPassword)
+	err = h.settingStore.UpdatePassword(traceCtx, user.ID, request.NewPassword)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
