@@ -5,7 +5,6 @@ import (
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/user/role"
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -172,9 +171,8 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	roleFilter := query.Get("role")
 
 	roleFilter = strings.ToLower(roleFilter)
-
 	if !role.IsValidGlobalRole(roleFilter) && roleFilter != "" {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRoleType, logger)
 		return
 	}
 
@@ -222,6 +220,16 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrUnauthorized, logger)
+		return
+	}
+	if user.ID == id {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrSelfDeletion, logger)
+		return
+	}
+
 	var req UpdateUserRoleRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -230,7 +238,7 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 
 	req.Role = strings.ToLower(req.Role)
 	if !role.IsValidGlobalRole(req.Role) {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRoleType, logger)
 		return
 	}
 
