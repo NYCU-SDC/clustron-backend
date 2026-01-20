@@ -171,6 +171,8 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	search := query.Get("search")
 	roleFilter := query.Get("role")
 
+	roleFilter = strings.ToLower(roleFilter)
+
 	if !role.IsValidGlobalRole(roleFilter) && roleFilter != "" {
 		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
 		return
