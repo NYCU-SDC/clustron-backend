@@ -3,6 +3,7 @@ package ldap
 import (
 	"errors"
 	"fmt"
+
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
 )
@@ -272,4 +273,24 @@ func (c *Client) GetAllUIDNumbers() ([]string, error) {
 	}
 
 	return uidNumbers, nil
+}
+
+func (c *Client) UpdateUserPassword(uid string, password string) error {
+	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	modifyRequest := ldap.NewModifyRequest(dn, nil)
+	modifyRequest.Replace("userPassword", []string{password})
+
+	err := c.Conn.Modify(modifyRequest)
+	if err != nil {
+		var ldapErr *ldap.Error
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
+			c.Logger.Warn("user not found when updating password", zap.String("uid", uid))
+			return fmt.Errorf("%w: %s", ErrUserNotFound, uid)
+		}
+		c.Logger.Error("failed to update user password", zap.String("uid", uid), zap.Error(err))
+		return fmt.Errorf("failed to update user password: %w", err)
+	}
+
+	c.Logger.Info("user password updated successfully", zap.String("uid", uid))
+	return nil
 }
