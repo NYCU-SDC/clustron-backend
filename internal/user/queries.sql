@@ -38,7 +38,6 @@ UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING *;
 -- name: UpdateStudentID :one
 UPDATE users SET student_id = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
-
 -- name: UpdateFullName :one
 UPDATE users SET full_name = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
@@ -75,7 +74,7 @@ ORDER BY
     CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'asc' THEN student_id END ASC,
     CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'desc' THEN student_id END DESC,
     created_at DESC
-LIMIT $1 OFFSET $2;
+LIMIT @Size OFFSET @Skip;
 
 -- name: CountUsers :one
 SELECT COUNT(*)

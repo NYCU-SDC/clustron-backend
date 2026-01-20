@@ -273,7 +273,6 @@ func (s *Service) SearchByIdentifier(ctx context.Context, query string, page, si
 type ListUsersServiceParams struct {
 	Page   int
 	Size   int
-	Sort   string
 	SortBy string
 	Search string
 	Role   string
@@ -286,7 +285,6 @@ func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) 
 
 	searchParam := pgtype.Text{String: params.Search, Valid: params.Search != ""}
 	roleParam := pgtype.Text{String: params.Role, Valid: params.Role != ""}
-	sortParam := pgtype.Text{String: params.Sort, Valid: params.Sort != ""}
 	sortByParam := pgtype.Text{String: params.SortBy, Valid: params.SortBy != ""}
 
 	totalCount, err := s.queries.CountUsers(traceCtx, CountUsersParams{
@@ -302,10 +300,9 @@ func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) 
 	items, err := s.queries.ListUsers(traceCtx, ListUsersParams{
 		Search: searchParam,
 		Role:   roleParam,
-		Sort:   sortParam,
 		SortBy: sortByParam,
-		Limit:  int32(params.Size),
-		Offset: int32(params.Page * params.Size),
+		Size:   int32(params.Size),
+		Skip:   int32(params.Page * params.Size),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list users")

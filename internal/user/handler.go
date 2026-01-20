@@ -6,7 +6,6 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
-	"math"
 	"net/http"
 	"strings"
 
@@ -31,13 +30,13 @@ type Store interface {
 type Response struct {
 	ID        uuid.UUID `json:"id"`
 	Email     string    `json:"email"`
-	FullName  string    `json:"full_name"`
+	FullName  string    `json:"fullName"`
 	StudentID string    `json:"studentId"`
 	Role      string    `json:"role"`
 }
 
 type UpdateFullNameRequest struct {
-	FullName string `json:"full_name" validate:"required,min=1,max=255"`
+	FullName string `json:"fullName" validate:"required,min=1,max=255"`
 }
 
 type SearchingResponse struct {
@@ -50,8 +49,9 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 	tracer        trace.Tracer
 
-	store             Store
-	paginationFactory pagination.Factory[SearchingResponse]
+	store                       Store
+	identifierPaginationFactory pagination.Factory[SearchingResponse]
+	userInfoPaginationFactory   pagination.Factory[Response]
 }
 
 func NewHandler(
@@ -61,12 +61,13 @@ func NewHandler(
 	store Store,
 ) *Handler {
 	return &Handler{
-		logger:            logger,
-		validator:         validator,
-		problemWriter:     problemWriter,
-		tracer:            otel.Tracer("user/handler"),
-		store:             store,
-		paginationFactory: pagination.NewFactory[SearchingResponse](200, []string{"created_at"}),
+		logger:                      logger,
+		validator:                   validator,
+		problemWriter:               problemWriter,
+		tracer:                      otel.Tracer("user/handler"),
+		store:                       store,
+		identifierPaginationFactory: pagination.NewFactory[SearchingResponse](200, []string{"created_at"}),
+		userInfoPaginationFactory:   pagination.NewFactory[Response](200, []string{"studentId", "fullName", "email"}),
 	}
 }
 
@@ -92,9 +93,9 @@ func (h *Handler) GetMeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateFullNameHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateFullnameHandler")
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateFullNameHandler")
 	defer span.End()
-	logger := h.logger.With(zap.String("handler", "UpdateFullnameHandler"))
+	logger := h.logger.With(zap.String("handler", "UpdateFullNameHandler"))
 
 	user, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
@@ -132,7 +133,7 @@ func (h *Handler) SearchByIdentifierHandler(w http.ResponseWriter, r *http.Reque
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "SearchByIdentifierHandler"))
 
-	pageRequest, err := h.paginationFactory.GetRequest(r)
+	pageRequest, err := h.identifierPaginationFactory.GetRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -151,25 +152,8 @@ func (h *Handler) SearchByIdentifierHandler(w http.ResponseWriter, r *http.Reque
 		response[i] = SearchingResponse{Identifier: identifier}
 	}
 
-	pageResponse := h.paginationFactory.NewResponse(response, totalCount, pageRequest.Page, pageRequest.Size)
+	pageResponse := h.identifierPaginationFactory.NewResponse(response, totalCount, pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
-}
-
-type ListUserItem struct {
-	ID        uuid.UUID `json:"id"`
-	FullName  string    `json:"fullName"`
-	Email     string    `json:"email"`
-	StudentID string    `json:"studentId"`
-	Role      string    `json:"role"`
-}
-
-type ListUserResponse struct {
-	Items       []ListUserItem `json:"items"`
-	TotalPages  int            `json:"totalPages"`
-	TotalItems  int            `json:"totalItems"`
-	CurrentPage int            `json:"currentPage"`
-	PageSize    int            `json:"pageSize"`
-	HasNextPage bool           `json:"hasNextPage"`
 }
 
 func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +161,7 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "ListUserHandler"))
 
-	pageRequest, err := h.paginationFactory.GetRequest(r)
+	pageRequest, err := h.userInfoPaginationFactory.GetRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -186,30 +170,28 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	search := query.Get("search")
 	roleFilter := query.Get("role")
-	sort := query.Get("sort")
-	sortBy := query.Get("sortBy")
 
-	if sortBy != "fullName" && sortBy != "studentId" && sortBy != "email" {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("not supported sortBy string"), logger)
+	if !role.IsValidGlobalRole(roleFilter) && roleFilter != "" {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
 		return
 	}
 
 	items, totalCount, err := h.store.ListUsers(traceCtx, ListUsersServiceParams{
-		Page:   pageRequest.Page,
-		Size:   pageRequest.Size,
 		Search: search,
 		Role:   roleFilter,
-		Sort:   sort,
-		SortBy: sortBy,
+		SortBy: pageRequest.SortBy,
+		Page:   pageRequest.Page,
+		Size:   pageRequest.Size,
 	})
+
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	responseItems := make([]ListUserItem, len(items))
+	responseItems := make([]Response, len(items))
 	for i, item := range items {
-		responseItems[i] = ListUserItem{
+		responseItems[i] = Response{
 			ID:        item.ID,
 			FullName:  item.FullName.String,
 			Email:     item.Email,
@@ -218,21 +200,8 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	totalPages := 0
-	if pageRequest.Size > 0 {
-		totalPages = int(math.Ceil(float64(totalCount) / float64(pageRequest.Size)))
-	}
-
-	response := ListUserResponse{
-		Items:       responseItems,
-		TotalPages:  totalPages,
-		TotalItems:  totalCount,
-		CurrentPage: pageRequest.Page,
-		PageSize:    pageRequest.Size,
-		HasNextPage: pageRequest.Page+1 < totalPages,
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+	pageResponse := h.userInfoPaginationFactory.NewResponse(responseItems, totalCount, pageRequest.Page, pageRequest.Size)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
 }
 
 type UpdateUserRoleRequest struct {
@@ -247,7 +216,7 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 	idStr := r.PathValue("user_id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUUIDFormat, logger)
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrInvalidUUID, logger)
 		return
 	}
 
@@ -260,6 +229,7 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 	req.Role = strings.ToLower(req.Role)
 	if !role.IsValidGlobalRole(req.Role) {
 		h.problemWriter.WriteError(traceCtx, w, errors.New("unknown role type"), logger)
+		return
 	}
 
 	updatedUser, err := h.store.UpdateRoleByID(traceCtx, id, req.Role)
