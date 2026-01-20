@@ -43,6 +43,10 @@ type AddPublicKeyRequest struct {
 	PublicKey string `json:"publicKey" validate:"required"`
 }
 
+type DeletePublicKeyRequest struct {
+	Fingerprint string `json:"fingerprint" validate:"required"`
+}
+
 type PublicKeyResponse struct {
 	Fingerprint string `json:"fingerprint"`
 	Title       string `json:"title"`
@@ -281,7 +285,14 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 
 	userID := user.ID
 
-	fingerprint := r.PathValue("fingerprint")
+	var request DeletePublicKeyRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	fingerprint := request.Fingerprint
 	if fingerprint == "" {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFingerprint, logger)
 		return

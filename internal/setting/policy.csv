@@ -5,3 +5,5 @@ p, user, /api/publickey, POST
 p, user, /api/publickey/:fingerprint, DELETE
 p, role_not_setup, /api/onboarding, POST
 p, user, /api/password, PUT
+p, user, /api/publickey, DELETE
+p, role_not_setup, /api/onboarding, POST
