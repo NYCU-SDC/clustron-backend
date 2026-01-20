@@ -368,7 +368,6 @@ func (h *Handler) handleGithubCallback(traceCtx context.Context, w http.Response
 	targetURL = fmt.Sprintf("%s%simported=%d&duplicates=%d", targetURL, separator, importCount, duplicateCount)
 
 	http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
-	return
 }
 
 func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
