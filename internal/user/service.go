@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -216,7 +217,19 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	if exist {
 		userRole = presetRole.Role
 	} else {
-		userRole = role.User.String()
+		hasAdmin, err := s.queries.CheckAdminExists(traceCtx)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "check admin role")
+			span.RecordError(err)
+			return "", err
+		}
+
+		if !hasAdmin {
+			userRole = role.Admin.String()
+			logger.Info("No admin found, promoting user to admin.", zap.String("userID", userID.String()))
+		} else {
+			userRole = role.User.String()
+		}
 	}
 	err = s.UpdateRoleByID(traceCtx, userID, userRole)
 	if err != nil {
@@ -267,4 +280,19 @@ func (s *Service) SearchByIdentifier(ctx context.Context, query string, page, si
 	}
 
 	return identifiers, int(totalCount), nil
+}
+
+func (s *Service) HasAdmin(ctx context.Context) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "hasAdmin")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exist, err := s.queries.CheckAdminExists(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check admin existence")
+		span.RecordError(err)
+		return true, err
+	}
+
+	return exist, nil
 }
