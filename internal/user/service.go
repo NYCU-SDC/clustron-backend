@@ -323,6 +323,7 @@ func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) 
 	}
 
 	return items, int(totalCount), nil
+}
 
 func (s *Service) HasAdmin(ctx context.Context) (bool, error) {
 	traceCtx, span := s.tracer.Start(ctx, "hasAdmin")
