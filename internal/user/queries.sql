@@ -38,7 +38,6 @@ UPDATE users SET role = $2, updated_at = now() WHERE id = $1 RETURNING *;
 -- name: UpdateStudentID :one
 UPDATE users SET student_id = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
-
 -- name: UpdateFullName :one
 UPDATE users SET full_name = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
@@ -61,8 +60,30 @@ WHERE email ILIKE @Query || '%' OR student_id ILIKE @Query || '%'
 ORDER BY identifier
 LIMIT @Size OFFSET @Skip;
 
+-- name: ListUsers :many
+SELECT id, full_name, email, student_id, role
+FROM users
+WHERE
+    (sqlc.narg('search')::text IS NULL OR (email ILIKE '%' || sqlc.narg('search') || '%' OR student_id ILIKE '%' || sqlc.narg('search') || '%' OR full_name ILIKE '%' || sqlc.narg('search') || '%'))
+  AND (sqlc.narg('role')::text IS NULL OR role = sqlc.narg('role'))
+ORDER BY
+    CASE WHEN sqlc.narg('sort_by')::text = 'fullName' AND sqlc.narg('sort')::text = 'asc' THEN full_name END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'fullName' AND sqlc.narg('sort')::text = 'desc' THEN full_name END DESC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'email' AND sqlc.narg('sort')::text = 'asc' THEN email END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'email' AND sqlc.narg('sort')::text = 'desc' THEN email END DESC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'asc' THEN student_id END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'studentId' AND sqlc.narg('sort')::text = 'desc' THEN student_id END DESC,
+    created_at DESC
+LIMIT @Size OFFSET @Skip;
+
+-- name: CountUsers :one
+SELECT COUNT(*)
+FROM users
+WHERE
+    (sqlc.narg('search')::text IS NULL OR (email ILIKE '%' || sqlc.narg('search') || '%' OR student_id ILIKE '%' || sqlc.narg('search') || '%' OR full_name ILIKE '%' || sqlc.narg('search') || '%'))
+  AND (sqlc.narg('role')::text IS NULL OR role = sqlc.narg('role'));
+
 -- name: CheckAdminExists :one
 SELECT EXISTS (
     SELECT 1 FROM users WHERE role = 'admin'
 ) AS exists;
-
