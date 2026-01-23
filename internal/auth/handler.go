@@ -355,7 +355,7 @@ func (h *Handler) handleGithubCallback(traceCtx context.Context, w http.Response
 	}
 	logger.Debug("Imported GitHub keys", zap.Int("success count", importCount), zap.Int("duplicate count", duplicateCount), zap.String("userID", info.bindingUser.String()))
 
-	targetURL := info.redirectTo
+	targetURL := info.callback.String()
 	if targetURL == "" {
 		targetURL = "/"
 	}
@@ -613,11 +613,7 @@ func (h *Handler) ImportGithubKeysHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	frontendRedirectTo := r.URL.Query().Get("c")
-	redirectTo := fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
-	if frontendRedirectTo != "" {
-		redirectTo = fmt.Sprintf("%s?r=%s", redirectTo, frontendRedirectTo)
-	}
+	redirectTo := r.URL.Query().Get("c")
 
 	token, err := h.store.CreateToken(traceCtx, redirectTo, jwtUser.ID)
 	if err != nil {
