@@ -11,7 +11,6 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -177,7 +176,7 @@ func TestHandler_AddUserPublicKeyHandler(t *testing.T) {
 
 func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 	publicKey := setting.LDAPPublicKey{
-		Fingerprint: "mock-fingerprint",
+		Fingerprint: "mock/fingerprint",
 		Title:       "Test Title",
 		PublicKey:   exampleValidKey,
 	}
@@ -195,7 +194,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				ID:   uuid.New(),
 				Role: role.User.String(),
 			},
-			fingerprint: "mock-fingerprint",
+			fingerprint: "mock/fingerprint",
 			setupMock: func(store *mocks.Store, user *jwt.User) {
 				store.On("DeletePublicKey", mock.Anything, user.ID, publicKey.Fingerprint).Return(nil)
 			},
@@ -217,7 +216,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				ID:   uuid.New(),
 				Role: role.User.String(),
 			},
-			fingerprint: "mock-fingerprint",
+			fingerprint: "mock/fingerprint",
 			setupMock: func(store *mocks.Store, user *jwt.User) {
 				store.On("DeletePublicKey", mock.Anything,
 					user.ID,
@@ -232,7 +231,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				ID:   uuid.New(),
 				Role: role.User.String(),
 			},
-			fingerprint: "non-existing-fingerprint",
+			fingerprint: "non/existing/fingerprint",
 			setupMock: func(store *mocks.Store, user *jwt.User) {
 				store.On("DeletePublicKey", mock.Anything, user.ID, mock.Anything).Return(ldaputil.ErrPublicKeyNotFound)
 			},
@@ -240,7 +239,7 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 		},
 		{
 			name:           "Should return error when user is missing in context",
-			fingerprint:    "mock-fingerprint",
+			fingerprint:    "mock/fingerprint",
 			user:           nil,
 			setupMock:      func(store *mocks.Store, user *jwt.User) {},
 			expectedStatus: http.StatusInternalServerError,
@@ -259,11 +258,15 @@ func TestHandler_DeletePublicKeyHandler(t *testing.T) {
 				tc.setupMock(store, tc.user)
 			}
 			h := setting.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, userStore)
+
+			requestBody, err := json.Marshal(setting.DeletePublicKeyRequest{
+				Fingerprint: tc.fingerprint,
+			})
 			if err != nil {
 				t.Fatalf("failed to marshal request body: %v", err)
 			}
-			r := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/publickey/%s", tc.fingerprint), nil)
-			r.SetPathValue("fingerprint", tc.fingerprint)
+
+			r := httptest.NewRequest(http.MethodDelete, "/api/publickey", bytes.NewReader(requestBody))
 			w := httptest.NewRecorder()
 			if tc.user != nil {
 				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
@@ -608,6 +611,132 @@ func TestHandler_GetUserPublicKeysHandler(t *testing.T) {
 			} else {
 				assert.Panics(t, func() {
 					h.GetUserPublicKeysHandler(w, r)
+				}, tc.name)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdatePasswordHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           setting.UpdatePasswordRequest
+		user           *jwt.User
+		setupMock      func(store *mocks.Store, user *jwt.User)
+		expectedStatus int
+	}{
+		{
+			name: "Should update password successfully",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "NewSecurePassword123",
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when password is too short",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "Short1", // Less than 8 chars
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock:      func(store *mocks.Store, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when password has no numbers",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "PasswordOnlyLetters",
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock:      func(store *mocks.Store, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when password has no letters",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "1234567890",
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock:      func(store *mocks.Store, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return Not Found if user not found in LDAP",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "NewSecurePassword123",
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(ldaputil.ErrUserNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "Should return Internal Server Error on store failure",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "NewSecurePassword123",
+			},
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, user *jwt.User) {
+				store.On("UpdatePassword", mock.Anything, user.ID, "NewSecurePassword123").Return(assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "Should return error when user is missing in context",
+			body: setting.UpdatePasswordRequest{
+				NewPassword: "NewSecurePassword123",
+			},
+			user:           nil,
+			setupMock:      func(store *mocks.Store, user *jwt.User) {},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, _ := zap.NewDevelopment()
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+
+			if tc.setupMock != nil {
+				tc.setupMock(store, tc.user)
+			}
+
+			h := setting.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, userStore)
+
+			requestBody, _ := json.Marshal(tc.body)
+			r := httptest.NewRequest(http.MethodPut, "/api/password", bytes.NewReader(requestBody))
+			w := httptest.NewRecorder()
+
+			if tc.user != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+				h.UpdatePasswordHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.UpdatePasswordHandler(w, r)
 				}, tc.name)
 			}
 		})

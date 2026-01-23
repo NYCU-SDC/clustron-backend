@@ -15,6 +15,7 @@ import (
 	"clustron-backend/internal/redis"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/slurm"
+	"clustron-backend/internal/system"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
@@ -163,6 +164,7 @@ func main() {
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
+	systemStatusHandler := system.NewHandler(logger, userService, problemWriter)
 
 	// Components
 	enforcer := casbin.NewEnforcer(logger, cfg)
@@ -172,6 +174,7 @@ func main() {
 	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(jwtService, logger)
 	roleMiddleware := auth.NewMiddleware(logger, enforcer, problemWriter)
+	systemStatusMiddleware := system.NewMiddleware(logger, userService)
 
 	// Basic Middleware (Tracing and Recover)
 	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
@@ -180,11 +183,15 @@ func main() {
 	// Auth Middleware (JWT and Role filtering)
 	authMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	authMiddleware = authMiddleware.Append(traceMiddleware.TraceMiddleWare)
+	authMiddleware = authMiddleware.Append(systemStatusMiddleware.EnsureSystemSetupMiddleware)
 	authMiddleware = authMiddleware.Append(jwtMiddleware.HandlerFunc)
 	authMiddleware = authMiddleware.Append(roleMiddleware.HandlerFunc)
 
 	// HTTP Server
 	mux := http.NewServeMux()
+
+	// System status
+	mux.HandleFunc("GET /api/setup/status", basicMiddleware.HandlerFunc(systemStatusHandler.GetSystemInfoHandler))
 
 	// Auth
 	mux.HandleFunc("GET /api/login/oauth/{provider}", basicMiddleware.HandlerFunc(authHandler.Oauth2Start))
@@ -197,11 +204,12 @@ func main() {
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
+	mux.HandleFunc("PUT /api/password", authMiddleware.HandlerFunc(settingHandler.UpdatePasswordHandler))
 
 	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
-	mux.HandleFunc("DELETE /api/publickey/{fingerprint}", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
+	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
 
 	// Roles
 	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))

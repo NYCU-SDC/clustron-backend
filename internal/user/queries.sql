@@ -82,3 +82,8 @@ FROM users
 WHERE
     (sqlc.narg('search')::text IS NULL OR (email ILIKE '%' || sqlc.narg('search') || '%' OR student_id ILIKE '%' || sqlc.narg('search') || '%' OR full_name ILIKE '%' || sqlc.narg('search') || '%'))
   AND (sqlc.narg('role')::text IS NULL OR role = sqlc.narg('role'));
+
+-- name: CheckAdminExists :one
+SELECT EXISTS (
+    SELECT 1 FROM users WHERE role = 'admin'
+) AS exists;
