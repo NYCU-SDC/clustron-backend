@@ -154,7 +154,7 @@ jobs:
                     "env_name": "GITHUB_OAUTH_CLIENT_ID"
                   },
                   {
-                    "path": "/gtihub-oauth",
+                    "path": "/github-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GITHUB_OAUTH_CLIENT_SECRET"
                   },
