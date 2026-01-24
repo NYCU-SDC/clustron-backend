@@ -1,1 +1,3 @@
 p, user, /api/searchUser, GET
+p, admin, /api/users, GET
+p, admin, /api/users/:id/globalRole, PUT

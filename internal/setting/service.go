@@ -43,6 +43,7 @@ type LDAPClient interface {
 	AddSSHPublicKey(uid string, publicKey string) error
 	DeleteSSHPublicKey(uid string, publicKey string) error
 	ExistUser(uid string) (bool, error)
+	UpdateUserPassword(uid string, password string) error
 }
 
 //go:generate mockery --name Querier
@@ -469,4 +470,39 @@ func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
 	logger.Error("failed to find available uid number", zap.Error(err))
 	span.RecordError(err)
 	return "", err
+}
+
+func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
+	traceCtx, span := s.tracer.Start(ctx, "UpdatePassword")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	ldapUIDNumber, err := s.query.GetUIDByUserID(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get ldap uid by user id")
+		span.RecordError(err)
+		return err
+	}
+
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDNumber)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.Int64("uidNumber", ldapUIDNumber))
+			return err
+		}
+		logger.Error("failed to find ldap user", zap.Error(err))
+		return err
+	}
+
+	uidString := ldapEntry.GetAttributeValue("uid")
+
+	err = s.ldapClient.UpdateUserPassword(uidString, newPassword)
+	if err != nil {
+		logger.Error("failed to update ldap password", zap.String("uid", uidString), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to update ldap password: %w", err)
+	}
+
+	logger.Info("user password updated successfully", zap.String("userID", userID.String()), zap.String("uid", uidString))
+	return nil
 }

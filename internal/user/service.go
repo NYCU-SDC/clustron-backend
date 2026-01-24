@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -138,7 +139,7 @@ func (s *Service) GetIdByStudentId(ctx context.Context, studentID string) (uuid.
 	return id, nil
 }
 
-func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) error {
+func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) (User, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateRoleByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -147,10 +148,10 @@ func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole s
 		err := errors.New("invalid role provided: " + globalRole)
 		logger.Error("Invalid role provided", zap.String("role", globalRole))
 		span.RecordError(err)
-		return err
+		return User{}, err
 	}
 
-	_, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{
+	user, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{
 		ID:   id,
 		Role: globalRole,
 	})
@@ -158,10 +159,10 @@ func (s *Service) UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole s
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", id.String(), logger, "update user role")
 		span.RecordError(err)
-		return err
+		return User{}, err
 	}
 
-	return nil
+	return user, nil
 }
 
 func (s *Service) UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (User, error) {
@@ -216,9 +217,21 @@ func (s *Service) SetupUserRole(ctx context.Context, userID uuid.UUID) (string, 
 	if exist {
 		userRole = presetRole.Role
 	} else {
-		userRole = role.User.String()
+		hasAdmin, err := s.queries.CheckAdminExists(traceCtx)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "check admin role")
+			span.RecordError(err)
+			return "", err
+		}
+
+		if !hasAdmin {
+			userRole = role.Admin.String()
+			logger.Info("No admin found, promoting user to admin.", zap.String("userID", userID.String()))
+		} else {
+			userRole = role.User.String()
+		}
 	}
-	err = s.UpdateRoleByID(traceCtx, userID, userRole)
+	_, err = s.UpdateRoleByID(traceCtx, userID, userRole)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "id", userID.String(), logger, "update user role")
 		span.RecordError(err)
@@ -267,4 +280,62 @@ func (s *Service) SearchByIdentifier(ctx context.Context, query string, page, si
 	}
 
 	return identifiers, int(totalCount), nil
+}
+
+type ListUsersServiceParams struct {
+	Page   int
+	Size   int
+	SortBy string
+	Search string
+	Role   string
+}
+
+func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRow, int, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListUsers")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	searchParam := pgtype.Text{String: params.Search, Valid: params.Search != ""}
+	roleParam := pgtype.Text{String: params.Role, Valid: params.Role != ""}
+	sortByParam := pgtype.Text{String: params.SortBy, Valid: params.SortBy != ""}
+
+	totalCount, err := s.queries.CountUsers(traceCtx, CountUsersParams{
+		Search: searchParam,
+		Role:   roleParam,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "count users")
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	items, err := s.queries.ListUsers(traceCtx, ListUsersParams{
+		Search: searchParam,
+		Role:   roleParam,
+		SortBy: sortByParam,
+		Size:   int32(params.Size),
+		Skip:   int32(params.Page * params.Size),
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list users")
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	return items, int(totalCount), nil
+}
+
+func (s *Service) HasAdmin(ctx context.Context) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "hasAdmin")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exist, err := s.queries.CheckAdminExists(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check admin existence")
+		span.RecordError(err)
+		return true, err
+	}
+
+	return exist, nil
 }
