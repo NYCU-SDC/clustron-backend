@@ -77,7 +77,7 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int) ([]Module, 
 
 	limit := int32(size)
 	offset := int32(page * size)
-	params := ListModulesParams{Limit: limit, Offset: offset}
+	params := ListModulesParams{Size: limit, Skip: offset}
 
 	modules, err := s.queries.ListModules(traceCtx, params)
 	if err != nil {
