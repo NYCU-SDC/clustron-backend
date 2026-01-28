@@ -3,6 +3,7 @@ package ldap
 import (
 	"errors"
 	"fmt"
+
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
 )
