@@ -73,7 +73,7 @@ type InternalLoginResponse struct {
 }
 
 type BindLoginInfoResponse struct {
-	Url string `json:"url"`
+	Url string `json:"redirectURL"`
 }
 
 type callbackInfo struct {
