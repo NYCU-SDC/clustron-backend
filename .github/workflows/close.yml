@@ -11,12 +11,30 @@ jobs:
     steps:
       - name: Trigger n8n Snapshot Webhook
         run: |
-          curl -X POST https://webhook.sdc.nycu.club/webhook/snapshot \
-            -H "Content-Type: application/json" \
-            -d '{
-              "pr_number": "${{ github.event.number }}",
-              "pr_title": "${{ github.event.pull_request.title }}",
+          curl -X POST https://webhook.sdc.nycu.club/webhook/deploy \
+          -H "Content-Type: application/json" \
+          -H "x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}" \
+          -d '{
+            "source": {
+              "title": "Clustron",
               "repo": "${{ github.repository }}",
-              "branch": "${{ github.ref_name }}",
-              "method": "close"
-            }'
+              "branch": "${{ github.head_ref || github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "pr_number": "${{ github.event.pull_request.number }}"
+            },
+            "method": "cleanup",
+            "metadata": {
+              "environment": "snapshot",
+              "component": "backend"
+            },
+            "post": {
+              "notify_discord": {
+                "enable": true,
+                "channel": "clustron-activity"
+              },
+              "cleanup_domain": {
+                "enable": true,
+                "name": "pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club"
+              }
+            }
+          }'
