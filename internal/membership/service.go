@@ -399,6 +399,12 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		UserID:  userId,
 		RoleID:  role,
 	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id/role_id", fmt.Sprintf("%s/%s/%s", groupId.String(), userId.String(), role.String()), logger, "failed to add group member")
+		logger.Error("add group member failed", zap.Error(err))
+		span.RecordError(err)
+		return MemberResponse{}, err
+	}
 
 	u, err := s.userStore.GetByID(traceCtx, userId)
 	if err != nil {
