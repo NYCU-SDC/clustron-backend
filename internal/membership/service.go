@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -473,6 +474,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
+				logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 				return nil
 			},
 		})
