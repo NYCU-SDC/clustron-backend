@@ -12,10 +12,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-ldap/ldap/v3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"clustron-backend/internal/ldap"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -43,11 +42,19 @@ type UserStore interface {
 //go:generate mockery --name SettingStore
 type SettingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
+	GetAllUserIDByUIDNumber(ctx context.Context, uidNumbers []int32) ([]uuid.UUID, error)
 }
 
 type GroupStore interface {
 	GetLDAPBaseGroupCNByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
 	GetLDAPAdminGroupCNByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
+}
+
+type LDAPClient interface {
+	AddUserToGroup(groupCN string, username string) error
+	RemoveUserFromGroup(groupCN string, username string) error
+	GetGroupInfo(groupCN string) (*ldap.Entry, error)
+	GetAllUserByUIDList(uidList []string) ([]*ldap.Entry, error)
 }
 
 type Service struct {
@@ -60,10 +67,10 @@ type Service struct {
 	groupRoleStore GroupRoleStore
 	groupStore     GroupStore
 	settingStore   SettingStore
-	ldapClient     ldap.LDAPClient
+	ldapClient     LDAPClient
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, groupStore GroupStore, ldapClient ldap.LDAPClient) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, groupStore GroupStore, ldapClient LDAPClient) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("membership/service"),
@@ -85,6 +92,60 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	// check if the user has access to the group (group owner or group admin)
 	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		return nil, handlerutil.ErrForbidden
+	}
+
+	// get base group member list from LDAP
+	ldapBaseGroupCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP base group CN by group ID")
+		logger.Error("get ldap base group cn failed", zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+
+	ldapBaseGroupEntry, err := s.ldapClient.GetGroupInfo(ldapBaseGroupCN)
+	if err != nil {
+		logger.Error("get ldap base group info failed", zap.String("group_cn", ldapBaseGroupCN), zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+	if ldapBaseGroupEntry == nil {
+		err = errors.New("ldap base group entry is nil")
+		logger.Error("ldap base group entry is nil", zap.String("group_cn", ldapBaseGroupCN))
+		span.RecordError(err)
+		return nil, err
+	}
+
+	baseMemberUIDs := make([]string, 0)
+	for _, member := range ldapBaseGroupEntry.GetAttributeValues("memberUid") {
+		baseMemberUIDs = append(baseMemberUIDs, member)
+	}
+
+	ldapBaseMembers, err := s.ldapClient.GetAllUserByUIDList(baseMemberUIDs)
+	if err != nil {
+		logger.Error("get all ldap base group members failed", zap.Strings("member_uids", baseMemberUIDs), zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+
+	uidNumbers := make([]int32, 0)
+	for _, entry := range ldapBaseMembers {
+		uidNumberStr := entry.GetAttributeValue("uidNumber")
+		var uidNumber int32
+		_, err := fmt.Sscanf(uidNumberStr, "%d", &uidNumber)
+		if err != nil {
+			logger.Error("parse uidNumber failed", zap.String("uidNumberStr", uidNumberStr), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+		uidNumbers = append(uidNumbers, uidNumber)
+	}
+
+	userIDs, err := s.settingStore.GetAllUserIDByUIDNumber(traceCtx, uidNumbers)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get user IDs by UID numbers")
+		span.RecordError(err)
+		return nil, err
 	}
 
 	var members []Response
@@ -359,25 +420,7 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	}
 
 	saga := internal.NewSaga(s.logger)
-	saga.AddStep(internal.SagaStep{
-		Name: "AddUserToLDAPBaseGroup",
-		Action: func(ctx context.Context) error {
-			err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
-			if err != nil {
-				logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-				return err
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
-			if err != nil {
-				logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-				return err
-			}
-			return nil
-		},
-	})
+
 	// Add user to LDAP admin group
 	accessLevel := grouprole.AccessLevel(roleInfo.AccessLevel)
 	if accessLevel == grouprole.AccessLevelOwner || accessLevel == grouprole.AccessLevelAdmin {
@@ -399,6 +442,26 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 					return err
 				}
 				logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+				return nil
+			},
+		})
+	} else {
+		saga.AddStep(internal.SagaStep{
+			Name: "AddUserToLDAPBaseGroup",
+			Action: func(ctx context.Context) error {
+				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
 				return nil
 			},
 		})

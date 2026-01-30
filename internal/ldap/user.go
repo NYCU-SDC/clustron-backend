@@ -76,6 +76,26 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	return nil
 }
 
+func (c *Client) GetAllUsersByUIDList(uids []string) ([]*ldap.Entry, error) {
+	base := "ou=People," + c.Config.LDAPBaseDN
+	filter := "(|"
+	for _, uid := range uids {
+		filter += fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
+	}
+	filter += ")"
+	attributes := []string{
+		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
+	}
+
+	result, err := c.SearchByFilter(base, filter, attributes)
+	if err != nil {
+		c.Logger.Error("failed to search users", zap.Error(err))
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+
+	return result.Entries, nil
+}
+
 func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
