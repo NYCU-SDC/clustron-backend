@@ -5,10 +5,17 @@ import (
 	"clustron-backend/internal/auth/oauthprovider"
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
+	ldaputil "clustron-backend/internal/ldap"
+	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -18,9 +25,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"net/http"
-	"net/url"
-	"time"
 )
 
 type JWTIssuer interface {
@@ -37,6 +41,10 @@ type JWTStore interface {
 
 type UserStore interface {
 	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
+}
+
+type SettingStore interface {
+	AddPublicKey(ctx context.Context, userID uuid.UUID, publicKey string, title string) (setting.LDAPPublicKey, error)
 }
 
 type Store interface {
@@ -65,7 +73,7 @@ type InternalLoginResponse struct {
 }
 
 type BindLoginInfoResponse struct {
-	Url string `json:"url"`
+	Url string `json:"redirectURL"`
 }
 
 type callbackInfo struct {
@@ -86,11 +94,12 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	userStore UserStore
-	jwtIssuer JWTIssuer
-	jwtStore  JWTStore
-	store     Store
-	provider  map[string]OAuthProvider
+	userStore    UserStore
+	jwtIssuer    JWTIssuer
+	jwtStore     JWTStore
+	store        Store
+	settingStore SettingStore
+	provider     map[string]OAuthProvider
 }
 
 func NewHandler(
@@ -103,11 +112,13 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
-	store Store) *Handler {
+	store Store,
+	settingStore SettingStore) *Handler {
 
 	var (
 		googleProvider OAuthProvider
 		nycuProvider   OAuthProvider
+		githubProvider OAuthProvider
 	)
 	if config.OAuthProxyBaseURL != "" {
 		googleProvider = oauthprovider.NewGoogleConfig(
@@ -117,7 +128,11 @@ func NewHandler(
 		nycuProvider = oauthprovider.NewNYCUConfig(
 			config.NYCUOauthClientID,
 			config.NYCUOauthClientSecret,
-			fmt.Sprintf("%s/api/auth/google/callback", config.OAuthProxyBaseURL))
+			fmt.Sprintf("%s/api/auth/nycu/callback", config.OAuthProxyBaseURL))
+		githubProvider = oauthprovider.NewGithubConfig(
+			config.GithubOauthClientID,
+			config.GithubOauthClientSecret,
+			fmt.Sprintf("%s/api/auth/github/callback", config.OAuthProxyBaseURL))
 	} else {
 		googleProvider = oauthprovider.NewGoogleConfig(
 			config.GoogleOauthClientID,
@@ -128,6 +143,11 @@ func NewHandler(
 			config.NYCUOauthClientID,
 			config.NYCUOauthClientSecret,
 			fmt.Sprintf("%s/api/oauth/nycu/callback", config.BaseURL))
+
+		githubProvider = oauthprovider.NewGithubConfig(
+			config.GithubOauthClientID,
+			config.GithubOauthClientSecret,
+			fmt.Sprintf("%s/api/oauth/github/callback", config.BaseURL))
 	}
 
 	return &Handler{
@@ -140,13 +160,15 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 
-		userStore: userStore,
-		jwtIssuer: jwtIssuer,
-		jwtStore:  jwtStore,
-		store:     store,
+		userStore:    userStore,
+		jwtIssuer:    jwtIssuer,
+		jwtStore:     jwtStore,
+		store:        store,
+		settingStore: settingStore,
 		provider: map[string]OAuthProvider{
 			"google": googleProvider,
 			"nycu":   nycuProvider,
+			"github": githubProvider,
 		},
 	}
 }
@@ -236,6 +258,11 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if provider.Name() == "github" {
+		h.handleGithubCallback(traceCtx, w, r, provider, token, callbackInfo, logger)
+		return
+	}
+
 	userInfo, err := provider.GetUserInfo(traceCtx, token)
 	if err != nil {
 		logger.Error("Failed to get user info", zap.Error(err))
@@ -288,7 +315,61 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectWithToken, http.StatusTemporaryRedirect)
 }
 
-// BindLoginInfo binds the login information to the request context
+func (h *Handler) handleGithubCallback(traceCtx context.Context, w http.ResponseWriter, r *http.Request, provider OAuthProvider, token *oauth2.Token, info callbackInfo, logger *zap.Logger) {
+	callback := info.callback.String()
+
+	if info.bindingUser == uuid.Nil {
+		err := errors.New("github login is not supported, please login first")
+		logger.Warn("User tried to login with GitHub", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "github_login_not_supported"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	githubProvider, ok := provider.(*oauthprovider.GithubConfig)
+	if !ok {
+		logger.Error("Invalid GitHub provider configuration")
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "internal_error"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	keys, err := githubProvider.GetSSHKeys(traceCtx, token)
+	if err != nil {
+		logger.Error("Failed to fetch GitHub keys", zap.Error(err))
+		http.Redirect(w, r, fmt.Sprintf("%s?error=%s", callback, "failed_to_fetch_keys"), http.StatusTemporaryRedirect)
+		return
+	}
+
+	importCount := 0
+	duplicateCount := 0
+
+	for _, key := range keys {
+		title := fmt.Sprintf("%s (GitHub)", key.Title)
+		_, err := h.settingStore.AddPublicKey(traceCtx, info.bindingUser, key.Key, title)
+		if errors.Is(err, ldaputil.ErrPublicKeyExists) {
+			duplicateCount++
+		} else if err != nil {
+			logger.Warn("Failed to add GitHub key", zap.String("title", title), zap.Error(err))
+		} else {
+			importCount++
+		}
+	}
+	logger.Debug("Imported GitHub keys", zap.Int("success count", importCount), zap.Int("duplicate count", duplicateCount), zap.String("userID", info.bindingUser.String()))
+
+	targetURL := info.callback.String()
+	if targetURL == "" {
+		targetURL = "/"
+	}
+
+	separator := "?"
+	if strings.Contains(targetURL, "?") {
+		separator = "&"
+	}
+
+	targetURL = fmt.Sprintf("%s%simported=%d&duplicates=%d", targetURL, separator, importCount, duplicateCount)
+
+	http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
+}
+
 func (h *Handler) BindLoginInfo(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "BindLoginInfo")
 	defer span.End()
@@ -512,4 +593,46 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, refreshTokenCookie)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
+}
+
+func (h *Handler) ImportGithubKeysHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ImportGithubKeys")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	jwtUser, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrUnauthorized, logger)
+		return
+	}
+
+	providerName := "github"
+	provider := h.provider[providerName]
+	if provider == nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: provider not found: %s", internal.ErrProviderNotFound, providerName), logger)
+		return
+	}
+
+	redirectTo := r.URL.Query().Get("c")
+
+	token, err := h.store.CreateToken(traceCtx, redirectTo, jwtUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	callback := fmt.Sprintf("%s/api/oauth/%s/callback", h.config.BaseURL, provider.Name())
+	proxyState, err := h.jwtIssuer.NewState(traceCtx, h.appName, h.environment, callback, redirectTo, token.ID.String())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
+		return
+	}
+
+	authURL := provider.Config().AuthCodeURL(proxyState, oauth2.AccessTypeOffline)
+
+	result := &BindLoginInfoResponse{
+		Url: authURL,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, result)
 }

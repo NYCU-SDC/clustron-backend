@@ -157,7 +157,7 @@ func main() {
 
 	// Handler
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService)
+	authHandler := auth.NewHandler(cfg, logger, Environment, AppName, validator, problemWriter, userService, jwtService, jwtService, authService, settingService)
 	jwtHandler := jwt.NewHandler(logger, validator, problemWriter, jwtService)
 	settingHandler := setting.NewHandler(logger, validator, problemWriter, settingService, userService)
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
@@ -211,6 +211,7 @@ func main() {
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
 	mux.HandleFunc("POST /api/publickey", authMiddleware.HandlerFunc(settingHandler.AddUserPublicKeyHandler))
 	mux.HandleFunc("DELETE /api/publickey", authMiddleware.HandlerFunc(settingHandler.DeletePublicKeyHandler))
+	mux.HandleFunc("GET /api/publickey/import", authMiddleware.HandlerFunc(authHandler.ImportGithubKeysHandler))
 
 	// Roles
 	mux.HandleFunc("GET /api/roles", authMiddleware.HandlerFunc(groupRoleHandler.GetAllHandler))
