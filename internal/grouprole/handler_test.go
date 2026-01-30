@@ -30,7 +30,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 			name:    "Create success",
 			request: grouprole.CreateRequest{RoleName: "test", AccessLevel: "GROUP_OWNER"},
 			setupMock: func(store *grouprolemocks.Store) {
-				store.On("Create", mock.Anything, mock.Anything).Return(
+				store.On("Create", mock.Anything, mock.Anything, mock.Anything).Return(
 					grouprole.GroupRole{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), RoleName: "test", AccessLevel: "GROUP_OWNER"}, nil,
 				)
 			},
@@ -40,7 +40,7 @@ func TestHandler_CreateHandler(t *testing.T) {
 			name:    "Create store error",
 			request: grouprole.CreateRequest{RoleName: "fail", AccessLevel: "GROUP_OWNER"},
 			setupMock: func(store *grouprolemocks.Store) {
-				store.On("Create", mock.Anything, mock.Anything).Return(grouprole.GroupRole{}, errors.New("db error"))
+				store.On("Create", mock.Anything, mock.Anything, mock.Anything).Return(grouprole.GroupRole{}, errors.New("db error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
