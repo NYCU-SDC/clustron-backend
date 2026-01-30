@@ -76,7 +76,7 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	return nil
 }
 
-func (c *Client) GetAllUsersByUIDList(uids []string) ([]*ldap.Entry, error) {
+func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
 	filter := "(|"
 	for _, uid := range uids {

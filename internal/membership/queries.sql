@@ -11,7 +11,7 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-WHERE group_id = $1
+WHERE group_id = $1 AND u.id IN (SELECT unnest(@UserIDs::UUID[]))
 ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
 
@@ -28,7 +28,7 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-WHERE group_id = $1
+WHERE group_id = $1 AND u.id IN (SELECT unnest(@UserIDs::UUID[]))
 ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;
 

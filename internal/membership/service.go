@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/go-ldap/ldap/v3"
@@ -42,7 +43,7 @@ type UserStore interface {
 //go:generate mockery --name SettingStore
 type SettingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
-	GetAllUserIDByUIDNumber(ctx context.Context, uidNumbers []int32) ([]uuid.UUID, error)
+	GetAllUserByUIDNumber(ctx context.Context, uidNumbers []int64) (map[int64]setting.User, error)
 }
 
 type GroupStore interface {
@@ -84,7 +85,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 	}
 }
 
-func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error) {
+func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sortDir string, sortBy string) ([]Response, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -103,109 +104,113 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		return nil, err
 	}
 
-	ldapBaseGroupEntry, err := s.ldapClient.GetGroupInfo(ldapBaseGroupCN)
+	baseEntries, err := s.getLDAPMember(ldapBaseGroupCN)
 	if err != nil {
 		logger.Error("get ldap base group info failed", zap.String("group_cn", ldapBaseGroupCN), zap.Error(err))
 		span.RecordError(err)
 		return nil, err
 	}
-	if ldapBaseGroupEntry == nil {
-		err = errors.New("ldap base group entry is nil")
-		logger.Error("ldap base group entry is nil", zap.String("group_cn", ldapBaseGroupCN))
-		span.RecordError(err)
-		return nil, err
-	}
 
-	baseMemberUIDs := make([]string, 0)
-	for _, member := range ldapBaseGroupEntry.GetAttributeValues("memberUid") {
-		baseMemberUIDs = append(baseMemberUIDs, member)
-	}
-
-	ldapBaseMembers, err := s.ldapClient.GetAllUserByUIDList(baseMemberUIDs)
+	// get admin group member list from LDAP
+	ldapAdminGroupCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupId)
 	if err != nil {
-		logger.Error("get all ldap base group members failed", zap.Strings("member_uids", baseMemberUIDs), zap.Error(err))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP admin group CN by group ID")
+		logger.Error("get ldap admin group cn failed", zap.Error(err))
 		span.RecordError(err)
 		return nil, err
 	}
 
-	uidNumbers := make([]int32, 0)
-	for _, entry := range ldapBaseMembers {
-		uidNumberStr := entry.GetAttributeValue("uidNumber")
-		var uidNumber int32
-		_, err := fmt.Sscanf(uidNumberStr, "%d", &uidNumber)
-		if err != nil {
-			logger.Error("parse uidNumber failed", zap.String("uidNumberStr", uidNumberStr), zap.Error(err))
-			span.RecordError(err)
-			return nil, err
-		}
-		uidNumbers = append(uidNumbers, uidNumber)
-	}
-
-	userIDs, err := s.settingStore.GetAllUserIDByUIDNumber(traceCtx, uidNumbers)
+	adminEntries, err := s.getLDAPMember(ldapAdminGroupCN)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to get user IDs by UID numbers")
+		logger.Error("get ldap admin group info failed", zap.String("group_cn", ldapAdminGroupCN), zap.Error(err))
 		span.RecordError(err)
 		return nil, err
 	}
 
-	var members []Response
-	if sort == "desc" {
-		params := ListDescPagedParams{
-			GroupID: groupId,
-			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
-			Size: int32(size),
-			Skip: int32(page) * int32(size),
-		}
-		res, err := s.queries.ListDescPaged(traceCtx, params)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "failed to list group members")
-			span.RecordError(err)
-			return nil, err
-		}
-		members = make([]Response, len(res))
-		for i, member := range res {
-			members[i] = Response{
-				ID:        member.UserID,
-				FullName:  member.FullName.String,
-				Email:     member.Email,
-				StudentID: member.StudentID.String,
-				Role: grouprole.RoleResponse{
-					ID:          member.RoleID.String(),
-					RoleName:    member.RoleName,
-					AccessLevel: member.AccessLevel,
-				},
-			}
-		}
-	} else {
-		params := ListAscPagedParams{
-			GroupID: groupId,
-			//Sortby:  sortBy, //TODO: Implement various query with corresponding sortBy
-			Size: int32(size),
-			Skip: int32(page) * int32(size),
-		}
-		res, err := s.queries.ListAscPaged(traceCtx, params)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "failed to list group members")
-			span.RecordError(err)
-			return nil, err
-		}
-		members = make([]Response, len(res))
-		for i, member := range res {
-			members[i] = Response{
-				ID:        member.UserID,
-				FullName:  member.FullName.String,
-				Email:     member.Email,
-				StudentID: member.StudentID.String,
-				Role: grouprole.RoleResponse{
-					ID:          member.RoleID.String(),
-					RoleName:    member.RoleName,
-					AccessLevel: member.AccessLevel,
-				},
+	ldapEntryMap := make(map[int64]*ldap.Entry)
+	allUIDNumbers := make([]int64, 0)
+
+	processEntries := func(entries []*ldap.Entry) {
+		for _, entry := range entries {
+			var uidNum int64
+			if _, err := fmt.Sscanf(entry.GetAttributeValue("uidNumber"), "%d", &uidNum); err == nil {
+				if _, exists := ldapEntryMap[uidNum]; !exists {
+					ldapEntryMap[uidNum] = entry
+					allUIDNumbers = append(allUIDNumbers, uidNum)
+				}
 			}
 		}
 	}
 
-	return members, nil
+	processEntries(baseEntries)
+	processEntries(adminEntries)
+
+	dbUserMap, err := s.settingStore.GetAllUserByUIDNumber(traceCtx, allUIDNumbers)
+	if err != nil {
+		logger.Warn("failed to fetch user IDs from DB, proceeding with LDAP data only", zap.Error(err))
+	}
+
+	allMembers := make([]Response, 0)
+	for uidNum, entry := range ldapEntryMap {
+		res := Response{
+			UIDNumber: uidNum,
+			UID:       entry.GetAttributeValue("uid"),
+		}
+
+		if userInfo, exist := dbUserMap[uidNum]; exist {
+			res.ID = userInfo.ID
+			res.FullName = userInfo.FullName.String
+			res.Email = userInfo.Email
+			res.StudentID = userInfo.StudentID.String
+			res.OnlyInLDAP = false
+			member, err := s.GetByUser(traceCtx, userInfo.ID, groupId)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					res.Role = grouprole.RoleResponse{
+						ID:          uuid.Nil.String(),
+						RoleName:    grouprole.RoleUnknown.String(),
+						AccessLevel: grouprole.AccessLevelUnknown.String(),
+					}
+				}
+			}
+			res.Role = grouprole.RoleResponse{
+				ID:          member.ID.String(),
+				RoleName:    member.RoleName,
+				AccessLevel: member.AccessLevel,
+			}
+		} else {
+			res.OnlyInLDAP = true
+			res.FullName = entry.GetAttributeValue("cn")
+			res.Role = grouprole.RoleResponse{
+				ID:          uuid.Nil.String(),
+				RoleName:    grouprole.RoleUnknown.String(),
+				AccessLevel: grouprole.AccessLevelUnknown.String(),
+			}
+		}
+		allMembers = append(allMembers, res)
+	}
+
+	sort.Slice(allMembers, func(i, j int) bool {
+		if sortDir == "desc" {
+			return allMembers[i].UIDNumber > allMembers[j].UIDNumber
+		}
+		return allMembers[i].UIDNumber < allMembers[j].UIDNumber
+	})
+
+	totalCount := len(allMembers)
+	startIndex := page * size
+	endIndex := startIndex + size
+
+	if startIndex >= totalCount {
+		return []Response{}, nil
+	}
+	if endIndex > totalCount {
+		endIndex = totalCount
+	}
+
+	pagedMembers := allMembers[startIndex:endIndex]
+
+	return pagedMembers, nil
 }
 
 func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (grouprole.GroupRole, error) {
@@ -1093,4 +1098,13 @@ func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUI
 	}
 
 	return nil
+}
+
+func (s *Service) getLDAPMember(groupCN string) ([]*ldap.Entry, error) {
+	entry, err := s.ldapClient.GetGroupInfo(groupCN)
+	if err != nil || entry == nil {
+		return nil, err
+	}
+	uids := entry.GetAttributeValues("memberUid")
+	return s.ldapClient.GetAllUserByUIDList(uids)
 }

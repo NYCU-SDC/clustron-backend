@@ -31,8 +31,8 @@ DELETE FROM public_keys WHERE id = $1;
 -- name: GetUIDByUserID :one
 SELECT uid_number FROM ldap_user WHERE id = $1;
 
--- name: GetAllUserByUIDNumber :many
-SELECT id FROM ldap_user WHERE uid_number IN (SELECT unnest($1::int[]));
+-- name: GetAllUserInfoByUIDNumber :many
+SELECT ldap_user.uid_number, u.* FROM ldap_user JOIN users u ON u.id = ldap_user.id WHERE uid_number IN (SELECT unnest($1::BIGINT[]));
 
 -- name: CreateLDAPUser :exec
 INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);
