@@ -37,11 +37,14 @@ type UserService interface {
 }
 
 type Response struct {
-	ID        uuid.UUID              `json:"id"`
-	FullName  string                 `json:"fullName"`
-	Email     string                 `json:"email"`
-	StudentID string                 `json:"studentId"`
-	Role      grouprole.RoleResponse `json:"role"`
+	ID         uuid.UUID              `json:"id"`
+	FullName   string                 `json:"fullName"`
+	Email      string                 `json:"email"`
+	StudentID  string                 `json:"studentId"`
+	Role       grouprole.RoleResponse `json:"role"`
+	OnlyInLDAP bool                   `json:"onlyInLDAP"`
+	UIDNumber  int64                  `json:"uidNumber,omitempty"`
+	UID        string                 `json:"uid,omitempty"`
 }
 
 type AddMembersRequest struct {

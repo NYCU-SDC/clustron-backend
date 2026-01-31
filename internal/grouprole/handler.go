@@ -17,8 +17,8 @@ import (
 //go:generate mockery --name=Store
 type Store interface {
 	GetAll(ctx context.Context) ([]GroupRole, error)
-	Create(ctx context.Context, params CreateParams) (GroupRole, error)
-	Update(ctx context.Context, params UpdateParams) (GroupRole, error)
+	Create(ctx context.Context, roleName string, level AccessLevel) (GroupRole, error)
+	Update(ctx context.Context, id uuid.UUID, roleName string, level AccessLevel) (GroupRole, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -72,7 +72,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		rolesResponse[i] = RoleResponse{
 			ID:          role.ID.String(),
 			RoleName:    role.RoleName,
-			AccessLevel: role.AccessLevel,
+			AccessLevel: string(role.AccessLevel),
 		}
 	}
 
@@ -91,7 +91,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdRole, err := h.store.Create(traceCtx, CreateParams(req))
+	createdRole, err := h.store.Create(traceCtx, req.RoleName, AccessLevel(req.AccessLevel))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -100,7 +100,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	createdRoleResponse := RoleResponse{
 		ID:          createdRole.ID.String(),
 		RoleName:    createdRole.RoleName,
-		AccessLevel: createdRole.AccessLevel,
+		AccessLevel: string(createdRole.AccessLevel),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, createdRoleResponse)
@@ -129,11 +129,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedRole, err := h.store.Update(traceCtx, UpdateParams{
-		ID:          roleID,
-		RoleName:    req.RoleName,
-		AccessLevel: req.AccessLevel,
-	})
+	updatedRole, err := h.store.Update(traceCtx, roleID, req.RoleName, AccessLevel(req.AccessLevel))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

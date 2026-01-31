@@ -2,9 +2,10 @@ package ldap
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 const (
@@ -290,7 +291,7 @@ func TestClient_GetUsedGidNumbers(t *testing.T) {
 				require.NoError(t, client.CreateGroup(fmt.Sprintf("group_%s", gid), gid, []string{}))
 			}
 
-			gids, err := client.GetUsedGidNumbers()
+			gids, err := client.GetAllGIDNumbers()
 			require.NoError(t, err)
 
 			for _, gid := range tc.expectedGIDs {

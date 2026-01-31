@@ -57,6 +57,7 @@ type Querier interface {
 	CreatePublicKey(ctx context.Context, arg CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
+	GetAllUserInfoByUIDNumber(ctx context.Context, uidNumbers []int64) ([]GetAllUserInfoByUIDNumberRow, error)
 }
 
 type MembershipService interface {
@@ -193,6 +194,32 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 	}
 
 	return ldapUserInfo, nil
+}
+
+func (s *Service) GetAllUserByUIDNumber(ctx context.Context, uidNumbers []int64) (map[int64]User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAllUserIDByUIDNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	userIDs, err := s.query.GetAllUserInfoByUIDNumber(ctx, uidNumbers)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "uid_number", fmt.Sprint(uidNumbers), logger, "get all user IDs by UID numbers")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	userMap := make(map[int64]User)
+	for _, row := range userIDs {
+		userMap[row.UidNumber] = User{
+			ID:        row.ID,
+			Email:     row.Email,
+			FullName:  row.FullName,
+			StudentID: row.StudentID,
+			Role:      row.Role,
+		}
+	}
+
+	return userMap, nil
 }
 
 func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error) {

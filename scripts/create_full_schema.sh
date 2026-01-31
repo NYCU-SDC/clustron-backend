@@ -61,7 +61,7 @@ sql:
 EOF
 
 # Find all directories containing queries.sql and generate config
-find ./internal -maxdepth 2 -type f -name "queries.sql" | while read -r QUERY_FILE; do
+find ./internal -maxdepth 3 -type f -name "queries.sql" | while read -r QUERY_FILE; do
     # Get the package directory name
     PACKAGE_DIR=$(dirname "$QUERY_FILE")
     PACKAGE_NAME=$(basename "$PACKAGE_DIR")
