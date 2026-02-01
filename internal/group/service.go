@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
@@ -39,7 +40,7 @@ type MembershipStore interface {
 	HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
 	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
-	UpdateRole(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) error
+	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) (membership.MemberResponse, error)
 }
 
 type UserStore interface {
@@ -893,11 +894,11 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 		return grouprole.UserScope{}, err
 	}
 
-	err = s.memberStore.UpdateRole(traceCtx, groupID, newOwnerID, uuid.MustParse(grouprole.RoleOwner.String()))
+	_, err = s.memberStore.Update(traceCtx, groupID, newOwnerID, uuid.MustParse(grouprole.RoleOwner.String()))
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}
-	err = s.memberStore.UpdateRole(traceCtx, groupID, oldOwnerID, uuid.MustParse(grouprole.RoleStudent.String()))
+	_, err = s.memberStore.Update(traceCtx, groupID, oldOwnerID, uuid.MustParse(grouprole.RoleStudent.String()))
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}

@@ -899,43 +899,6 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 	}, nil
 }
 
-func (s *Service) UpdateRole(ctx context.Context, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) error {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateRole")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	// check if the user has access to the group (group owner or group admin)
-	if !s.HasGroupControlAccess(traceCtx, groupId) {
-		logger.Warn("The user's access is not allowed to control this group")
-		return handlerutil.ErrForbidden
-	}
-
-	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, groupId, role) {
-		logger.Warn("The user's access is not allowed to update this member")
-		return handlerutil.ErrForbidden
-	}
-
-	_, err := s.queries.UpdateRole(ctx, UpdateRoleParams{
-		GroupID: groupId,
-		UserID:  userId,
-		RoleID:  role,
-	})
-	if err != nil {
-		span.RecordError(err)
-		return databaseutil.WrapDBErrorWithKeyValue(
-			err,
-			"memberships",
-			"group_id/user_id",
-			fmt.Sprintf("%s/%s", groupId, userId),
-			logger,
-			"failed to update membership",
-		)
-	}
-
-	return err
-}
-
 func (s *Service) CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByRole")
 	defer span.End()
