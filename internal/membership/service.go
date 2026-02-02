@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
+	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
@@ -683,52 +684,28 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		span.RecordError(err)
 		return MemberResponse{}, err
 	}
-	defer func(q pgx.Tx, ctx context.Context) {
-		err := q.Rollback(ctx)
+	defer func(tx pgx.Tx, ctx context.Context) {
+		err := tx.Rollback(ctx)
 		if err != nil {
 			logger.Warn("failed to rollback transaction", zap.Error(err))
 		}
 	}(tx, ctx)
 
-	queries := s.queries.WithTx(tx)
-
-	oldMembership, err := queries.GetByUser(traceCtx, GetByUserParams{
-		UserID:  userId,
-		GroupID: groupId,
-	})
+	updatedMembership, err := s.updateRole(traceCtx, tx, groupId, userId, role)
 	if err != nil {
-		span.RecordError(err)
-		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
-			err,
-			"memberships",
-			"group_id/user_id",
-			fmt.Sprintf("%s/%s", groupId, userId),
-			logger,
-			"failed to get membership",
-		)
-	}
-
-	oldRoleInfo, err := s.groupRoleStore.GetByID(traceCtx, oldMembership.RoleID)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to get old group role")
-		span.RecordError(err)
 		return MemberResponse{}, err
 	}
 
-	updatedMembership, err := queries.UpdateRole(ctx, UpdateRoleParams{
-		GroupID: groupId,
-		UserID:  userId,
-		RoleID:  role,
-	})
+	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
 	if err != nil {
 		span.RecordError(err)
 		return MemberResponse{}, databaseutil.WrapDBErrorWithKeyValue(
 			err,
-			"memberships",
-			"group_id/user_id",
-			fmt.Sprintf("%s/%s", groupId, userId),
+			"settings",
+			"user_id",
+			userId.String(),
 			logger,
-			"failed to update membership",
+			"failed to get ldap user info",
 		)
 	}
 
@@ -758,126 +735,8 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		)
 	}
 
-	baseCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupId)
+	err = tx.Commit(ctx)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP base group CN by group ID")
-		logger.Error("get ldap base group cn failed", zap.Error(err))
-		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-
-	adminCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupId)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP admin group CN by group ID")
-		logger.Error("get ldap admin group cn failed", zap.Error(err))
-		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-
-	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userId.String(), logger, "failed to get ldap user info")
-		logger.Error("get ldap user info failed", zap.Error(err))
-		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-
-	saga := internal.NewSaga(s.logger)
-
-	if oldRoleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() && roleInfo.AccessLevel == grouprole.AccessLevelUser.String() {
-		// Remove from admin group, add to base group
-		saga.AddStep(internal.SagaStep{
-			Name: "RemoveUserFromLDAPAdminGroup",
-			Action: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-		})
-
-		saga.AddStep(internal.SagaStep{
-			Name: "AddUserToLDAPBaseGroup",
-			Action: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-		})
-	}
-
-	if oldRoleInfo.AccessLevel == grouprole.AccessLevelUser.String() && roleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() {
-		// Remove from base group, add to admin group
-		saga.AddStep(internal.SagaStep{
-			Name: "RemoveUserFromLDAPBaseGroup",
-			Action: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-		})
-
-		saga.AddStep(internal.SagaStep{
-			Name: "AddUserToLDAPAdminGroup",
-			Action: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
-				if err != nil {
-					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
-					return err
-				}
-				return nil
-			},
-		})
-	}
-
-	err = saga.Execute(ctx)
-	if err != nil {
-		logger.Error("saga execution failed", zap.Error(err))
-		span.RecordError(err)
-		return MemberResponse{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
 		logger.Error("commit transaction failed", zap.Error(err))
 		span.RecordError(err)
 		return MemberResponse{}, err
@@ -897,6 +756,276 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 			AccessLevel: roleResponse.AccessLevel,
 		},
 	}, nil
+}
+
+func (s *Service) updateRole(ctx context.Context, tx pgx.Tx, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) (Membership, error) {
+	traceCtx, span := s.tracer.Start(ctx, "updateRole")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	queries := s.queries.WithTx(tx)
+
+	oldMembership, err := queries.GetByUser(traceCtx, GetByUserParams{
+		UserID:  userId,
+		GroupID: groupId,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"memberships",
+			"group_id/user_id",
+			fmt.Sprintf("%s/%s", groupId, userId),
+			logger,
+			"failed to get membership",
+		)
+	}
+
+	oldRoleInfo, err := s.groupRoleStore.GetByID(traceCtx, oldMembership.RoleID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to get old group role")
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	updatedMembership, err := queries.UpdateRole(ctx, UpdateRoleParams{
+		GroupID: groupId,
+		UserID:  userId,
+		RoleID:  role,
+	})
+	if err != nil {
+		span.RecordError(err)
+		return Membership{}, databaseutil.WrapDBErrorWithKeyValue(
+			err,
+			"memberships",
+			"group_id/user_id",
+			fmt.Sprintf("%s/%s", groupId, userId),
+			logger,
+			"failed to update membership",
+		)
+	}
+
+	baseCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP base group CN by group ID")
+		logger.Error("get ldap base group cn failed", zap.Error(err))
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	adminCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP admin group CN by group ID")
+		logger.Error("get ldap admin group cn failed", zap.Error(err))
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	ldapUserInfo, err := s.settingStore.GetLDAPUserInfoByUserID(traceCtx, userId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "settings", "user_id", userId.String(), logger, "failed to get ldap user info")
+		logger.Error("get ldap user info failed", zap.Error(err))
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	saga := internal.NewSaga(s.logger)
+
+	if (oldRoleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() || oldRoleInfo.AccessLevel == grouprole.AccessLevelOwner.String()) && roleInfo.AccessLevel == grouprole.AccessLevelUser.String() {
+		// Remove from admin group, add to base group
+		saga.AddStep(internal.SagaStep{
+			Name: "RemoveUserFromLDAPAdminGroup",
+			Action: func(ctx context.Context) error {
+				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+
+		saga.AddStep(internal.SagaStep{
+			Name: "AddUserToLDAPBaseGroup",
+			Action: func(ctx context.Context) error {
+				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+	}
+
+	if oldRoleInfo.AccessLevel == grouprole.AccessLevelUser.String() && (roleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() || roleInfo.AccessLevel == grouprole.AccessLevelOwner.String()) {
+		// Remove from base group, add to admin group
+		saga.AddStep(internal.SagaStep{
+			Name: "RemoveUserFromLDAPBaseGroup",
+			Action: func(ctx context.Context) error {
+				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+
+		saga.AddStep(internal.SagaStep{
+			Name: "AddUserToLDAPAdminGroup",
+			Action: func(ctx context.Context) error {
+				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
+					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+	}
+
+	err = saga.Execute(ctx)
+	if err != nil {
+		logger.Error("saga execution failed", zap.Error(err))
+		span.RecordError(err)
+		return Membership{}, err
+	}
+
+	return updatedMembership, nil
+}
+
+func (s *Service) TransferOwnership(ctx context.Context, groupID uuid.UUID, oldOwnerUserID, newOwnerUserID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "TransferOwnership")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	membership, err := s.queries.GetByUser(traceCtx, GetByUserParams{
+		UserID:  newOwnerUserID,
+		GroupID: groupID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// check if the user has access to the group (group owner or group admin)
+	if !s.HasGroupControlAccess(traceCtx, groupID) {
+		logger.Warn("The user's access is not allowed to control this group")
+		return handlerutil.ErrForbidden
+	}
+
+	// check if the user's access_level is bigger than the target access_level
+	if !s.canAssignRole(traceCtx, groupID, membership.RoleID) {
+		logger.Warn("The user's access is not allowed to update this member")
+		return handlerutil.ErrForbidden
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		logger.Error("begin transaction failed", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func(tx pgx.Tx, ctx context.Context) {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			logger.Warn("failed to rollback transaction", zap.Error(err))
+		}
+	}(tx, ctx)
+
+	_, err = s.updateRole(traceCtx, tx, groupID, oldOwnerUserID, uuid.MustParse(grouprole.RoleStudent.String()))
+	if err != nil {
+		logger.Error("failed to downgrade old owner role", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	_, err = s.updateRole(traceCtx, tx, groupID, newOwnerUserID, uuid.MustParse(grouprole.RoleOwner.String()))
+	if err != nil {
+		logger.Error("failed to upgrade new owner role", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		logger.Error("commit transaction failed", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error) {

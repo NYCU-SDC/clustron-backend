@@ -4,7 +4,6 @@ import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
-	"clustron-backend/internal/membership"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
@@ -40,7 +39,7 @@ type MembershipStore interface {
 	HasGroupControlAccess(ctx context.Context, groupId uuid.UUID) bool
 	GetByUser(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, error)
 	GetOwnerByGroupID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error)
-	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, roleID uuid.UUID) (membership.MemberResponse, error)
+	TransferOwnership(ctx context.Context, groupID uuid.UUID, oldOwnerID uuid.UUID, newOwnerID uuid.UUID) error
 }
 
 type UserStore interface {
@@ -862,7 +861,7 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 		span.RecordError(err)
 		return grouprole.UserScope{}, err
 	}
-	if membership.AccessLevel != grouprole.AccessLevelOwner.String() || user.Role != role.Admin.String() {
+	if membership.AccessLevel != grouprole.AccessLevelOwner.String() && user.Role != role.Admin.String() {
 		err = fmt.Errorf("user %s is not the owner of group %s", user.ID.String(), groupID.String())
 		logger.Error("transfer owner failed", zap.Error(err))
 		span.RecordError(err)
@@ -894,12 +893,10 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 		return grouprole.UserScope{}, err
 	}
 
-	_, err = s.memberStore.Update(traceCtx, groupID, newOwnerID, uuid.MustParse(grouprole.RoleOwner.String()))
+	err = s.memberStore.TransferOwnership(traceCtx, groupID, oldOwnerID, newOwnerID)
 	if err != nil {
-		return grouprole.UserScope{}, err
-	}
-	_, err = s.memberStore.Update(traceCtx, groupID, oldOwnerID, uuid.MustParse(grouprole.RoleStudent.String()))
-	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "group_id", groupID.String(), logger, "transfer group ownership")
+		span.RecordError(err)
 		return grouprole.UserScope{}, err
 	}
 
