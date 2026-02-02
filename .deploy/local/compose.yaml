@@ -44,3 +44,11 @@ services:
       retries: 5
     ports:
       - "6379:6379"
+
+  # optional
+  ldap_admin:
+    image: osixia/phpldapadmin
+    ports:
+      - "6443:443"
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "#PYTHON2BASH:[{'ldap': [{'server': [{'tls': False}]},{'login': [{'bind_id': 'cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club'},{'bind_pass': 'password'}]}]}]"
