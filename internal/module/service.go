@@ -29,7 +29,7 @@ func NewService(logger *zap.Logger, dbConn DBTX) *Service {
 	}
 }
 
-func (s *Service) Create(ctx context.Context, title string, description string, environment []byte) (Module, error) {
+func (s *Service) Create(ctx context.Context, userID uuid.UUID, title string, description string, environment []byte) (Module, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 
@@ -37,6 +37,7 @@ func (s *Service) Create(ctx context.Context, title string, description string, 
 	desc := pgtype.Text{String: description, Valid: description != ""}
 
 	module, err := s.queries.CreateModule(traceCtx, CreateModuleParams{
+		UserID:      userID,
 		Title:       title,
 		Description: desc,
 		Environment: environment,
@@ -70,16 +71,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Module, error) {
 	return module, nil
 }
 
-func (s *Service) ListPaged(ctx context.Context, page int, size int) ([]Module, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ListPaged")
+func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Module, error) {
+	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	limit := int32(size)
-	offset := int32(page * size)
-	params := ListModulesParams{Size: limit, Skip: offset}
-
-	modules, err := s.queries.ListModules(traceCtx, params)
+	modules, err := s.queries.ListModules(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to list modules")
 		span.RecordError(err)
@@ -88,7 +85,7 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int) ([]Module, 
 	return modules, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, title string, description string, environment []byte) (Module, error) {
+func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, title string, description string, environment []byte) (Module, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -97,6 +94,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, title string, descri
 
 	updatedModule, err := s.queries.UpdateModule(traceCtx, UpdateModuleParams{
 		ID:          id,
+		UserID:      userID,
 		Title:       title,
 		Description: desc,
 		Environment: environment,
@@ -110,12 +108,15 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, title string, descri
 	return updatedModule, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "Delete")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if err := s.queries.DeleteModule(traceCtx, id); err != nil {
+	if err := s.queries.DeleteModule(traceCtx, DeleteModuleParams{
+		ID:     id,
+		UserID: userID,
+	}); err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "modules", "id", id.String(), logger, "failed to delete module")
 		span.RecordError(err)
 		return err

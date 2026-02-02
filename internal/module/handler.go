@@ -3,8 +3,8 @@ package module
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strconv"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -17,30 +17,34 @@ import (
 	"go.uber.org/zap"
 )
 
+type EnvironmentItem struct {
+	Key   string `json:"key" validate:"required"`
+	Value string `json:"value" validate:"required"`
+}
 type CreateRequest struct {
-	Title       string          `json:"title" validate:"required,max=100"`
-	Description string          `json:"description"`
-	Environment json.RawMessage `json:"environment"`
+	Title       string            `json:"title" validate:"required,max=100"`
+	Description string            `json:"description"`
+	Environment []EnvironmentItem `json:"environment" validate:"dive"`
 }
 
 type UpdateRequest struct {
-	Title       string          `json:"title" validate:"required,max=100"`
-	Description string          `json:"description"`
-	Environment json.RawMessage `json:"environment"`
+	Title       string            `json:"title" validate:"required,max=100"`
+	Description string            `json:"description"`
+	Environment []EnvironmentItem `json:"environment" validate:"dive"`
 }
 
 type Response struct {
-	ID          string          `json:"id"`
-	Title       string          `json:"title"`
-	Environment json.RawMessage `json:"environment"`
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	Environment []EnvironmentItem `json:"environment"`
 }
 
 type Store interface {
-	Create(ctx context.Context, title string, description string, environment []byte) (Module, error)
+	Create(ctx context.Context, userID uuid.UUID, title string, description string, environment []byte) (Module, error)
 	Get(ctx context.Context, id uuid.UUID) (Module, error)
-	ListPaged(ctx context.Context, page int, size int) ([]Module, error)
-	Update(ctx context.Context, id uuid.UUID, title string, description string, environment []byte) (Module, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	List(ctx context.Context, userID uuid.UUID) ([]Module, error)
+	Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, title string, description string, environment []byte) (Module, error)
+	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
 
 type Handler struct {
@@ -67,13 +71,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logger)
+		return
+	}
+
 	var req CreateRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	module, err := h.store.Create(traceCtx, req.Title, req.Description, req.Environment)
+	envBytes, err := json.Marshal(req.Environment)
+	if err != nil {
+		// 這種錯誤通常不會發生，但以防萬一
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	module, err := h.store.Create(traceCtx, userID, req.Title, req.Description, envBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -110,19 +127,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	pageStr := r.URL.Query().Get("page")
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		page = 0
+	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logger)
+		return
 	}
-
-	sizeStr := r.URL.Query().Get("size")
-	size, err := strconv.Atoi(sizeStr)
-	if err != nil || size <= 0 {
-		size = 10
-	}
-
-	modules, err := h.store.ListPaged(traceCtx, page, size)
+	modules, err := h.store.List(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -140,6 +150,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Update")
 	defer span.End()
 
+	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logutil.WithContext(traceCtx, h.logger))
+		return
+	}
+
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	idStr := r.PathValue("id")
@@ -155,7 +171,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	module, err := h.store.Update(traceCtx, id, req.Title, req.Description, req.Environment)
+	envBytes, err := json.Marshal(req.Environment)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	module, err := h.store.Update(traceCtx, id, userID, req.Title, req.Description, envBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -168,6 +190,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
 	defer span.End()
 
+	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logutil.WithContext(traceCtx, h.logger))
+		return
+	}
+
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	idStr := r.PathValue("id")
@@ -177,7 +205,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.Delete(traceCtx, id); err != nil {
+	if err := h.store.Delete(traceCtx, id, userID); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -186,9 +214,14 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func toResponse(m Module) Response {
+
+	var envItems []EnvironmentItem
+	if len(m.Environment) > 0 {
+		_ = json.Unmarshal(m.Environment, &envItems)
+	}
 	return Response{
 		ID:          m.ID.String(),
 		Title:       m.Title,
-		Environment: m.Environment,
+		Environment: envItems,
 	}
 }
