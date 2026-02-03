@@ -197,7 +197,7 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 	return ldapUserInfo, nil
 }
 
-func (s *Service) GetAllUserByUIDNumber(ctx context.Context, uidNumbers []int64) (map[int64]User, error) {
+func (s *Service) GetAllUserByUIDNumbers(ctx context.Context, uidNumbers []int64) (map[int64]User, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAllUserIDByUIDNumber")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)

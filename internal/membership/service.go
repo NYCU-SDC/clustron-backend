@@ -44,7 +44,7 @@ type UserStore interface {
 //go:generate mockery --name SettingStore
 type SettingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
-	GetAllUserByUIDNumber(ctx context.Context, uidNumbers []int64) (map[int64]setting.User, error)
+	GetAllUserByUIDNumbers(ctx context.Context, uidNumbers []int64) (map[int64]setting.User, error)
 }
 
 type GroupStore interface {
@@ -146,7 +146,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	processEntries(baseEntries)
 	processEntries(adminEntries)
 
-	dbUserMap, err := s.settingStore.GetAllUserByUIDNumber(traceCtx, allUIDNumbers)
+	dbUserMap, err := s.settingStore.GetAllUserByUIDNumbers(traceCtx, allUIDNumbers)
 	if err != nil {
 		logger.Warn("failed to fetch user IDs from DB, proceeding with LDAP data only", zap.Error(err))
 	}
