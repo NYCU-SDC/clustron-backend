@@ -942,7 +942,7 @@ func (s *Service) GetAvailableGIDNumber(ctx context.Context, excepts []string) (
 		return "", err
 	}
 
-	gidNumbersMap := make(map[int]bool)
+	gitNumberInUse := make(map[int]bool)
 	for _, gidStr := range excepts {
 		var gid int
 		_, err := fmt.Sscanf(gidStr, "%d", &gid)
@@ -950,7 +950,7 @@ func (s *Service) GetAvailableGIDNumber(ctx context.Context, excepts []string) (
 			logger.Warn("failed to parse gid number", zap.String("gidStr", gidStr), zap.Error(err))
 			continue
 		}
-		gidNumbersMap[gid] = true
+		gitNumberInUse[gid] = true
 	}
 
 	for _, gidStr := range gidNumbers {
@@ -960,11 +960,11 @@ func (s *Service) GetAvailableGIDNumber(ctx context.Context, excepts []string) (
 			logger.Warn("failed to parse gid number", zap.String("gidStr", gidStr), zap.Error(err))
 			continue
 		}
-		gidNumbersMap[gid] = true
+		gitNumberInUse[gid] = true
 	}
 
 	for uid := 10000; uid < 60000; uid++ {
-		if !gidNumbersMap[uid] {
+		if !gitNumberInUse[uid] {
 			return fmt.Sprintf("%d", uid), nil
 		}
 	}
