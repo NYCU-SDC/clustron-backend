@@ -1,4 +1,4 @@
-CREATE TYPE group_type AS ENUM ('Base', 'Admin');
+CREATE TYPE group_type AS ENUM ('BASE', 'ADMIN');
 
 CREATE TABLE IF NOT EXISTS ldap_groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
