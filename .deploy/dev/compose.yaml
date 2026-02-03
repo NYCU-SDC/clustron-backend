@@ -79,7 +79,7 @@ services:
       LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
       KEEP_EXISTING_CONFIG: "false"
     volumes:
-      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
     command: --copy-service --loglevel debug
     networks:
       - internal
