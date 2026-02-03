@@ -293,10 +293,12 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "testuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 				store.On("OnboardUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(false, nil).Once()
+				store.On("UpdatePassword", mock.Anything, mock.Anything, "str0ngpassword").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -305,6 +307,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "root",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -315,6 +318,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "12345678901234567890123456789012345678901234567890",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -325,6 +329,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "test user",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -335,6 +340,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "1testuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -345,6 +351,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "-testuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -355,6 +362,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "test:user",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -365,6 +373,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "test/user",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -375,6 +384,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "TestUser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -385,6 +395,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "",
+				Password:      "str0ngpassword",
 			},
 			setupMock:      func(store *mocks.Store) {},
 			expectedStatus: http.StatusBadRequest,
@@ -394,6 +405,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "",
 				LinuxUsername: "testuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock:      func(store *mocks.Store) {},
 			expectedStatus: http.StatusBadRequest,
@@ -403,6 +415,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "   ",
+				Password:      "str0ngpassword",
 			},
 			setupMock:      func(store *mocks.Store) {},
 			expectedStatus: http.StatusBadRequest,
@@ -412,6 +425,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "   ",
 				LinuxUsername: "testuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
@@ -422,6 +436,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "existuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 				store.On("IsLinuxUsernameExists", mock.Anything, "existuser").Return(true, nil).Once()
@@ -433,6 +448,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "erroruser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 				store.On("IsLinuxUsernameExists", mock.Anything, "erroruser").Return(false, assert.AnError).Once()
@@ -444,6 +460,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "failuser",
+				Password:      "str0ngpassword",
 			},
 			setupMock: func(store *mocks.Store) {
 				store.On("IsLinuxUsernameExists", mock.Anything, "failuser").Return(false, nil).Once()
