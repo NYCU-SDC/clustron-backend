@@ -552,41 +552,59 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		return Group{}, err
 	}
 
-	// Create LDAP Group
-	var ldapCleanUp []func()
+	saga := internal.NewSaga(s.logger)
 
-	err = s.ldapClient.CreateGroup(title, baseGIDNumber, []string{})
-	if err != nil {
-		logger.Error("failed to create group in LDAP", zap.Error(err))
-		span.RecordError(err)
-		performCleanUp(ldapCleanUp)
-		return Group{}, err
-	}
-	ldapCleanUp = append(ldapCleanUp, func() {
-		err := s.ldapClient.DeleteGroup(title)
-		if err != nil {
-			logger.Error("failed to delete group in LDAP", zap.Error(err))
-		}
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateLDAPBaseGroup",
+		Action: func(ctx context.Context) error {
+			// Create LDAP Group
+			err = s.ldapClient.CreateGroup(title, baseGIDNumber, []string{})
+			if err != nil {
+				logger.Error("failed to create group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.ldapClient.DeleteGroup(title)
+			if err != nil {
+				logger.Error("failed to delete group in LDAP", zap.Error(err))
+			}
+			return err
+		},
 	})
 
-	err = s.ldapClient.CreateGroup(adminCN, adminGIDNumber, []string{})
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateLDAPAdminGroup",
+		Action: func(ctx context.Context) error {
+			// Create LDAP Group
+			err = s.ldapClient.CreateGroup(title, adminCN, []string{})
+			if err != nil {
+				logger.Error("failed to create group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.ldapClient.DeleteGroup(adminCN)
+			if err != nil {
+				logger.Error("failed to delete group in LDAP", zap.Error(err))
+			}
+			return err
+		},
+	})
+
+	err = saga.Execute(traceCtx)
 	if err != nil {
-		logger.Error("failed to create group in LDAP", zap.Error(err))
-		span.RecordError(err)
-		performCleanUp(ldapCleanUp)
+		logger.Error("saga execution failed", zap.Error(err))
 		return Group{}, err
 	}
-	ldapCleanUp = append(ldapCleanUp, func() {
-		err := s.ldapClient.DeleteGroup(adminCN)
-		if err != nil {
-			logger.Error("failed to delete group in LDAP", zap.Error(err))
-		}
-	})
 
 	if err := tx.Commit(ctx); err != nil {
 		logger.Error("failed to commit transaction", zap.Error(err))
 		span.RecordError(err)
-		performCleanUp(ldapCleanUp)
 		return Group{}, err
 	}
 
@@ -1029,10 +1047,4 @@ func (s *Service) DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid
 	}
 
 	return nil
-}
-
-func performCleanUp(cleanUpFunc []func()) {
-	for i := len(cleanUpFunc) - 1; i >= 0; i-- {
-		cleanUpFunc[i]()
-	}
 }
