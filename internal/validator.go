@@ -15,14 +15,6 @@ func NewValidator() *validator.Validate {
 	return v
 }
 
-func ValidateStruct(v *validator.Validate, s interface{}) error {
-	err := v.Struct(s)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func validateRegex(fl validator.FieldLevel) bool {
 	pattern := fl.Param()
 
