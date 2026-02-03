@@ -13,9 +13,8 @@ type SagaStep struct {
 }
 
 type Saga struct {
-	Steps         []SagaStep
-	executedSteps []SagaStep
-	logger        *zap.Logger
+	Steps  []SagaStep
+	logger *zap.Logger
 }
 
 func NewSaga(logger *zap.Logger) *Saga {
@@ -29,34 +28,24 @@ func (s *Saga) AddStep(step SagaStep) {
 }
 
 func (s *Saga) Execute(ctx context.Context) error {
+	var executedSteps []SagaStep
 	for _, step := range s.Steps {
 		if err := step.Action(ctx); err != nil {
 			s.logger.Error("Saga step failed", zap.String("step", step.Name), zap.Error(err))
 
-			for i := len(s.executedSteps) - 1; i >= 0; i-- {
-				if s.executedSteps[i].Compensate == nil {
+			for i := len(executedSteps) - 1; i >= 0; i-- {
+				if executedSteps[i].Compensate == nil {
 					continue
 				}
-				if rollbackErr := s.executedSteps[i].Compensate(ctx); rollbackErr != nil {
-					s.logger.Error("Compensation step failed", zap.String("step", s.executedSteps[i].Name), zap.Error(rollbackErr))
+				if rollbackErr := executedSteps[i].Compensate(ctx); rollbackErr != nil {
+					s.logger.Error("Compensation step failed", zap.String("step", executedSteps[i].Name), zap.Error(rollbackErr))
 					return rollbackErr
 				}
 			}
 			return err
 		}
-		s.executedSteps = append(s.executedSteps, step)
+		executedSteps = append(executedSteps, step)
 	}
 
 	return nil
-}
-
-func (s *Saga) Rollback() {
-	for i := len(s.executedSteps) - 1; i >= 0; i-- {
-		if s.executedSteps[i].Compensate == nil {
-			continue
-		}
-		if err := s.executedSteps[i].Compensate(context.Background()); err != nil {
-			s.logger.Error("Compensation step failed during manual rollback", zap.String("step", s.executedSteps[i].Name), zap.Error(err))
-		}
-	}
 }
