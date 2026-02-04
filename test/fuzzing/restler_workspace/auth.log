@@ -1,0 +1,4 @@
+auth.py invoked, argv = ['/mnt/restler/auth.py', '474410d9-5eb9-4359-a469-4e5c7366f9ee']
+auth.py: get_access_token called with user_id = 474410d9-5eb9-4359-a469-4e5c7366f9ee
+auth.py: INTERNAL_LOGIN_URL = http://backend:8080/api/internal/login
+auth.py: HTTP status code = 200
