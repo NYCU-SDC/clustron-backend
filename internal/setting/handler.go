@@ -25,6 +25,7 @@ import (
 type OnboardingRequest struct {
 	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
+	Password      string `json:"password" validate:"required,min=8"`
 }
 
 type LoginMethod struct {
@@ -124,6 +125,10 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Linux Username cannot be empty"}, logger)
 		return
 	}
+	if !isValidPassword(request.Password) {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidPassword, logger)
+		return
+	}
 
 	// check if the linux username is valid first
 	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
@@ -133,6 +138,12 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.settingStore.UpdatePassword(traceCtx, user.ID, request.Password)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
