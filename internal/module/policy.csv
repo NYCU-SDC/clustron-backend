@@ -1,0 +1,5 @@
+p, user, /api/modules, GET
+p, user, /api/modules, POST
+p, user, /api/modules/:id, GET
+p, user, /api/modules/:id, PUT
+p, user, /api/modules/:id, DELETE
