@@ -72,7 +72,7 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 		rolesResponse[i] = RoleResponse{
 			ID:          role.ID.String(),
 			RoleName:    role.RoleName,
-			AccessLevel: string(role.AccessLevel),
+			AccessLevel: role.AccessLevel,
 		}
 	}
 
@@ -100,7 +100,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	createdRoleResponse := RoleResponse{
 		ID:          createdRole.ID.String(),
 		RoleName:    createdRole.RoleName,
-		AccessLevel: string(createdRole.AccessLevel),
+		AccessLevel: createdRole.AccessLevel,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, createdRoleResponse)
