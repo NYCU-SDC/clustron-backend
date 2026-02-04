@@ -10,6 +10,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 
+	"clustron-backend/internal/jwt"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -71,11 +72,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logger)
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+	userID := user.ID
 
 	var req CreateRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
@@ -85,7 +87,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	envBytes, err := json.Marshal(req.Environment)
 	if err != nil {
-		// 這種錯誤通常不會發生，但以防萬一
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -127,11 +128,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logger)
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+	userID := user.ID
+
 	modules, err := h.store.List(traceCtx, userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -150,11 +153,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Update")
 	defer span.End()
 
-	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logutil.WithContext(traceCtx, h.logger))
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		// 這裡原本有傳入 logutil.WithContext，現在統一用上面宣告的 logger 即可，或是照舊
+		h.problemWriter.WriteError(traceCtx, w, err, logutil.WithContext(traceCtx, h.logger))
 		return
 	}
+	userID := user.ID
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -179,10 +184,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	module, err := h.store.Update(traceCtx, id, userID, req.Title, req.Description, envBytes)
 	if err != nil {
+		if errors.Is(err, ErrPermissionDenied) {
+			h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrForbidden, logger)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-
 	handlerutil.WriteJSONResponse(w, http.StatusOK, toResponse(module))
 }
 
@@ -190,11 +198,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
 	defer span.End()
 
-	userID, ok := traceCtx.Value("user_id").(uuid.UUID)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, errors.New("unauthorized: user id not found"), logutil.WithContext(traceCtx, h.logger))
+	user, err := jwt.GetUserFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logutil.WithContext(traceCtx, h.logger))
 		return
 	}
+	userID := user.ID
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -206,6 +215,11 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Delete(traceCtx, id, userID); err != nil {
+
+		if errors.Is(err, ErrPermissionDenied) {
+			h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrForbidden, logger)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

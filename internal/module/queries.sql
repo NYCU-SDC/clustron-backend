@@ -6,10 +6,14 @@ INSERT INTO modules (
     title,
     description,
     environment
-) VALUES (
-             $1, $2, $3, $4
-         )
-    RETURNING *;
+)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
+RETURNING *;
 
 -- name: GetModule :one
 SELECT *

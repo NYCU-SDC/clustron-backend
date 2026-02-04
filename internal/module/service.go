@@ -15,6 +15,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ErrPermissionDenied = errors.New("permission denied: user does not own this module")
+)
+
 type Service struct {
 	logger  *zap.Logger
 	tracer  trace.Tracer
@@ -90,6 +94,20 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, ti
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	existingModule, err := s.queries.GetModule(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "modules", "id", id.String(), logger, "failed to get module for update check")
+		span.RecordError(err)
+		return Module{}, err
+	}
+
+	if existingModule.UserID != userID {
+		logger.Warn("user attempted to update module they do not own",
+			zap.String("user_id", userID.String()),
+			zap.String("module_owner", existingModule.UserID.String()))
+		return Module{}, ErrPermissionDenied
+	}
+
 	desc := pgtype.Text{String: description, Valid: description != ""}
 
 	updatedModule, err := s.queries.UpdateModule(traceCtx, UpdateModuleParams{
@@ -112,6 +130,20 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) er
 	traceCtx, span := s.tracer.Start(ctx, "Delete")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	existingModule, err := s.queries.GetModule(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "modules", "id", id.String(), logger, "failed to get module for delete check")
+		span.RecordError(err)
+		return err
+	}
+
+	if existingModule.UserID != userID {
+		logger.Warn("user attempted to delete module they do not own",
+			zap.String("user_id", userID.String()),
+			zap.String("module_owner", existingModule.UserID.String()))
+		return ErrPermissionDenied
+	}
 
 	if err := s.queries.DeleteModule(traceCtx, DeleteModuleParams{
 		ID:     id,
