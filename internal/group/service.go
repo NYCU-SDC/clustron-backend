@@ -458,8 +458,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "create", userID.String(), logger, "failed to create group")
-		logger.Error("failed to create group", zap.Error(err))
+		logger.Error("begin transaction failed", zap.Error(err))
 		span.RecordError(err)
 		return Group{}, err
 	}
