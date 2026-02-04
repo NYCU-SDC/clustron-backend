@@ -447,7 +447,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
 				LinuxUsername: "testuser",
-				Password:      "noletters",
+				Password:      "12345678",
 			},
 			setupMock: func(store *mocks.Store) {
 			},
