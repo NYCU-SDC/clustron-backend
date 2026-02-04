@@ -432,6 +432,50 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
+			name: "Should block password with no numbers",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testuser",
+				Password:      "nonumbers",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block password with no letters",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testuser",
+				Password:      "noletters",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block password with length less than 8",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testuser",
+				Password:      "len<8",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should block empty password",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testuser",
+				Password:      "",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
 			name: "Should block if linux username already exists",
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
