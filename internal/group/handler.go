@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
@@ -77,7 +78,7 @@ type CreateResponse struct {
 }
 
 type CreateRequest struct {
-	Title       string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?$"`
+	Title       string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
 	Links       []CreateLinkRequest
@@ -247,7 +248,9 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.Create(traceCtx, user.ID, request.Title, request.Description)
+	titleStr := strings.ReplaceAll(request.Title, " ", "-")
+
+	group, err := h.store.Create(traceCtx, user.ID, titleStr, request.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
