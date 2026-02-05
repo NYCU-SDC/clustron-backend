@@ -119,8 +119,8 @@ DELETE FROM links WHERE id = $1;
 
 -- name: CreateLDAPBaseGroup :one
 INSERT INTO ldap_groups (group_id, ldap_cn, type, gid_number)
-VALUES ($1, $2, 'Base', $3) RETURNING *;
+VALUES ($1, $2, 'BASE', $3) RETURNING *;
 
 -- name: CreateLDAPAdminGroup :one
 INSERT INTO ldap_groups (group_id, ldap_cn, type, gid_number)
-VALUES ($1, $2, 'Admin', $3) RETURNING *;
+VALUES ($1, $2, 'ADMIN', $3) RETURNING *;
