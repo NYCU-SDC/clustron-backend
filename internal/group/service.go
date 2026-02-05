@@ -578,7 +578,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		Name: "CreateLDAPAdminGroup",
 		Action: func(ctx context.Context) error {
 			// Create LDAP Group
-			err = s.ldapClient.CreateGroup(title, adminCN, []string{})
+			err = s.ldapClient.CreateGroup(adminCN, adminGIDNumber, []string{})
 			if err != nil {
 				logger.Error("failed to create group in LDAP", zap.Error(err))
 				span.RecordError(err)
