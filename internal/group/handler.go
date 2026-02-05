@@ -7,13 +7,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -31,7 +31,7 @@ type MemberStore interface {
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
-	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
+	Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error)
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -78,7 +78,7 @@ type CreateResponse struct {
 }
 
 type CreateRequest struct {
-	Title       string                        `json:"title" validate:"required"`
+	Title       string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
 	Links       []CreateLinkRequest
@@ -248,10 +248,9 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.Create(traceCtx, user.ID, CreateParams{
-		Title:       request.Title,
-		Description: pgtype.Text{String: request.Description, Valid: true},
-	})
+	titleStr := strings.ReplaceAll(request.Title, " ", "-")
+
+	group, err := h.store.Create(traceCtx, user.ID, titleStr, request.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

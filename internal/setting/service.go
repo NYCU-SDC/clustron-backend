@@ -57,6 +57,7 @@ type Querier interface {
 	CreatePublicKey(ctx context.Context, arg CreatePublicKeyParams) (PublicKey, error)
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
+	GetAllUserInfoByUIDNumber(ctx context.Context, uidNumbers []int64) ([]GetAllUserInfoByUIDNumberRow, error)
 }
 
 type MembershipService interface {
@@ -165,21 +166,21 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	ldapUID, err := s.query.GetUIDByUserID(ctx, userID)
+	ldapUIDNumber, err := s.query.GetUIDByUserID(ctx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "get setting by user id")
 		span.RecordError(err)
 		return LDAPUserInfo{}, err
 	}
 
-	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUID)
+	ldapEntry, err := s.ldapClient.GetUserInfoByUIDNumber(ldapUIDNumber)
 	if err != nil {
 		if errors.Is(err, ldaputil.ErrUserNotFound) {
-			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID))
+			logger.Warn("LDAP user not found", zap.String("userID", userID.String()), zap.Int64("ldapUIDNumber", ldapUIDNumber))
 			return LDAPUserInfo{}, err
 		}
 		err = fmt.Errorf("failed to get LDAP user info by UID: %w", err)
-		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUID", ldapUID), zap.Error(err))
+		logger.Error("failed to get LDAP user info", zap.String("userID", userID.String()), zap.Int64("ldapUIDNumber", ldapUIDNumber), zap.Error(err))
 		span.RecordError(err)
 		return LDAPUserInfo{}, err
 	}
@@ -188,11 +189,38 @@ func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID)
 	publicKeys := ldapEntry.GetAttributeValues("sshPublicKey")
 
 	ldapUserInfo := LDAPUserInfo{
+		UIDNumber: ldapUIDNumber,
 		Username:  username,
 		PublicKey: publicKeys,
 	}
 
 	return ldapUserInfo, nil
+}
+
+func (s *Service) GetAllUserByUIDNumbers(ctx context.Context, uidNumbers []int64) (map[int64]User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAllUserIDByUIDNumber")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	userIDs, err := s.query.GetAllUserInfoByUIDNumber(ctx, uidNumbers)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "uid_number", fmt.Sprint(uidNumbers), logger, "get all user IDs by UID numbers")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	userMap := make(map[int64]User)
+	for _, row := range userIDs {
+		userMap[row.UidNumber] = User{
+			ID:        row.ID,
+			Email:     row.Email,
+			FullName:  row.FullName,
+			StudentID: row.StudentID,
+			Role:      row.Role,
+		}
+	}
+
+	return userMap, nil
 }
 
 func (s *Service) GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error) {

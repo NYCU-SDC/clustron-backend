@@ -3,6 +3,7 @@ package ldap
 import (
 	"errors"
 	"fmt"
+
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
 )
@@ -177,7 +178,7 @@ func (c *Client) GetGroupsForUser(uid string) ([]*ldap.Entry, error) {
 	return result.Entries, nil
 }
 
-func (c *Client) GetUsedGidNumbers() ([]string, error) {
+func (c *Client) GetAllGIDNumbers() ([]string, error) {
 	base := "ou=Groups," + c.Config.LDAPBaseDN
 	filter := "(gidNumber=*)"
 	attributes := []string{"gidNumber"}
