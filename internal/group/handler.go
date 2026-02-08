@@ -403,7 +403,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != grouprole.AccessLevelAdmin.String() {
 		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
