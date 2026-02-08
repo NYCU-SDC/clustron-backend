@@ -23,7 +23,11 @@ func NewHandler(logger *zap.Logger, service *user.Service, problemWriter *proble
 	}
 }
 
-type SystemInfoResponse struct {
+type Response struct {
+	Progress Progress `json:"progress"`
+}
+
+type Progress struct {
 	AdminAccountCreated bool `json:"adminAccountCreated"`
 }
 
@@ -34,7 +38,9 @@ func (h *Handler) GetSystemInfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, SystemInfoResponse{
-		AdminAccountCreated: adminExists,
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		Progress: Progress{
+			AdminAccountCreated: adminExists,
+		},
 	})
 }
