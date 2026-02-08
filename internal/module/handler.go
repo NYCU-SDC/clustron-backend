@@ -155,7 +155,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	user, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
-		// 這裡原本有傳入 logutil.WithContext，現在統一用上面宣告的 logger 即可，或是照舊
 		h.problemWriter.WriteError(traceCtx, w, err, logutil.WithContext(traceCtx, h.logger))
 		return
 	}
