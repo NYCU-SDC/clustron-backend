@@ -3,12 +3,13 @@ package auth
 import (
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
+	"net/http"
+
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 //go:generate mockery --name CasbinEnforcer

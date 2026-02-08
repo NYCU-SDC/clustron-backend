@@ -47,6 +47,23 @@ SELECT EXISTS (
     WHERE group_id = $1 AND user_id = $2
 ) AS exists;
 
+-- name: GetAll :many
+SELECT
+    m.group_id,
+    m.user_id,
+    u.full_name,
+    u.email,
+    u.student_id,
+    m.role_id,
+    gr.role_name,
+    gr.access_level,
+    l.uid_number
+FROM memberships AS m
+JOIN group_role AS gr ON gr.id = m.role_id
+JOIN users AS u ON u.id = m.user_id
+LEFT JOIN ldap_user AS l ON l.id = u.id
+WHERE group_id = $1;
+
 -- name: GetByUser :one
 SELECT
     m.user_id,

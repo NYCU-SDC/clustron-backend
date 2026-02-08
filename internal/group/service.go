@@ -52,6 +52,11 @@ type SettingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
+type LDAPGroupStore interface {
+	GetLDAPBaseGroupCNByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
+	GetLDAPAdminGroupCNByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
+}
+
 type LDAPClient interface {
 	CreateGroup(groupName string, gidNumber string, memberUids []string) error
 	DeleteGroup(groupName string) error
@@ -61,28 +66,30 @@ type LDAPClient interface {
 }
 
 type Service struct {
-	logger       *zap.Logger
-	tracer       trace.Tracer
-	queries      *Queries
-	db           *pgxpool.Pool
-	userStore    UserStore
-	roleStore    RoleStore
-	settingStore SettingStore
-	memberStore  MembershipStore
-	ldapClient   LDAPClient
+	logger         *zap.Logger
+	tracer         trace.Tracer
+	queries        *Queries
+	db             *pgxpool.Pool
+	userStore      UserStore
+	roleStore      RoleStore
+	settingStore   SettingStore
+	memberStore    MembershipStore
+	ldapGroupStore LDAPGroupStore
+	ldapClient     LDAPClient
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapClient LDAPClient) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient) *Service {
 	return &Service{
-		logger:       logger,
-		tracer:       otel.Tracer("group/service"),
-		queries:      New(db),
-		db:           db,
-		userStore:    userStore,
-		roleStore:    roleStore,
-		settingStore: settingStore,
-		memberStore:  membershipStore,
-		ldapClient:   ldapClient,
+		logger:         logger,
+		tracer:         otel.Tracer("group/service"),
+		queries:        New(db),
+		db:             db,
+		userStore:      userStore,
+		roleStore:      roleStore,
+		settingStore:   settingStore,
+		memberStore:    membershipStore,
+		ldapGroupStore: ldapGroupStore,
+		ldapClient:     ldapClient,
 	}
 }
 
@@ -622,6 +629,22 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		members []Membership
 	)
 
+	baseCN, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP base group CN by group ID")
+		logger.Error("failed to get LDAP base group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Group{}, err
+	}
+
+	adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP admin group CN by group ID")
+		logger.Error("failed to get LDAP admin group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Group{}, err
+	}
+
 	members, err = s.queries.GetMembersByGroupID(ctx, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get members by group id")
@@ -663,12 +686,29 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 					return err
 				}
 
-				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), ldapUserInfo.Username)
+				memberRole, err := s.memberStore.GetByUser(ctx, member.UserID, groupID)
 				if err != nil {
-					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+					err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", member.UserID.String(), logger, "failed to get user membership")
 					span.RecordError(err)
 					return err
 				}
+
+				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("remove user from LDAP group failed", zap.String("group", baseCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+					span.RecordError(err)
+					return err
+				}
+
+				if memberRole.AccessLevel == grouprole.AccessLevelAdmin.String() || memberRole.AccessLevel == grouprole.AccessLevelOwner.String() {
+					err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+					if err != nil {
+						logger.Error("remove user from LDAP admin group failed", zap.String("group", adminCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+						span.RecordError(err)
+						return err
+					}
+				}
+
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
@@ -679,9 +719,25 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 					return err
 				}
 
-				err = s.ldapClient.AddUserToGroup(group.ID.String(), ldapUserInfo.Username)
+				memberRole, err := s.memberStore.GetByUser(ctx, member.UserID, groupID)
 				if err != nil {
-					logger.Error("add user back to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+					err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", member.UserID.String(), logger, "failed to get user membership")
+					span.RecordError(err)
+					return err
+				}
+
+				if memberRole.AccessLevel == grouprole.AccessLevelAdmin.String() || memberRole.AccessLevel == grouprole.AccessLevelOwner.String() {
+					err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+					if err != nil {
+						logger.Error("add user back to LDAP admin group failed", zap.String("group", adminCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+						span.RecordError(err)
+						return err
+					}
+				}
+
+				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("add user back to LDAP group failed", zap.String("group", baseCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
@@ -709,6 +765,22 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 		err     error
 		members []Membership
 	)
+
+	baseCN, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP base group CN by group ID")
+		logger.Error("failed to get LDAP base group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Group{}, err
+	}
+
+	adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP admin group CN by group ID")
+		logger.Error("failed to get LDAP admin group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Group{}, err
+	}
 
 	members, err = s.queries.GetMembersByGroupID(ctx, groupID)
 	if err != nil {
@@ -751,9 +823,25 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 					return err
 				}
 
-				err = s.ldapClient.AddUserToGroup(group.ID.String(), ldapUserInfo.Username)
+				memberRole, err := s.memberStore.GetByUser(ctx, member.UserID, groupID)
 				if err != nil {
-					logger.Error("add user to LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+					err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", member.UserID.String(), logger, "failed to get user membership")
+					span.RecordError(err)
+					return err
+				}
+
+				if memberRole.AccessLevel == grouprole.AccessLevelAdmin.String() || memberRole.AccessLevel == grouprole.AccessLevelOwner.String() {
+					err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+					if err != nil {
+						logger.Error("add user to LDAP admin group failed", zap.String("group", adminCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+						span.RecordError(err)
+						return err
+					}
+				}
+
+				err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("add user to LDAP group failed", zap.String("group", baseCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
@@ -767,9 +855,25 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 					return err
 				}
 
-				err = s.ldapClient.RemoveUserFromGroup(group.ID.String(), ldapUserInfo.Username)
+				memberRole, err := s.memberStore.GetByUser(ctx, member.UserID, groupID)
 				if err != nil {
-					logger.Error("remove user from LDAP group failed", zap.String("group", group.ID.String()), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+					err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id", member.UserID.String(), logger, "failed to get user membership")
+					span.RecordError(err)
+					return err
+				}
+
+				if memberRole.AccessLevel == grouprole.AccessLevelAdmin.String() || memberRole.AccessLevel == grouprole.AccessLevelOwner.String() {
+					err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+					if err != nil {
+						logger.Error("remove user from LDAP admin group failed", zap.String("group", adminCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
+						span.RecordError(err)
+						return err
+					}
+				}
+
+				err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+				if err != nil {
+					logger.Error("remove user from LDAP group failed", zap.String("group", baseCN), zap.String("user", ldapUserInfo.Username), zap.Error(err))
 					span.RecordError(err)
 					return err
 				}
