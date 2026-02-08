@@ -3,7 +3,6 @@ package module
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -11,6 +10,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 
 	"clustron-backend/internal/jwt"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -184,10 +184,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	module, err := h.store.Update(traceCtx, id, userID, req.Title, req.Description, envBytes)
 	if err != nil {
-		if errors.Is(err, ErrPermissionDenied) {
-			h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrForbidden, logger)
-			return
-		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -215,15 +211,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Delete(traceCtx, id, userID); err != nil {
-
-		if errors.Is(err, ErrPermissionDenied) {
-			h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrForbidden, logger)
-			return
-		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -7,16 +7,13 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 
+	"clustron-backend/internal"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-)
-
-var (
-	ErrPermissionDenied = errors.New("permission denied: user does not own this module")
 )
 
 type Service struct {
@@ -105,7 +102,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, ti
 		logger.Warn("user attempted to update module they do not own",
 			zap.String("user_id", userID.String()),
 			zap.String("module_owner", existingModule.UserID.String()))
-		return Module{}, ErrPermissionDenied
+		return Module{}, internal.ErrNotModuleOwner
 	}
 
 	desc := pgtype.Text{String: description, Valid: description != ""}
@@ -142,7 +139,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) er
 		logger.Warn("user attempted to delete module they do not own",
 			zap.String("user_id", userID.String()),
 			zap.String("module_owner", existingModule.UserID.String()))
-		return ErrPermissionDenied
+		return internal.ErrNotModuleOwner
 	}
 
 	if err := s.queries.DeleteModule(traceCtx, DeleteModuleParams{
