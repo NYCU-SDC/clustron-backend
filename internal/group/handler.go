@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
@@ -248,9 +247,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	titleStr := strings.ReplaceAll(request.Title, " ", "-")
-
-	group, err := h.store.Create(traceCtx, user.ID, titleStr, request.Description)
+	group, err := h.store.Create(traceCtx, user.ID, request.Title, request.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

@@ -510,12 +510,13 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		return Group{}, fmt.Errorf("failed to parse gidNumber to int64: %w", err)
 	}
 
-	adminCN := fmt.Sprintf("%s-admin", title)
+	baseCN := strings.ReplaceAll(title, " ", "-")
+	adminCN := fmt.Sprintf("%s-admin", baseCN)
 
 	// Create DB LDAP Group
 	_, err = q.CreateLDAPBaseGroup(ctx, CreateLDAPBaseGroupParams{
 		GroupID:   newGroup.ID,
-		LdapCn:    pgtype.Text{String: title, Valid: true},
+		LdapCn:    pgtype.Text{String: baseCN, Valid: true},
 		GidNumber: baseGIDNumberInt,
 	})
 	if err != nil {
@@ -557,7 +558,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		Name: "CreateLDAPBaseGroup",
 		Action: func(ctx context.Context) error {
 			// Create LDAP Group
-			err = s.ldapClient.CreateGroup(title, baseGIDNumber, []string{})
+			err = s.ldapClient.CreateGroup(baseCN, baseGIDNumber, []string{})
 			if err != nil {
 				logger.Error("failed to create group in LDAP", zap.Error(err))
 				span.RecordError(err)
