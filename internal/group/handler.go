@@ -4,6 +4,7 @@ import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/membership"
+	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"net/http"
@@ -235,7 +236,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != "admin" && user.Role != "organizer" { // TODO: the string comparison should be replaced with a enum.
+	if user.Role != role.Admin.String() && user.Role != role.Organizer.String() {
 		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
 		return
 	}
