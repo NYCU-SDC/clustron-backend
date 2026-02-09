@@ -34,7 +34,7 @@ jobs:
               },
               "cleanup_domain": {
                 "enable": true,
-                "name": "pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club"
+                "name": "api.pr-${{ github.event.pull_request.number }}.clustron.sdc.nycu.club"
               }
             }
           }'
