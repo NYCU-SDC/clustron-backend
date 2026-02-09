@@ -7,6 +7,7 @@ erDiagram
 
     %% Group Core
     groups ||--o{ links : "contains"
+    groups ||--o{ ldap_groups : "has(1:2) (base and admin groups)"
 
     %% Membership / Many-to-Many Relations
     users ||--o{ memberships : "joins"
@@ -64,7 +65,16 @@ erDiagram
         VARCHAR title
         TEXT description
         BOOLEAN is_archived
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    ldap_groups {
+        UUID id PK
+        UUID group_id FK
+        VARCHAR ldap_cn
         INTEGER gid_number
+        VARCHAR type "ENUM: Base, Admin"
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }

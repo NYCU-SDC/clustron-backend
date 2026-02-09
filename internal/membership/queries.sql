@@ -11,7 +11,7 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-WHERE group_id = $1
+WHERE group_id = $1 AND u.id IN (SELECT unnest(@UserIDs::UUID[]))
 ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
 
@@ -28,7 +28,7 @@ SELECT
 FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
-WHERE group_id = $1
+WHERE group_id = $1 AND u.id IN (SELECT unnest(@UserIDs::UUID[]))
 ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;
 
@@ -46,6 +46,23 @@ SELECT EXISTS (
     FROM memberships
     WHERE group_id = $1 AND user_id = $2
 ) AS exists;
+
+-- name: GetAll :many
+SELECT
+    m.group_id,
+    m.user_id,
+    u.full_name,
+    u.email,
+    u.student_id,
+    m.role_id,
+    gr.role_name,
+    gr.access_level,
+    l.uid_number
+FROM memberships AS m
+JOIN group_role AS gr ON gr.id = m.role_id
+JOIN users AS u ON u.id = m.user_id
+LEFT JOIN ldap_user AS l ON l.id = u.id
+WHERE group_id = $1;
 
 -- name: GetByUser :one
 SELECT

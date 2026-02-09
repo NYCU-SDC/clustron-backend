@@ -7,6 +7,7 @@ import (
 	"clustron-backend/internal/config"
 	"clustron-backend/internal/cors"
 	"clustron-backend/internal/group"
+	"clustron-backend/internal/group/ldapgroup"
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/job"
 	"clustron-backend/internal/jwt"
@@ -146,9 +147,10 @@ func main() {
 	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
 	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
-	groupRoleService := grouprole.NewService(logger, dbPool)
-	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapClient)
-	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapClient)
+	ldapGroupService := ldapgroup.NewService(logger, dbPool)
+	groupRoleService := grouprole.NewService(logger, ldapGroupService, ldapClient, dbPool)
+	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapGroupService, ldapClient)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient)
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 

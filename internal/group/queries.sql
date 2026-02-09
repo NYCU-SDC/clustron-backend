@@ -90,12 +90,6 @@ JOIN
 WHERE
     user_id = $1 AND group_id = $2;
 
--- name: ListGidNumbers :many
-SELECT gid_number FROM groups WHERE gid_number IS NOT NULL ORDER BY gid_number;
-
--- name: UpdateGidNumber :exec
-UPDATE groups SET gid_number = $2 WHERE id = $1;
-
 -- name: GetMembersByGroupID :many
 SELECT
     *
@@ -122,3 +116,11 @@ UPDATE links SET title = $2, url = $3 WHERE id = $1 RETURNING *;
 
 -- name: DeleteLink :exec
 DELETE FROM links WHERE id = $1;
+
+-- name: CreateLDAPBaseGroup :one
+INSERT INTO ldap_groups (group_id, ldap_cn, type, gid_number)
+VALUES ($1, $2, 'BASE', $3) RETURNING *;
+
+-- name: CreateLDAPAdminGroup :one
+INSERT INTO ldap_groups (group_id, ldap_cn, type, gid_number)
+VALUES ($1, $2, 'ADMIN', $3) RETURNING *;

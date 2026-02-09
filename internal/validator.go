@@ -1,15 +1,28 @@
 package internal
 
-import "github.com/go-playground/validator/v10"
+import (
+	"regexp"
+
+	"github.com/go-playground/validator/v10"
+)
 
 func NewValidator() *validator.Validate {
-	return validator.New()
+	v := validator.New()
+	err := v.RegisterValidation("regexp", validateRegex)
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
 
-func ValidateStruct(v *validator.Validate, s interface{}) error {
-	err := v.Struct(s)
+func validateRegex(fl validator.FieldLevel) bool {
+	pattern := fl.Param()
+
+	value := fl.Field().String()
+
+	matched, err := regexp.MatchString(pattern, value)
 	if err != nil {
-		return err
+		return false
 	}
-	return nil
+	return matched
 }
