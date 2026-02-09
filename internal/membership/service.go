@@ -160,6 +160,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	}
 
 	allMembers := make([]MemberResponse, 0)
+	// Add members that are only in LDAP but not in DB, and also add members that are in both LDAP and DB
 	for uidNum, entry := range ldapEntryMap {
 		res := MemberResponse{
 			UIDNumber: uidNum,
@@ -199,6 +200,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		allMembers = append(allMembers, res)
 	}
 
+	// Add members that are only in DB but not in LDAP
 	for _, member := range dbGroupMember {
 		if !member.UidNumber.Valid {
 			continue
