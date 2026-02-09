@@ -12,6 +12,8 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -31,15 +33,17 @@ type Service struct {
 	logger         *zap.Logger
 	tracer         trace.Tracer
 	queries        *Queries
+	db             *pgxpool.Pool
 	ldapGroupStore LDAPGroupStore
 	ldapClient     LDAPClient
 }
 
-func NewService(logger *zap.Logger, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient, db DBTX) *Service {
+func NewService(logger *zap.Logger, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient, db *pgxpool.Pool) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("group/service"),
 		queries:        New(db),
+		db:             db,
 		ldapGroupStore: ldapGroupStore,
 		ldapClient:     ldapClient,
 	}
@@ -101,7 +105,22 @@ func (s *Service) Update(ctx context.Context, roleID uuid.UUID, roleName string,
 		return GroupRole{}, err
 	}
 
-	updatedRole, err := s.queries.Update(ctx, UpdateParams{
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin transaction for updating group role")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+	defer func(tx pgx.Tx) {
+		txErr := tx.Rollback(traceCtx)
+		if txErr != nil && !errors.Is(txErr, pgx.ErrTxClosed) {
+			logger.Error("failed to rollback transaction for updating group role", zap.String("role_id", roleID.String()), zap.Error(txErr))
+		}
+	}(tx)
+
+	q := s.queries.WithTx(tx)
+
+	updatedRole, err := q.Update(ctx, UpdateParams{
 		ID:          roleID,
 		RoleName:    roleName,
 		AccessLevel: level.String(),
@@ -196,6 +215,12 @@ func (s *Service) Update(ctx context.Context, roleID uuid.UUID, roleName string,
 		err = saga.Execute(traceCtx)
 		if err != nil {
 			err = fmt.Errorf("failed to execute saga for updating user roles when updating group role with id %s: %w", roleID.String(), err)
+			span.RecordError(err)
+			return GroupRole{}, err
+		}
+
+		if err := tx.Commit(traceCtx); err != nil {
+			err = databaseutil.WrapDBError(err, logger, "commit transaction for updating group role")
 			span.RecordError(err)
 			return GroupRole{}, err
 		}
