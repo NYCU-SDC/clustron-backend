@@ -80,6 +80,52 @@ type Handler struct {
 	userStore    UserStore
 }
 
+var Blacklist = LinuxUsernameBlacklist{
+	// Core System Users
+	"root":          {},
+	"daemon":        {},
+	"bin":           {},
+	"sys":           {},
+	"sync":          {},
+	"games":         {},
+	"man":           {},
+	"lp":            {},
+	"mail":          {},
+	"news":          {},
+	"uucp":          {},
+	"proxy":         {},
+	"admin":         {},
+	"administrator": {},
+
+	// Service-Specific Accounts
+	"syslog":     {},
+	"www-data":   {},
+	"backup":     {},
+	"list":       {},
+	"irc":        {},
+	"gnats":      {},
+	"nobody":     {},
+	"nogroup":    {},
+	"messagebus": {},
+	"sshd":       {},
+
+	// Modern Systemd / Virtual Users
+	"systemd-network":  {},
+	"systemd-resolve":  {},
+	"systemd-timesync": {},
+	"systemd-coredump": {},
+	"_apt":             {},
+	"uuidd":            {},
+	"tcpdump":          {},
+
+	// Database and Common App Defaults
+	"mysql":    {},
+	"postgres": {},
+	"apache":   {},
+	"nginx":    {},
+	"postfix":  {},
+}
+
 func validatePublicKey(key string) error {
 	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key))
 	if err != nil {
@@ -352,7 +398,7 @@ func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string
 		}
 	}
 
-	if linuxUsername == "root" || linuxUsername == "admin" || linuxUsername == "administrator" {
+	if _, exists := Blacklist[linuxUsername]; exists {
 		return internal.ErrInvalidLinuxUsername{
 			Reason: "Linux username contain reserved keywords",
 		}
