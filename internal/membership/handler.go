@@ -136,7 +136,6 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusBadRequest, results)
-	return
 }
 
 func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
