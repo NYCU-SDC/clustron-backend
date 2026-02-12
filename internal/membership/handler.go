@@ -111,6 +111,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	for _, m := range request.Members {
 		if (m.Member == user.Email || m.Member == user.StudentID.String) && !user.HasRole(role.Admin.String()) {
+			results.AddedFailureNumber++
 			continue
 		}
 
@@ -130,13 +131,11 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if results.AddedSuccessNumber > 0 {
-		handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
+		handlerutil.WriteJSONResponse(w, http.StatusOK, results)
 		return
 	}
-	if results.AddedFailureNumber > 0 {
-		handlerutil.WriteJSONResponse(w, http.StatusInternalServerError, results)
-		return
-	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusBadRequest, results)
 }
 
 func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
