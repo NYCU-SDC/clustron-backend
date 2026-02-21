@@ -219,12 +219,12 @@ func (s *Service) Update(ctx context.Context, roleID uuid.UUID, roleName string,
 			return GroupRole{}, err
 		}
 
-	}
+		if err := tx.Commit(traceCtx); err != nil {
+			err = databaseutil.WrapDBError(err, logger, "commit transaction for updating group role")
+			span.RecordError(err)
+			return GroupRole{}, err
+		}
 
-	if err := tx.Commit(traceCtx); err != nil {
-		err = databaseutil.WrapDBError(err, logger, "commit transaction for updating group role")
-		span.RecordError(err)
-		return GroupRole{}, err
 	}
 
 	return updatedRole, nil
