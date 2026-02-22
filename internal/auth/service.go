@@ -151,6 +151,17 @@ func (s *Service) FindOrCreateInfo(ctx context.Context, email, identifier string
 				span.RecordError(err)
 				return LoginInfo{}, err
 			}
+
+			if loginInfo.Providertype == providerType.String() {
+				return loginInfo, nil
+			}
+			
+			loginInfo, err = s.CreateInfo(ctx, loginInfo.UserID, providerType, loginInfo.Email.String, identifier)
+			if err != nil {
+				span.RecordError(err)
+				return LoginInfo{}, err
+			}
+			
 			return loginInfo, nil
 		} else {
 			// CreateInfo user
