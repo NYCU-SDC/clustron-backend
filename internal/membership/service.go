@@ -283,13 +283,13 @@ func (s *Service) GetOwnerByGroupID(ctx context.Context, groupId uuid.UUID) (uui
 	return membership, nil
 }
 
-func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (JoinResult, error) {
+func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, roleID uuid.UUID) (JoinResult, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Add")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the role is group owner (it should never be allowed to add another group owner)
-	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, role)
+	roleInfo, err := s.groupRoleStore.GetByID(traceCtx, roleID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "failed to get group role")
 		span.RecordError(err)
@@ -308,7 +308,7 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 	}
 
 	// check if the user's access_level is bigger than the target access_level
-	if !s.canAssignRole(traceCtx, groupId, role) {
+	if !s.canAssignRole(traceCtx, groupId, roleID) {
 		logger.Warn("The user's access is not allowed to add this member")
 		return nil, handlerutil.ErrForbidden
 	}
@@ -325,7 +325,7 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 		pendingMember, err := s.JoinPending(traceCtx, CreateOrUpdatePendingParams{
 			UserIdentifier: memberIdentifier,
 			GroupID:        groupId,
-			RoleID:         role,
+			RoleID:         roleID,
 		})
 		if err != nil {
 			return nil, err
@@ -346,8 +346,28 @@ func (s *Service) Add(ctx context.Context, groupId uuid.UUID, memberIdentifier s
 		}
 	}
 
+	// get user
+	addingUser, err := s.userStore.GetByID(traceCtx, memberUserId)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "users", "user_id", memberUserId.String(), logger, "failed to get user info")
+		logger.Error("get user info failed", zap.Error(err))
+		span.RecordError(err)
+	}
+
+	if addingUser.Role == role.NotSetup.String() {
+		pendingMember, err := s.JoinPending(traceCtx, CreateOrUpdatePendingParams{
+			UserIdentifier: memberIdentifier,
+			GroupID:        groupId,
+			RoleID:         roleID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return pendingMember, nil
+	}
+
 	// call Join
-	member, err := s.Join(traceCtx, memberUserId, groupId, role, false)
+	member, err := s.Join(traceCtx, memberUserId, groupId, roleID, false)
 	if err != nil {
 		return nil, err
 	}
