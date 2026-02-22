@@ -29,6 +29,7 @@ import (
 type UserStore interface {
 	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
+	UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) (user.User, error)
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (user.User, error)
 	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
 }
@@ -36,6 +37,7 @@ type UserStore interface {
 //go:generate mockery --name LDAPClient
 type LDAPClient interface {
 	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
+	DeleteUser(uid string) error
 	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
 	GetAllUIDNumbers() ([]string, error)
 	GetUserInfo(uid string) (*ldap.Entry, error)
@@ -50,6 +52,7 @@ type LDAPClient interface {
 type Querier interface {
 	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error
+	DeleteLDAPUser(ctx context.Context, userID uuid.UUID) error
 	ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
 	GetPublicKey(ctx context.Context, id uuid.UUID) (PublicKey, error)
@@ -100,52 +103,117 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 		return internal.ErrAlreadyOnboarded
 	}
 
-	// update User's FullName
-	updatedUser, err := s.userStore.UpdateFullName(traceCtx, userID, fullName.String)
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-	logger.Info("updated user's full name", zap.String("userID", userID.String()), zap.String("fullName", updatedUser.FullName.String))
+	var (
+		err       error
+		uidNumber string
+	)
 
-	// set up the user's role
-	_, err = s.userStore.SetupUserRole(traceCtx, userID)
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
+	saga := internal.NewSaga(logger)
 
-	uidNumber, err := s.GetAvailableUIDNumber(traceCtx)
-	if err != nil {
-		logger.Error("failed to get available uid number", zap.String("userID", userID.String()), zap.Error(err))
-		span.RecordError(err)
-		return fmt.Errorf("failed to get available uid number: %w", err)
-	}
-
-	// Create User Entry
-	err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
-	if err != nil {
-		logger.Error("failed to create LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.Error(err))
-		span.RecordError(err)
-		return fmt.Errorf("failed to create LDAP user: %w", err)
-	}
-
-	uidNumberInt, err := strconv.ParseInt(uidNumber, 10, 64)
-	if err != nil {
-		logger.Error("failed to parse uidNumber to int64", zap.String("uidNumber", uidNumber), zap.Error(err))
-		span.RecordError(err)
-		return fmt.Errorf("failed to parse uidNumber to int64: %w", err)
-	}
-
-	// Store ldap_user
-	err = s.query.CreateLDAPUser(traceCtx, CreateLDAPUserParams{
-		ID:        userID,
-		UidNumber: uidNumberInt,
+	saga.AddStep(internal.SagaStep{
+		Name: "Update User FullName",
+		Action: func(ctx context.Context) error {
+			updatedUser, err := s.userStore.UpdateFullName(ctx, userID, fullName.String)
+			if err != nil {
+				return err
+			}
+			logger.Info("updated user's full name", zap.String("userID", userID.String()), zap.String("fullName", updatedUser.FullName.String))
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			logger.Warn("compensate Update User FullName: no action taken as original full name is unknown", zap.String("userID", userID.String()))
+			return nil
+		},
 	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "Setup User Role",
+		Action: func(ctx context.Context) error {
+			_, err := s.userStore.SetupUserRole(ctx, userID)
+			if err != nil {
+				return fmt.Errorf("failed to setup user role: %w", err)
+			}
+			logger.Info("set up user role", zap.String("userID", userID.String()))
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.userStore.UpdateRoleByID(ctx, userID, role.NotSetup.String())
+			if err != nil {
+				logger.Error("failed to reset user role during compensation", zap.String("userID", userID.String()), zap.Error(err))
+				return fmt.Errorf("failed to reset user role during compensation: %w", err)
+			}
+			logger.Info("reset user role to NotSetup during compensation", zap.String("userID", userID.String()))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "Create LDAP User",
+		Action: func(ctx context.Context) error {
+			uidNumber, err = s.GetAvailableUIDNumber(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get available uid number: %w", err)
+			}
+
+			err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
+			if err != nil {
+				if errors.Is(err, ldaputil.ErrUserExists) {
+					logger.Warn("LDAP user already exists", zap.String("linuxUsername", linuxUsername.String))
+					return internal.ErrAlreadyOnboarded
+				}
+				return fmt.Errorf("failed to create LDAP user: %w", err)
+			}
+			logger.Info("created LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.String("uidNumber", uidNumber))
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.ldapClient.DeleteUser(linuxUsername.String)
+			if err != nil {
+				logger.Error("failed to delete LDAP user during compensation", zap.String("linuxUsername", linuxUsername.String), zap.Error(err))
+				return fmt.Errorf("failed to delete LDAP user during compensation: %w", err)
+			}
+			logger.Info("deleted LDAP user during compensation", zap.String("linuxUsername", linuxUsername.String))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "Store LDAP User Info",
+		Action: func(ctx context.Context) error {
+			uidNumberInt, err := strconv.ParseInt(uidNumber, 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse uid number to int64: %w", err)
+			}
+			err = s.query.CreateLDAPUser(traceCtx, CreateLDAPUserParams{
+				ID:        userID,
+				UidNumber: uidNumberInt,
+			})
+			if err != nil {
+				if errors.Is(err, databaseutil.ErrUniqueViolation) {
+					logger.Warn("ldap_user record already exists for user", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt))
+					return internal.ErrAlreadyOnboarded
+				}
+				logger.Error("failed to create ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt), zap.Error(err))
+				return fmt.Errorf("failed to create ldap_user record: %w", internal.ErrAlreadyOnboarded)
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.query.DeleteLDAPUser(ctx, userID)
+			if err != nil {
+				logger.Error("failed to delete ldap_user record during compensation", zap.String("userID", userID.String()), zap.Error(err))
+				return fmt.Errorf("failed to delete ldap_user record during compensation: %w", err)
+			}
+			logger.Info("no compensation needed for Store LDAP User Info step", zap.String("userID", userID.String()))
+			return nil
+		},
+	})
+
+	err = saga.Execute(traceCtx)
 	if err != nil {
-		logger.Error("failed to create ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt), zap.Error(err))
+		logger.Error("failed to onboard user", zap.String("userID", userID.String()), zap.Error(err))
 		span.RecordError(err)
-		return fmt.Errorf("failed to create ldap_user record: %w", err)
+		return fmt.Errorf("failed to onboard user: %w", err)
 	}
 
 	// Process pending memberships after user onboarding
