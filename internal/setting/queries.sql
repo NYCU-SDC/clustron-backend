@@ -36,3 +36,6 @@ SELECT ldap_user.uid_number, u.* FROM ldap_user JOIN users u ON u.id = ldap_user
 
 -- name: CreateLDAPUser :exec
 INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);
+
+-- name: DeleteLDAPUser :exec
+DELETE FROM ldap_user WHERE id = $1;
