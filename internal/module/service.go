@@ -8,6 +8,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 
 	"clustron-backend/internal"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -48,8 +49,8 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title string, de
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			logger.Warn("module title already exists", zap.String("title", title))
-			span.RecordError(err)
-			return Module{}, err
+			span.RecordError(internal.ErrDatabaseConflict)
+			return Module{}, internal.ErrDatabaseConflict
 		}
 		err = databaseutil.WrapDBError(err, logger, "failed to create module")
 		span.RecordError(err)
@@ -116,6 +117,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, ti
 	})
 
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			logger.Warn("module title already exists during update", zap.String("title", title))
+			span.RecordError(internal.ErrDatabaseConflict)
+			return Module{}, internal.ErrDatabaseConflict
+		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "modules", "id", id.String(), logger, "failed to update module")
 		span.RecordError(err)
 		return Module{}, err

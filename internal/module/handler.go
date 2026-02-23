@@ -9,6 +9,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 
+	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 
 	"github.com/go-playground/validator/v10"
@@ -72,12 +73,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	user, err := jwt.GetUserFromContext(traceCtx)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	userID, ok := h.getUserID(traceCtx, w, logger) // ✨ 使用輔助方法
+	if !ok {
 		return
 	}
-	userID := user.ID
 
 	var req CreateRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
@@ -106,10 +105,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	id, ok := h.getModuleID(traceCtx, w, r, logger) // ✨ 使用輔助方法
+	if !ok {
 		return
 	}
 
@@ -128,12 +125,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	user, err := jwt.GetUserFromContext(traceCtx)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	userID, ok := h.getUserID(traceCtx, w, logger) // ✨ 使用輔助方法
+	if !ok {
 		return
 	}
-	userID := user.ID
 
 	modules, err := h.store.List(traceCtx, userID)
 	if err != nil {
@@ -153,19 +148,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Update")
 	defer span.End()
 
-	user, err := jwt.GetUserFromContext(traceCtx)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logutil.WithContext(traceCtx, h.logger))
-		return
-	}
-	userID := user.ID
-
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	userID, ok := h.getUserID(traceCtx, w, logger)
+	if !ok {
+		return
+	}
+
+	id, ok := h.getModuleID(traceCtx, w, r, logger)
+	if !ok {
 		return
 	}
 
@@ -193,19 +184,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
 	defer span.End()
 
-	user, err := jwt.GetUserFromContext(traceCtx)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logutil.WithContext(traceCtx, h.logger))
-		return
-	}
-	userID := user.ID
-
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	userID, ok := h.getUserID(traceCtx, w, logger)
+	if !ok {
+		return
+	}
+
+	id, ok := h.getModuleID(traceCtx, w, r, logger)
+	if !ok {
 		return
 	}
 
@@ -227,4 +214,23 @@ func toResponse(m Module) Response {
 		Title:       m.Title,
 		Environment: envItems,
 	}
+}
+
+func (h *Handler) getUserID(ctx context.Context, w http.ResponseWriter, logger *zap.Logger) (uuid.UUID, bool) {
+	user, err := jwt.GetUserFromContext(ctx)
+	if err != nil {
+		h.problemWriter.WriteError(ctx, w, err, logger)
+		return uuid.Nil, false
+	}
+	return user.ID, true
+}
+
+func (h *Handler) getModuleID(ctx context.Context, w http.ResponseWriter, r *http.Request, logger *zap.Logger) (uuid.UUID, bool) {
+	idStr := r.PathValue("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(ctx, w, internal.ErrInvalidUUID, logger)
+		return uuid.Nil, false
+	}
+	return id, true
 }
