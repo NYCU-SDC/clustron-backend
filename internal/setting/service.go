@@ -88,15 +88,20 @@ func (s *Service) SetMembershipService(membershipService MembershipService) {
 	s.membershipService = membershipService
 }
 
-func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error {
+func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error {
 	traceCtx, span := s.tracer.Start(ctx, "OnboardUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// validate user role
-	if userRole != role.NotSetup.String() {
-		logger.Warn(internal.ErrAlreadyOnboarded.Error(), zap.String("userID", userID.String()), zap.String("userRole", userRole))
-		span.RecordError(internal.ErrAlreadyOnboarded)
+	u, err := s.userStore.GetByID(ctx, userID)
+	if err != nil {
+		logger.Error("failed to get user by ID", zap.String("userID", userID.String()), zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("failed to get user by ID: %w", err)
+	}
+
+	if u.Role != role.NotSetup.String() {
+		logger.Info("user already onboarded, skipping onboarding process", zap.String("userID", userID.String()), zap.String("role", u.Role))
 		return internal.ErrAlreadyOnboarded
 	}
 
@@ -149,12 +154,12 @@ func (s *Service) OnboardUser(ctx context.Context, userRole string, userID uuid.
 	}
 
 	// Process pending memberships after user onboarding
-	err = s.membershipService.ProcessPendingMemberships(traceCtx, userID, email, studentID)
+	err = s.membershipService.ProcessPendingMemberships(traceCtx, userID, u.Email, u.StudentID.String)
 	if err != nil {
 		logger.Warn("failed to process pending memberships for onboarded user",
 			zap.String("userID", userID.String()),
-			zap.String("email", email),
-			zap.String("student_id", studentID),
+			zap.String("email", u.Email),
+			zap.String("student_id", u.StudentID.String),
 			zap.Error(err))
 	}
 
