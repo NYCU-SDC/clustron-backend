@@ -977,38 +977,43 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	membership, err := s.memberStore.GetByUser(traceCtx, user.ID, groupID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), user.ID.String()), logger, "get membership")
-		span.RecordError(err)
-		return grouprole.UserScope{}, err
-	}
-	if membership.AccessLevel != grouprole.AccessLevelOwner.String() && user.Role != role.Admin.String() {
-		err = fmt.Errorf("user %s is not the owner of group %s", user.ID.String(), groupID.String())
-		logger.Error("transfer owner failed", zap.Error(err))
-		span.RecordError(err)
-		return grouprole.UserScope{}, err
+	if user.Role != role.Admin.String() {
+		membership, err := s.memberStore.GetByUser(traceCtx, user.ID, groupID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), user.ID.String()), logger, "get membership")
+			span.RecordError(err)
+			return grouprole.UserScope{}, err
+		}
+
+		if membership.AccessLevel != grouprole.AccessLevelOwner.String() {
+			err = fmt.Errorf("user %s is not the owner of group %s nor the admin: %w", user.ID.String(), groupID.String(), handlerutil.ErrForbidden)
+			logger.Error("transfer owner failed", zap.Error(err))
+			span.RecordError(err)
+			return grouprole.UserScope{}, err
+		}
 	}
 
 	var newOwnerID uuid.UUID
 	if strings.Contains(newOwnerIdentifier, "@") {
+		var err error
 		newOwnerID, err = s.userStore.GetIdByEmail(traceCtx, newOwnerIdentifier)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "failed to get user by email")
+			err = databaseutil.WrapDBError(err, logger, "failed to get new owner by email")
 			span.RecordError(err)
 			return grouprole.UserScope{}, err
 		}
 	} else {
+		var err error
 		newOwnerID, err = s.userStore.GetIdByStudentId(traceCtx, newOwnerIdentifier)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "failed to get user by student id")
+			err = databaseutil.WrapDBError(err, logger, "failed to get new owner by student id")
 			span.RecordError(err)
 			return grouprole.UserScope{}, err
 		}
 	}
 
 	var oldOwnerID uuid.UUID
-	oldOwnerID, err = s.memberStore.GetOwnerByGroupID(traceCtx, groupID)
+	oldOwnerID, err := s.memberStore.GetOwnerByGroupID(traceCtx, groupID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "group_id", groupID.String(), logger, "get group owner")
 		span.RecordError(err)
