@@ -222,7 +222,8 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 
 	user, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrUnauthorized, logger)
+		logger.Error("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	if user.ID == id {
