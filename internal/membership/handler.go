@@ -85,7 +85,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	logger := h.logger.With(zap.String("handler", "AddGroupMemberHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -145,12 +145,12 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	groupID := r.PathValue("group_id")
 	removedUserID := r.PathValue("user_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	removedUserUUID, err := uuid.Parse(removedUserID)
+	removedUserUUID, err := handlerutil.ParseUUID(removedUserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -172,12 +172,12 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	groupID := r.PathValue("group_id")
 	userID := r.PathValue("user_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	userUUID, err := uuid.Parse(userID)
+	userUUID, err := handlerutil.ParseUUID(userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -204,7 +204,7 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 	logger := h.logger.With(zap.String("handler", "ListGroupMembersPagedHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -245,7 +245,7 @@ func (h *Handler) ListPendingMembersPagedHandler(w http.ResponseWriter, r *http.
 	logger := h.logger.With(zap.String("handler", "ListPendingMembersPagedHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -287,12 +287,12 @@ func (h *Handler) UpdatePendingMemberHandler(w http.ResponseWriter, r *http.Requ
 
 	groupID := r.PathValue("group_id")
 	pendingID := r.PathValue("pending_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	pendingUUID, err := uuid.Parse(pendingID)
+	pendingUUID, err := handlerutil.ParseUUID(pendingID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -320,12 +320,12 @@ func (h *Handler) RemovePendingMemberHandler(w http.ResponseWriter, r *http.Requ
 
 	groupID := r.PathValue("group_id")
 	pendingID := r.PathValue("pending_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	pendingUUID, err := uuid.Parse(pendingID)
+	pendingUUID, err := handlerutil.ParseUUID(pendingID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

@@ -214,7 +214,7 @@ func (h *Handler) UpdateUserRoleHandler(w http.ResponseWriter, r *http.Request) 
 	logger := h.logger.With(zap.String("handler", "UpdateUserRoleHandler"))
 
 	idStr := r.PathValue("user_id")
-	id, err := uuid.Parse(idStr)
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrInvalidUUID, logger)
 		return
