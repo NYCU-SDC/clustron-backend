@@ -96,6 +96,11 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	var (
+		err       error
+		uidNumber string
+	)
+
 	u, err := s.userStore.GetByID(ctx, userID)
 	if err != nil {
 		logger.Error("failed to get user by ID", zap.String("userID", userID.String()), zap.Error(err))
@@ -107,11 +112,6 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 		logger.Info("user already onboarded, skipping onboarding process", zap.String("userID", userID.String()), zap.String("role", u.Role))
 		return internal.ErrAlreadyOnboarded
 	}
-
-	var (
-		err       error
-		uidNumber string
-	)
 
 	saga := internal.NewSaga(logger)
 
