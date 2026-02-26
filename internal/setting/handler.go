@@ -124,6 +124,16 @@ var Blacklist = LinuxUsernameBlacklist{
 	"apache":   {},
 	"nginx":    {},
 	"postfix":  {},
+
+	// suggested system name
+	"dhcpcd":        {},
+	"pollinate":     {},
+	"polkitd":       {},
+	"tss":           {},
+	"landscape":     {},
+	"fwupd-refresh": {},
+	"usbmux":        {},
+	"sssd":          {},
 }
 
 func validatePublicKey(key string) error {
