@@ -65,8 +65,6 @@ func Test_GetMeHandler(t *testing.T) {
 }
 
 func TestHandler_UpdateUserRoleHandler(t *testing.T) {
-	requestID := uuid.New()
-
 	testCases := []struct {
 		name           string
 		user           *jwt.User
@@ -78,7 +76,7 @@ func TestHandler_UpdateUserRoleHandler(t *testing.T) {
 	}{
 		{
 			name:      "Valid request updates user role",
-			requestID: requestID.String(),
+			requestID: uuid.New().String(),
 			user: &jwt.User{
 				ID:   uuid.New(),
 				Role: role.Admin.String(),
@@ -110,13 +108,13 @@ func TestHandler_UpdateUserRoleHandler(t *testing.T) {
 		{
 			name:           "Missing user in context returns error",
 			user:           nil,
-			requestID:      requestID.String(),
+			requestID:      uuid.New().String(),
 			body:           user.UpdateUserRoleRequest{Role: role.Admin.String()},
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
 			name:      "Malformed JSON body returns error",
-			requestID: requestID.String(),
+			requestID: uuid.New().String(),
 			user: &jwt.User{
 				ID:   uuid.New(),
 				Role: role.Admin.String(),
