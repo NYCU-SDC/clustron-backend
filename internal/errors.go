@@ -25,7 +25,6 @@ var (
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
-	ErrInvalidUUID      = errors.New("invalid uuid format")
 
 	// Setting Errors
 	ErrInvalidPublicKey   = errors.New("invalid public key")
@@ -85,8 +84,6 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewForbiddenProblem("user does not own this module")
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewConflictProblem("database conflict")
-	case errors.Is(err, ErrInvalidUUID):
-		return problem.NewBadRequestProblem("invalid uuid format")
 	case errors.Is(err, ErrAlreadyOnboarded):
 		return problem.NewBadRequestProblem("user already onboarded")
 	case errors.Is(err, strconv.ErrSyntax):

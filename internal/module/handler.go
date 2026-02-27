@@ -9,7 +9,6 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 
-	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 
 	"github.com/go-playground/validator/v10"
@@ -73,7 +72,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	userID, ok := h.getUserID(traceCtx, w, logger) // ✨ 使用輔助方法
+	userID, ok := h.getUserID(traceCtx, w, logger)
 	if !ok {
 		return
 	}
@@ -105,7 +104,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	id, ok := h.getModuleID(traceCtx, w, r, logger) // ✨ 使用輔助方法
+	id, ok := h.getModuleID(traceCtx, w, r, logger)
 	if !ok {
 		return
 	}
@@ -125,7 +124,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	userID, ok := h.getUserID(traceCtx, w, logger) // ✨ 使用輔助方法
+	userID, ok := h.getUserID(traceCtx, w, logger)
 	if !ok {
 		return
 	}
@@ -227,9 +226,9 @@ func (h *Handler) getUserID(ctx context.Context, w http.ResponseWriter, logger *
 
 func (h *Handler) getModuleID(ctx context.Context, w http.ResponseWriter, r *http.Request, logger *zap.Logger) (uuid.UUID, bool) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
-		h.problemWriter.WriteError(ctx, w, internal.ErrInvalidUUID, logger)
+		h.problemWriter.WriteError(ctx, w, err, logger)
 		return uuid.Nil, false
 	}
 	return id, true

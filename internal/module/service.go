@@ -10,6 +10,7 @@ import (
 	"clustron-backend/internal"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
@@ -47,7 +48,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title string, de
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			logger.Warn("module title already exists", zap.String("title", title))
 			span.RecordError(internal.ErrDatabaseConflict)
 			return Module{}, internal.ErrDatabaseConflict
@@ -118,7 +119,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, ti
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			logger.Warn("module title already exists during update", zap.String("title", title))
 			span.RecordError(internal.ErrDatabaseConflict)
 			return Module{}, internal.ErrDatabaseConflict
