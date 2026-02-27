@@ -123,7 +123,7 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
-			r := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/groups/%s", tc.resourceID), nil)
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/groups/%s/arahive", tc.resourceID), nil)
 			r.SetPathValue("group_id", tc.resourceID)
 			w := httptest.NewRecorder()
 			if tc.user != nil {
@@ -253,7 +253,7 @@ func TestHandler_CreateLinkHandler(t *testing.T) {
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
-			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/groups/%s/links", tc.resourceID), bytes.NewReader(requestBody))
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/groups/%s/link", tc.resourceID), bytes.NewReader(requestBody))
 			r.SetPathValue("group_id", tc.resourceID)
 			w := httptest.NewRecorder()
 			if tc.user != nil {
@@ -339,7 +339,7 @@ func TestHandler_UpdateLinkHandler(t *testing.T) {
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
-			r := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/groups/%s/links/%s", tc.resourceID, tc.linkID), bytes.NewReader(requestBody))
+			r := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/groups/%s/link/%s", tc.resourceID, tc.linkID), bytes.NewReader(requestBody))
 			r.SetPathValue("group_id", tc.resourceID)
 			r.SetPathValue("link_id", tc.linkID)
 			w := httptest.NewRecorder()
@@ -410,7 +410,7 @@ func TestHandler_DeleteLinkHandler(t *testing.T) {
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
-			r := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/groups/%s/links/%s", tc.resourceID, tc.linkID), nil)
+			r := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/groups/%s/link/%s", tc.resourceID, tc.linkID), nil)
 			r.SetPathValue("group_id", tc.resourceID)
 			r.SetPathValue("link_id", tc.linkID)
 			w := httptest.NewRecorder()
@@ -484,7 +484,7 @@ func TestHandler_TransferGroupOwnerHandler(t *testing.T) {
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
-			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/groups/%s/transfer-owner", tc.resourceID), bytes.NewReader(requestBody))
+			r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/groups/%s/transfer", tc.resourceID), bytes.NewReader(requestBody))
 			r.SetPathValue("group_id", tc.resourceID)
 			w := httptest.NewRecorder()
 			if tc.user != nil {
