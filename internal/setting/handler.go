@@ -1,11 +1,13 @@
 package setting
 
 import (
+	"bufio"
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -145,6 +147,10 @@ func validatePublicKey(key string) error {
 }
 
 func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
+	err := loadSystemUsers()
+	if err != nil {
+		logger.Error("fail to read user from system")
+	}
 	return Handler{
 		logger:        logger,
 		validator:     v,
@@ -465,4 +471,38 @@ func isValidPassword(pass string) bool {
 	hasLetter := regexp.MustCompile(`[a-zA-Z]`).MatchString(pass)
 	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(pass)
 	return hasLetter && hasNumber
+}
+
+func loadSystemUsers() error {
+	file, err := os.Open("/etc/passwd")
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines or comments
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		// /etc/passwd format: name:password:UID:GID:comment:home:shell
+		parts := strings.Split(line, ":")
+		if len(parts) > 0 {
+			username := strings.ToLower(strings.TrimSpace(parts[0]))
+			if username != "" {
+				Blacklist[username] = struct{}{}
+			}
+		}
+	}
+
+	return scanner.Err()
 }
