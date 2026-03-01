@@ -172,7 +172,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get group id from url
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -327,7 +327,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "ArchiveHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -390,7 +390,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "UnarchiveHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -453,7 +453,7 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "CreateLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -487,14 +487,14 @@ func (h *Handler) UpdateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "UpdateLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	linkID := r.PathValue("link_id")
-	linkUUID, err := uuid.Parse(linkID)
+	linkUUID, err := handlerutil.ParseUUID(linkID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -528,14 +528,14 @@ func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "DeleteLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	linkID := r.PathValue("link_id")
-	linkUUID, err := uuid.Parse(linkID)
+	linkUUID, err := handlerutil.ParseUUID(linkID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -556,7 +556,7 @@ func (h *Handler) TransferGroupOwnerHandler(w http.ResponseWriter, r *http.Reque
 	logger := h.logger.With(zap.String("handler", "TransferGroupOwnerHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

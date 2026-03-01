@@ -9,15 +9,17 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 func Test_GetMeHandler(t *testing.T) {
@@ -57,6 +59,103 @@ func Test_GetMeHandler(t *testing.T) {
 			}
 
 			h.GetMeHandler(w, r)
+			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+		})
+	}
+}
+
+func TestHandler_UpdateUserRoleHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		user           *jwt.User
+		body           user.UpdateUserRoleRequest
+		setupMock      func(store *mocks.Store, userID uuid.UUID, globalRole string)
+		requestID      string
+		customBody     []byte
+		expectedStatus int
+	}{
+		{
+			name:      "Valid request updates user role",
+			requestID: uuid.New().String(),
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.Admin.String(),
+			},
+			setupMock: func(store *mocks.Store, userID uuid.UUID, globalRole string) {
+				store.On("UpdateRoleByID", mock.Anything, userID, globalRole).Return(user.User{
+					ID:   userID,
+					Role: globalRole,
+				}, nil)
+			},
+			body: user.UpdateUserRoleRequest{
+				Role: role.User.String(),
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:      "Invalid user ID format returns error",
+			requestID: "invalid-uuid",
+			user:      &jwt.User{Role: role.User.String()},
+			setupMock: func(store *mocks.Store, userID uuid.UUID, globalRole string) {
+				store.On("UpdateRoleByID", mock.Anything, userID, globalRole).Return(user.User{
+					ID:   userID,
+					Role: globalRole,
+				}, nil)
+			},
+			body:           user.UpdateUserRoleRequest{Role: role.Admin.String()},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Missing user in context returns error",
+			user:           nil,
+			requestID:      uuid.New().String(),
+			body:           user.UpdateUserRoleRequest{Role: role.Admin.String()},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:      "Malformed JSON body returns error",
+			requestID: uuid.New().String(),
+			user: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.Admin.String(),
+			},
+			customBody:     []byte(`{"role": "USER"`),
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+
+			requestID, err := uuid.Parse(tc.requestID)
+			if tc.setupMock != nil && err == nil {
+				tc.setupMock(store, requestID, tc.body.Role)
+			}
+
+			var requestBody []byte
+			if tc.customBody != nil {
+				requestBody = tc.customBody
+			} else {
+				requestBody, err = json.Marshal(tc.body)
+				if err != nil {
+					t.Fatalf("failed to marshal request body: %v", err)
+				}
+			}
+
+			h := user.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store)
+			r := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/users/%s/globalRole", tc.requestID), bytes.NewReader(requestBody))
+			r.SetPathValue("user_id", tc.requestID)
+			w := httptest.NewRecorder()
+			if tc.user != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.user))
+			}
+
+			h.UpdateUserRoleHandler(w, r)
 			assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
 		})
 	}
