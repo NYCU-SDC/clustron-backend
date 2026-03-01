@@ -18,6 +18,7 @@ var (
 	ErrInvalidCallbackInfo    = errors.New("invalid callback info")
 	ErrInvalidCallbackState   = errors.New("invalid callback state")
 	ErrPermissionDenied       = errors.New("permission denied")
+	ErrNotModuleOwner         = errors.New("user does not own this module")
 	ErrAlreadyOnboarded       = errors.New("user already onboarded")
 	ErrBindingAccountConflict = errors.New("binding account conflict")
 	ErrNewStateFailed         = errors.New("failed to generate new state")
@@ -79,6 +80,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("invalid callback state")
 	case errors.Is(err, ErrPermissionDenied):
 		return problem.NewForbiddenProblem("permission denied")
+	case errors.Is(err, ErrNotModuleOwner):
+		return problem.NewForbiddenProblem("user does not own this module")
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewConflictProblem("database conflict")
 	case errors.Is(err, ErrAlreadyOnboarded):
