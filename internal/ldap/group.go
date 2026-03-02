@@ -199,19 +199,3 @@ func (c *Client) GetAllGIDNumbers() ([]string, error) {
 
 	return gidNumbers, nil
 }
-
-func (c *Client) GetGIDNumberByGroupCN(groupCN string) (string, error) {
-	base := "ou=Groups," + c.Config.LDAPBaseDN
-	filter := fmt.Sprintf("(&(objectClass=posixGroup)(cn=%s))", ldap.EscapeFilter(groupCN))
-	attributes := []string{"gidNumber"}
-
-	result, err := c.SearchByFilter(base, filter, attributes)
-	if err != nil {
-		c.Logger.Error("failed to search for gidNumbers", zap.Error(err))
-		return "", fmt.Errorf("failed to retrieve gidNumbers: %w", err)
-	}
-
-	gid := result.Entries[0].GetAttributeValue("gidNumber")
-
-	return gid, nil
-}
