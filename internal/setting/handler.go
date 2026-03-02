@@ -65,7 +65,7 @@ type Store interface {
 	GetPublicKeyByFingerprint(ctx context.Context, id uuid.UUID, fingerprint string) (LDAPPublicKey, error)
 	AddPublicKey(ctx context.Context, user uuid.UUID, publicKey string, title string) (LDAPPublicKey, error)
 	DeletePublicKey(ctx context.Context, user uuid.UUID, fingerprint string) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
+	OnboardUser(ctx context.Context, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
@@ -137,7 +137,7 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.ID, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
