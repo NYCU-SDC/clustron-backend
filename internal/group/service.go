@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,6 +64,7 @@ type LDAPClient interface {
 	AddUserToGroup(groupName string, memberUid string) error
 	RemoveUserFromGroup(groupName string, memberUid string) error
 	GetAllGIDNumbers() ([]string, error)
+	GetGroupInfo(groupName string) (*ldap.Entry, error)
 }
 
 type Service struct {
@@ -616,6 +618,66 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 	}
 
 	return newGroup, nil
+}
+
+func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "Delete")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	err := s.queries.Delete(ctx, groupID)
+	if err != nil {
+		logger.Error("fail to delete group")
+		return err
+	}
+
+	baseCN, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP base group CN by group ID")
+		logger.Error("failed to get LDAP base group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(ctx, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "failed to get LDAP admin group CN by group ID")
+		logger.Error("failed to get LDAP admin group CN by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	// get GID number of base group
+	baseEntry, err := s.ldapClient.GetGroupInfo(baseCN)
+	if err != nil {
+		logger.Error("failed to get LDAP base group GID number by CN", zap.String("baseCN", baseCN), zap.Error(err))
+		return err
+	}
+	baseGID := baseEntry.GetAttributeValue("gidNumber")
+	baseEntry.GetAttributeValues("member")
+	saga := internal.NewSaga(logger)
+
+	saga.AddStep(internal.SagaStep{
+		Name: "Delete basic group",
+		Action: func(ctx context.Context) error {
+			err = s.ldapClient.DeleteGroup(baseCN)
+			if err != nil {
+				err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to delete LDAP basic group")
+				span.RecordError(err)
+				return err
+			}
+
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.ldapClient.CreateGroup(ctx, baseCN, baseGID)
+			if err != nil {
+				s.logger.Warn("failed to create basic group in compensation", zap.Error(err), zap.String("group_id", group.ID.String()))
+			}
+			return err
+		},
+	})
+
+	return nil
 }
 
 func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error) {
