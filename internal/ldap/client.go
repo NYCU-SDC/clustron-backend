@@ -89,7 +89,7 @@ func (c *Client) Validate() error {
 	}
 	if len(sr.Entries) == 0 {
 		c.Logger.Error("People OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
-		return fmt.Errorf("People OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+		return fmt.Errorf("people OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
 	}
 
 	searchGroupsOURequest := ldap.NewSearchRequest(
@@ -106,7 +106,7 @@ func (c *Client) Validate() error {
 	}
 	if len(sr.Entries) == 0 {
 		c.Logger.Error("Groups OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
-		return fmt.Errorf("Groups OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+		return fmt.Errorf("groups OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
 	}
 
 	c.Logger.Info("LDAP structure validated successfully")
