@@ -130,6 +130,11 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize LDAP client", zap.Error(err))
 	}
+	err = ldapClient.Validate()
+	if err != nil {
+		logger.Fatal("Failed to validate LDAP connection", zap.Error(err))
+	}
+	defer ldapClient.Close()
 
 	shutdown, err := initOpenTelemetry(AppName, Version, BuildTime, CommitHash, cfg.OtelCollectorUrl)
 	if err != nil {
