@@ -9,6 +9,7 @@ import (
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"fmt"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -428,6 +430,10 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 
 	group, err := s.queries.GetByID(ctx, groupID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Group{}, internal.ErrGroupNotFound
+		}
+
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get group by id")
 		span.RecordError(err)
 		return Group{}, err
@@ -751,6 +757,10 @@ func (s *Service) GetUserGroupByID(ctx context.Context, userID uuid.UUID, groupI
 		GroupID: groupID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Group{}, internal.ErrGroupNotFound
+		}
+
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userID.String()+" "+groupID.String(), logger, "get membership")
 		span.RecordError(err)
 		return Group{}, err
