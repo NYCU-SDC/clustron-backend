@@ -358,6 +358,8 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
 func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
