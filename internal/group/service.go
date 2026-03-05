@@ -638,33 +638,44 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 		}
 	}(tx, ctx)
 
-	// 1. Fetch the LDAP CNs for both Base and Admin groups from the database
+	q := s.queries.WithTx(tx)
+	err = q.Delete(ctx, groupID)
+	if err != nil {
+		logger.Error("failed to delete group in database", zap.Error(err))
+		return err
+	}
+
+	// Fetch the LDAP CNs for both Base and Admin groups from the database
 	baseCN, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupID)
 	if err != nil {
-		return fmt.Errorf("failed to get base group CN: %w", err)
+		logger.Error("failed to get CN of base group by group ID", zap.Error(err))
+		return err
 	}
 
 	adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupID)
 	if err != nil {
-		return fmt.Errorf("failed to get admin group CN: %w", err)
+		logger.Error("failed to get CN of admin group by group ID", zap.Error(err))
+		return err
 	}
 
-	// 2. Fetch current state from LDAP for exact compensation/rollback
+	// Fetch current state from LDAP for exact compensation
 	baseInfo, err := s.ldapClient.GetGroupInfo(baseCN)
 	if err != nil {
-		return fmt.Errorf("failed to fetch base group state for saga: %w", err)
+		logger.Error("failed to get info of base group by group ID", zap.Error(err))
+		return err
 	}
 	baseGid := baseInfo.GetAttributeValue("gidNumber")
 	baseMembers := baseInfo.GetAttributeValues("memberUid")
 
 	adminInfo, err := s.ldapClient.GetGroupInfo(adminCN)
 	if err != nil {
-		return fmt.Errorf("failed to fetch admin group state for saga: %w", err)
+		logger.Error("failed to get info of admin group by group ID", zap.Error(err))
+		return err
 	}
 	adminGid := adminInfo.GetAttributeValue("gidNumber")
 	adminMembers := adminInfo.GetAttributeValues("memberUid")
 
-	// 2. Initialize the Saga orchestration to ensure Atomicity
+	// Initialize the Saga orchestration for LDAP operation
 	saga := internal.NewSaga(s.logger)
 
 	// Step 1: Delete the Base Group
@@ -684,7 +695,7 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 			s.logger.Info("Compensating: Recreating Base LDAP Group", zap.String("cn", baseCN))
 			err = s.ldapClient.CreateGroup(baseCN, baseGid, baseMembers)
 			if err != nil {
-				s.logger.Error("failed to compensate creating base group in LDAP", zap.Error(err))
+				s.logger.Error("failed to compensate for creating base group in LDAP", zap.Error(err))
 				span.RecordError(err)
 				return err
 			}
@@ -709,7 +720,7 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 			s.logger.Info("Compensating: Recreating Admin LDAP Group", zap.String("cn", baseCN))
 			err = s.ldapClient.CreateGroup(adminCN, adminGid, adminMembers)
 			if err != nil {
-				s.logger.Error("failed to compensate creating admin group in LDAP", zap.Error(err))
+				s.logger.Error("failed to compensate for creating admin group in LDAP", zap.Error(err))
 				span.RecordError(err)
 				return err
 			}
@@ -726,6 +737,12 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 		s.logger.Error("Failed to delete LDAP groups, saga aborted/compensated", zap.Error(err))
 		span.RecordError(err)
 		return fmt.Errorf("transaction aborted: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Error("failed to commit transaction", zap.Error(err))
+		span.RecordError(err)
+		return err
 	}
 
 	s.logger.Info("Successfully deleted LDAP groups", zap.String("group_id", groupID.String()))
