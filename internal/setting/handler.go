@@ -479,7 +479,10 @@ func loadSystemUsers() error {
 		return err
 	}
 	defer func(file *os.File) {
-		_ = file.Close()
+		closeErr := file.Close()
+		if err != nil {
+			err = closeErr
+		}
 	}(file)
 
 	scanner := bufio.NewScanner(file)
