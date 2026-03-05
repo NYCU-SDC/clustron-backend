@@ -54,3 +54,61 @@ func (c *Client) Close() {
 		c.Logger.Info("LDAP connection closed successfully")
 	}
 }
+
+func (c *Client) Validate() error {
+	// Check if base DN exists
+	searchRequest := ldap.NewSearchRequest(
+		c.Config.LDAPBaseDN,
+		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
+		"(objectClass=*)",
+		[]string{"dn"},
+		nil,
+	)
+
+	sr, err := c.Conn.Search(searchRequest)
+	if err != nil {
+		c.Logger.Error("Failed to search LDAP base DN", zap.Error(err))
+		return fmt.Errorf("failed to search LDAP base DN: %w", err)
+	}
+	if len(sr.Entries) == 0 {
+		c.Logger.Error("Base DN does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
+		return fmt.Errorf("base DN does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+	}
+
+	searchPeopleOURequest := ldap.NewSearchRequest(
+		fmt.Sprintf("ou=People,%s", c.Config.LDAPBaseDN),
+		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
+		"(objectClass=organizationalUnit)",
+		[]string{"dn"},
+		nil,
+	)
+	sr, err = c.Conn.Search(searchPeopleOURequest)
+	if err != nil {
+		c.Logger.Error("Failed to search for People OU", zap.Error(err))
+		return fmt.Errorf("failed to search for People OU: %w", err)
+	}
+	if len(sr.Entries) == 0 {
+		c.Logger.Error("People OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
+		return fmt.Errorf("people OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+	}
+
+	searchGroupsOURequest := ldap.NewSearchRequest(
+		fmt.Sprintf("ou=Groups,%s", c.Config.LDAPBaseDN),
+		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
+		"(objectClass=organizationalUnit)",
+		[]string{"dn"},
+		nil,
+	)
+	sr, err = c.Conn.Search(searchGroupsOURequest)
+	if err != nil {
+		c.Logger.Error("Failed to search for Groups OU", zap.Error(err))
+		return fmt.Errorf("failed to search for Groups OU: %w", err)
+	}
+	if len(sr.Entries) == 0 {
+		c.Logger.Error("Groups OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
+		return fmt.Errorf("groups OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+	}
+
+	c.Logger.Info("LDAP structure validated successfully")
+	return nil
+}
