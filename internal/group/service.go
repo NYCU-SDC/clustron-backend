@@ -728,10 +728,6 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 		},
 	})
 
-	// Optional Step 3: Delete records from the Database
-	// You can add a third step here to delete the `ldap_groups` rows in PostgreSQL,
-	// using a DB transaction rollback as the compensation mechanism.
-
 	// 3. Execute the Saga
 	if err := saga.Execute(traceCtx); err != nil { //
 		s.logger.Error("Failed to delete LDAP groups, saga aborted/compensated", zap.Error(err))
