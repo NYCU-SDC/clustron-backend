@@ -2,7 +2,7 @@ CREATE TYPE group_type AS ENUM ('BASE', 'ADMIN');
 
 CREATE TABLE IF NOT EXISTS ldap_groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id UUID REFERENCES groups(id) NOT NULL,
+    group_id UUID REFERENCES groups(id) ON DELETE CASCADE NOT NULL,
     ldap_cn VARCHAR(255) UNIQUE,
     type group_type NOT NULL,
     gid_number BIGINT UNIQUE NOT NULL,
