@@ -32,6 +32,7 @@ type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error)
+	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -319,6 +320,46 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)
+}
+
+func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "DeleteHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "DeleteHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if user.Role != grouprole.AccessLevelAdmin.String() {
+		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		if accessLevel != string(grouprole.AccessLevelOwner) {
+			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
+			return
+		}
+	}
+
+	err = h.store.Delete(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
 func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
