@@ -1,0 +1,17 @@
+{
+  "target_ip": "backend",
+  "target_port": 8080,
+  "host": "backend:8080",
+  "max_combinations": 20,
+  "authentication": {
+    "token": {
+      "token_refresh_cmd": "python3 /mnt/restler/auth.py 474410d9-5eb9-4359-a469-4e5c7366f9ee",
+      "token_refresh_interval": 300
+    }
+  },
+  "include_requests": [
+    { "endpoint": "/api/groups/*" },
+    { "endpoint": "/api/settings/*" }
+  ],
+  "no_tokens_in_logs": false
+}
