@@ -325,6 +325,17 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
+			name: "Should block linux username with reserved linux word",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "syslog",
+				Password:      "str0ngpassword",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
 			name: "Should block linux username with space",
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
