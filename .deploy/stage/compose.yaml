@@ -58,6 +58,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
+    volumes:
+      - db-data:/var/lib/postgresql
     networks:
       - internal
 
@@ -77,6 +79,8 @@ services:
       KEEP_EXISTING_CONFIG: "false"
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
     command: --copy-service --loglevel debug
     networks:
       - internal
@@ -95,3 +99,8 @@ networks:
   internal:
   traefik:
     external: true
+
+volumes:
+  db-data:
+  ldap-data:
+  ldap-config:
