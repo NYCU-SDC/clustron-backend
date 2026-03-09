@@ -328,7 +328,7 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "DeleteHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
