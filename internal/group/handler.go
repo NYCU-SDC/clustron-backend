@@ -4,7 +4,6 @@ import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/membership"
-	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"net/http"
@@ -237,11 +236,6 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != role.Admin.String() && user.Role != role.Organizer.String() {
-		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-		return
-	}
-
 	var request CreateRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -334,25 +328,6 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := jwt.GetUserFromContext(r.Context())
-	if err != nil {
-		logger.DPanic("Can't find user in context, this should never happen")
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	if user.Role != grouprole.AccessLevelAdmin.String() {
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
-	}
-
 	err = h.store.Delete(traceCtx, groupUUID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -379,18 +354,6 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != grouprole.AccessLevelAdmin.String() {
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Archive(traceCtx, groupUUID)
@@ -442,18 +405,6 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != grouprole.AccessLevelAdmin.String() {
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Unarchive(traceCtx, groupUUID)
