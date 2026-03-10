@@ -89,7 +89,6 @@ func TestHandler_ArchiveHandler(t *testing.T) {
 		{
 			name: "Valid group ID archives group",
 			setupMock: func(store *mocks.Store, user jwt.User, groupID uuid.UUID) {
-				store.On("GetUserGroupAccessLevel", mock.Anything, user.ID, groupID).Return(grouprole.AccessLevelOwner.String(), nil)
 				store.On("Archive", mock.Anything, groupID).Return(group.Group{}, nil)
 				store.On("GetTypeByUser", mock.Anything, user.Role, user.ID, groupID).Return(grouprole.GroupRole{}, "membership", nil)
 			},
@@ -147,7 +146,6 @@ func TestHandler_UnarchiveHandler(t *testing.T) {
 		{
 			name: "Valid group ID unarchives group",
 			setupMock: func(store *mocks.Store, user jwt.User, groupID uuid.UUID) {
-				store.On("GetUserGroupAccessLevel", mock.Anything, user.ID, groupID).Return(grouprole.AccessLevelOwner.String(), nil)
 				store.On("Unarchive", mock.Anything, groupID).Return(group.Group{}, nil)
 				store.On("GetTypeByUser", mock.Anything, user.Role, user.ID, groupID).Return(grouprole.GroupRole{}, "membership", nil)
 			},
