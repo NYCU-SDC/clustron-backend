@@ -35,7 +35,9 @@ var (
 	ErrInvalidFullName = errors.New("invalid full name")
 	ErrInvalidRoleType = errors.New("invalid role type")
 	ErrSelfDeletion    = errors.New("self deletion")
-	ErrGroupNotFound   = errors.New("group not found or user not in group")
+
+	// Group Errors
+	ErrGroupNotFound = errors.New("group not found or user not in group")
 )
 
 type ErrInvalidLinuxUsername struct {

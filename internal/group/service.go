@@ -256,8 +256,6 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		group, err = s.Get(traceCtx, groupID)
 	}
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
-		span.RecordError(err)
 		return grouprole.UserScope{}, err
 	}
 
@@ -302,8 +300,6 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 		group, err = s.Get(traceCtx, groupID)
 	}
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
-		span.RecordError(err)
 		return ResponseWithLinks{}, err
 	}
 
@@ -889,7 +885,6 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}
-
 	return userScope, nil
 }
 
