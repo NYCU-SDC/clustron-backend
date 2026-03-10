@@ -1,7 +1,6 @@
 package membership
 
 import (
-	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/user/role"
 	"context"
@@ -23,7 +22,7 @@ type Store interface {
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
-	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]Response, error)
+	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]MemberResponse, error)
 	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error)
 	UpdatePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID, role uuid.UUID) (PendingMemberResponse, error)
 	RemovePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID) error
@@ -34,14 +33,6 @@ type Store interface {
 type UserService interface {
 	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
-}
-
-type Response struct {
-	ID        uuid.UUID              `json:"id"`
-	FullName  string                 `json:"fullName"`
-	Email     string                 `json:"email"`
-	StudentID string                 `json:"studentId"`
-	Role      grouprole.RoleResponse `json:"role"`
 }
 
 type AddMembersRequest struct {
@@ -65,7 +56,7 @@ type Handler struct {
 
 	store                    Store
 	userService              UserService
-	paginationFactory        pagination.Factory[Response]
+	paginationFactory        pagination.Factory[MemberResponse]
 	pendingPaginationFactory pagination.Factory[PendingMemberResponse]
 }
 
@@ -83,7 +74,7 @@ func NewHandler(
 		tracer:                   otel.Tracer("member/handler"),
 		store:                    store,
 		userService:              userService,
-		paginationFactory:        pagination.NewFactory[Response](200, []string{"id"}),
+		paginationFactory:        pagination.NewFactory[MemberResponse](200, []string{"id"}),
 		pendingPaginationFactory: pagination.NewFactory[PendingMemberResponse](200, []string{"id"}),
 	}
 }
@@ -94,7 +85,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	logger := h.logger.With(zap.String("handler", "AddGroupMemberHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -120,6 +111,7 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	for _, m := range request.Members {
 		if (m.Member == user.Email || m.Member == user.StudentID.String) && !user.HasRole(role.Admin.String()) {
+			results.AddedFailureNumber++
 			continue
 		}
 
@@ -139,13 +131,11 @@ func (h *Handler) AddGroupMemberHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if results.AddedSuccessNumber > 0 {
-		handlerutil.WriteJSONResponse(w, http.StatusCreated, results)
+		handlerutil.WriteJSONResponse(w, http.StatusOK, results)
 		return
 	}
-	if results.AddedFailureNumber > 0 {
-		handlerutil.WriteJSONResponse(w, http.StatusInternalServerError, results)
-		return
-	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusBadRequest, results)
 }
 
 func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Request) {
@@ -155,12 +145,12 @@ func (h *Handler) RemoveGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	groupID := r.PathValue("group_id")
 	removedUserID := r.PathValue("user_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	removedUserUUID, err := uuid.Parse(removedUserID)
+	removedUserUUID, err := handlerutil.ParseUUID(removedUserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -182,12 +172,12 @@ func (h *Handler) UpdateGroupMemberHandler(w http.ResponseWriter, r *http.Reques
 
 	groupID := r.PathValue("group_id")
 	userID := r.PathValue("user_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	userUUID, err := uuid.Parse(userID)
+	userUUID, err := handlerutil.ParseUUID(userID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -214,7 +204,7 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 	logger := h.logger.With(zap.String("handler", "ListGroupMembersPagedHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -255,7 +245,7 @@ func (h *Handler) ListPendingMembersPagedHandler(w http.ResponseWriter, r *http.
 	logger := h.logger.With(zap.String("handler", "ListPendingMembersPagedHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -297,12 +287,12 @@ func (h *Handler) UpdatePendingMemberHandler(w http.ResponseWriter, r *http.Requ
 
 	groupID := r.PathValue("group_id")
 	pendingID := r.PathValue("pending_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	pendingUUID, err := uuid.Parse(pendingID)
+	pendingUUID, err := handlerutil.ParseUUID(pendingID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -330,12 +320,12 @@ func (h *Handler) RemovePendingMemberHandler(w http.ResponseWriter, r *http.Requ
 
 	groupID := r.PathValue("group_id")
 	pendingID := r.PathValue("pending_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	pendingUUID, err := uuid.Parse(pendingID)
+	pendingUUID, err := handlerutil.ParseUUID(pendingID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

@@ -13,7 +13,6 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -31,7 +30,8 @@ type MemberStore interface {
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
-	Create(ctx context.Context, userID uuid.UUID, group CreateParams) (Group, error)
+	Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error)
+	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -78,7 +78,7 @@ type CreateResponse struct {
 }
 
 type CreateRequest struct {
-	Title       string                        `json:"title" validate:"required"`
+	Title       string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
 	Description string                        `json:"description" validate:"required"`
 	Members     []membership.AddMemberRequest `json:"members"`
 	Links       []CreateLinkRequest
@@ -172,7 +172,7 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get group id from url
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -236,11 +236,6 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != "admin" && user.Role != "organizer" { // TODO: the string comparison should be replaced with a enum.
-		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-		return
-	}
-
 	var request CreateRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -248,10 +243,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.Create(traceCtx, user.ID, CreateParams{
-		Title:       request.Title,
-		Description: pgtype.Text{String: request.Description, Valid: true},
-	})
+	group, err := h.store.Create(traceCtx, user.ID, request.Title, request.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -324,13 +316,34 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)
 }
 
+func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "DeleteHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "DeleteHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := handlerutil.ParseUUID(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.Delete(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+}
+
 func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
 	defer span.End()
 	logger := h.logger.With(zap.String("handler", "ArchiveHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -341,18 +354,6 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Archive(traceCtx, groupUUID)
@@ -393,7 +394,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "UnarchiveHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -404,18 +405,6 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != "admin" { // TODO: the string comparison should be replaced with a enum.
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Unarchive(traceCtx, groupUUID)
@@ -456,7 +445,7 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "CreateLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -490,14 +479,14 @@ func (h *Handler) UpdateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "UpdateLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	linkID := r.PathValue("link_id")
-	linkUUID, err := uuid.Parse(linkID)
+	linkUUID, err := handlerutil.ParseUUID(linkID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -531,14 +520,14 @@ func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger.With(zap.String("handler", "DeleteLinkHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	linkID := r.PathValue("link_id")
-	linkUUID, err := uuid.Parse(linkID)
+	linkUUID, err := handlerutil.ParseUUID(linkID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -559,7 +548,7 @@ func (h *Handler) TransferGroupOwnerHandler(w http.ResponseWriter, r *http.Reque
 	logger := h.logger.With(zap.String("handler", "TransferGroupOwnerHandler"))
 
 	groupID := r.PathValue("group_id")
-	groupUUID, err := uuid.Parse(groupID)
+	groupUUID, err := handlerutil.ParseUUID(groupID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

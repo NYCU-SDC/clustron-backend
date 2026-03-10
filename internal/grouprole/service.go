@@ -6,26 +6,46 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
-type Service struct {
-	logger  *zap.Logger
-	tracer  trace.Tracer
-	queries *Queries
+type LDAPGroupStore interface {
+	GetLDAPAdminGroupCNByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type LDAPClient interface {
+	AddUserToGroup(groupName string, memberUid string) error
+	RemoveUserFromGroup(groupName string, memberUid string) error
+	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
+}
+
+type Service struct {
+	logger         *zap.Logger
+	tracer         trace.Tracer
+	queries        *Queries
+	db             *pgxpool.Pool
+	ldapGroupStore LDAPGroupStore
+	ldapClient     LDAPClient
+}
+
+func NewService(logger *zap.Logger, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient, db *pgxpool.Pool) *Service {
 	return &Service{
-		logger:  logger,
-		tracer:  otel.Tracer("group/service"),
-		queries: New(db),
+		logger:         logger,
+		tracer:         otel.Tracer("group/service"),
+		queries:        New(db),
+		db:             db,
+		ldapGroupStore: ldapGroupStore,
+		ldapClient:     ldapClient,
 	}
 }
 
@@ -43,26 +63,29 @@ func (s *Service) GetAll(ctx context.Context) ([]GroupRole, error) {
 	return roles, nil
 }
 
-func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, error) {
+func (s *Service) Create(ctx context.Context, roleName string, level AccessLevel) (GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateGroupRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByRoleName(ctx, role.RoleName)
+	exists, err := s.queries.ExistsByRoleName(ctx, roleName)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "check if group role exists")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", roleName, logger, "check if group role exists")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
 	if exists {
-		err = fmt.Errorf("role %s already exists, %w", role.RoleName, internal.ErrDatabaseConflict)
+		err = fmt.Errorf("role %s already exists, %w", roleName, internal.ErrDatabaseConflict)
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
 
-	createdRole, err := s.queries.Create(ctx, role)
+	createdRole, err := s.queries.Create(ctx, CreateParams{
+		RoleName:    roleName,
+		AccessLevel: level.String(),
+	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", role.RoleName, logger, "create group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_name", roleName, logger, "create group role")
 		span.RecordError(err)
 		return GroupRole{}, err
 	}
@@ -70,16 +93,137 @@ func (s *Service) Create(ctx context.Context, role CreateParams) (GroupRole, err
 	return createdRole, nil
 }
 
-func (s *Service) Update(ctx context.Context, role UpdateParams) (GroupRole, error) {
+func (s *Service) Update(ctx context.Context, roleID uuid.UUID, roleName string, level AccessLevel) (GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupRole")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	updatedRole, err := s.queries.Update(ctx, role)
+	groupRole, err := s.queries.GetByID(ctx, roleID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", role.ID.String(), logger, "update group role")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleID.String(), logger, "get group role by id")
 		span.RecordError(err)
 		return GroupRole{}, err
+	}
+
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin transaction for updating group role")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+	defer func(tx pgx.Tx) {
+		txErr := tx.Rollback(traceCtx)
+		if txErr != nil && !errors.Is(txErr, pgx.ErrTxClosed) {
+			logger.Error("failed to rollback transaction for updating group role", zap.String("role_id", roleID.String()), zap.Error(txErr))
+		}
+	}(tx)
+
+	q := s.queries.WithTx(tx)
+
+	updatedRole, err := q.Update(ctx, UpdateParams{
+		ID:          roleID,
+		RoleName:    roleName,
+		AccessLevel: level.String(),
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleID.String(), logger, "update group role")
+		span.RecordError(err)
+		return GroupRole{}, err
+	}
+
+	isChangeToAdminLevel := (groupRole.AccessLevel == AccessLevelUser.String() && level.String() == AccessLevelAdmin.String()) ||
+		(groupRole.AccessLevel == AccessLevelUser.String() && level.String() == AccessLevelOwner.String())
+	isChangeFromAdminLevel := (groupRole.AccessLevel == AccessLevelAdmin.String() && level.String() == AccessLevelUser.String()) ||
+		(groupRole.AccessLevel == AccessLevelOwner.String() && level.String() == AccessLevelUser.String())
+
+	if isChangeToAdminLevel || isChangeFromAdminLevel {
+		saga := internal.NewSaga(logger)
+
+		updatedMember, err := s.queries.GetUpdatedUser(ctx, roleID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", "role_id", roleID.String(), logger, "get updated user for group role")
+			span.RecordError(err)
+			return GroupRole{}, err
+		}
+
+		for _, member := range updatedMember {
+			saga.AddStep(internal.SagaStep{
+				Name: "UpdateUserRole",
+				Action: func(ctx context.Context) error {
+					userInfo, err := s.ldapClient.GetUserInfoByUIDNumber(member.UidNumber)
+					if err != nil {
+						return fmt.Errorf("failed to get user info by UID number %d: %w", member.UidNumber, err)
+					}
+
+					memberUid := userInfo.GetAttributeValue("uid")
+					if memberUid == "" {
+						return fmt.Errorf("user with UID number %d does not have a uid attribute", member.UidNumber)
+					}
+
+					adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(ctx, member.GroupID)
+					if err != nil {
+						return fmt.Errorf("failed to get LDAP base group CN by group ID %s: %w", member.GroupID.String(), err)
+					}
+
+					if level.String() == AccessLevelAdmin.String() || level.String() == AccessLevelOwner.String() {
+						err = s.ldapClient.AddUserToGroup(adminCN, memberUid)
+						if err != nil {
+							return fmt.Errorf("failed to add user %s to admin group for group %s: %w", memberUid, adminCN, err)
+						}
+					} else {
+						err = s.ldapClient.RemoveUserFromGroup(adminCN, memberUid)
+						if err != nil {
+							return fmt.Errorf("failed to remove user %s from admin group for group %s: %w", memberUid, adminCN, err)
+						}
+					}
+
+					return nil
+				},
+				Compensate: func(ctx context.Context) error {
+					userInfo, err := s.ldapClient.GetUserInfoByUIDNumber(member.UidNumber)
+					if err != nil {
+						return fmt.Errorf("failed to get user info by UID number %d: %w", member.UidNumber, err)
+					}
+
+					memberUid := userInfo.GetAttributeValue("uid")
+					if memberUid == "" {
+						return fmt.Errorf("user with UID number %d does not have a uid attribute", member.UidNumber)
+					}
+
+					adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(ctx, member.GroupID)
+					if err != nil {
+						return fmt.Errorf("failed to get LDAP base group CN by group ID %s: %w", member.GroupID.String(), err)
+					}
+
+					if level.String() == AccessLevelAdmin.String() || level.String() == AccessLevelOwner.String() {
+						err = s.ldapClient.RemoveUserFromGroup(adminCN, memberUid)
+						if err != nil {
+							return fmt.Errorf("failed to remove user %s from admin group for group %s: %w", memberUid, adminCN, err)
+						}
+					} else {
+						err = s.ldapClient.AddUserToGroup(adminCN, memberUid)
+						if err != nil {
+							return fmt.Errorf("failed to add user %s to admin group for group %s: %w", memberUid, adminCN, err)
+						}
+					}
+
+					return nil
+				},
+			})
+		}
+
+		err = saga.Execute(traceCtx)
+		if err != nil {
+			err = fmt.Errorf("failed to execute saga for updating user roles when updating group role with id %s: %w", roleID.String(), err)
+			span.RecordError(err)
+			return GroupRole{}, err
+		}
+
+		if err := tx.Commit(traceCtx); err != nil {
+			err = databaseutil.WrapDBError(err, logger, "commit transaction for updating group role")
+			span.RecordError(err)
+			return GroupRole{}, err
+		}
 	}
 
 	return updatedRole, nil

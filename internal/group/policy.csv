@@ -7,3 +7,4 @@ p, user, /api/groups/:group_id/link, POST
 p, user, /api/groups/:group_id/link/:linkId, PUT
 p, user, /api/groups/:group_id/link/:linkId, DELETE
 p, user, /api/groups/:groupId/transfer, POST
+p, admin, /api/groups/:groupID, DELETE

@@ -1,11 +1,13 @@
 package setting
 
 import (
+	"bufio"
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +27,7 @@ import (
 type OnboardingRequest struct {
 	FullName      string `json:"fullName" validate:"required"`
 	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
+	Password      string `json:"password" validate:"required,min=8"`
 }
 
 type LoginMethod struct {
@@ -64,7 +67,7 @@ type Store interface {
 	GetPublicKeyByFingerprint(ctx context.Context, id uuid.UUID, fingerprint string) (LDAPPublicKey, error)
 	AddPublicKey(ctx context.Context, user uuid.UUID, publicKey string, title string) (LDAPPublicKey, error)
 	DeletePublicKey(ctx context.Context, user uuid.UUID, fingerprint string) error
-	OnboardUser(ctx context.Context, userRole string, userID uuid.UUID, email string, studentID string, fullName pgtype.Text, linuxUsername pgtype.Text) error
+	OnboardUser(ctx context.Context, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
@@ -79,6 +82,62 @@ type Handler struct {
 	userStore    UserStore
 }
 
+var Blacklist = LinuxUsernameBlacklist{
+	// Core System Users
+	"root":          {},
+	"daemon":        {},
+	"bin":           {},
+	"sys":           {},
+	"sync":          {},
+	"games":         {},
+	"man":           {},
+	"lp":            {},
+	"mail":          {},
+	"news":          {},
+	"uucp":          {},
+	"proxy":         {},
+	"admin":         {},
+	"administrator": {},
+
+	// Service-Specific Accounts
+	"syslog":     {},
+	"www-data":   {},
+	"backup":     {},
+	"list":       {},
+	"irc":        {},
+	"gnats":      {},
+	"nobody":     {},
+	"nogroup":    {},
+	"messagebus": {},
+	"sshd":       {},
+
+	// Modern Systemd / Virtual Users
+	"systemd-network":  {},
+	"systemd-resolve":  {},
+	"systemd-timesync": {},
+	"systemd-coredump": {},
+	"_apt":             {},
+	"uuidd":            {},
+	"tcpdump":          {},
+
+	// Database and Common App Defaults
+	"mysql":    {},
+	"postgres": {},
+	"apache":   {},
+	"nginx":    {},
+	"postfix":  {},
+
+	// suggested system name
+	"dhcpcd":        {},
+	"pollinate":     {},
+	"polkitd":       {},
+	"tss":           {},
+	"landscape":     {},
+	"fwupd-refresh": {},
+	"usbmux":        {},
+	"sssd":          {},
+}
+
 func validatePublicKey(key string) error {
 	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key))
 	if err != nil {
@@ -88,6 +147,10 @@ func validatePublicKey(key string) error {
 }
 
 func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
+	err := loadSystemUsers()
+	if err != nil {
+		logger.Error("fail to read user from system")
+	}
 	return Handler{
 		logger:        logger,
 		validator:     v,
@@ -124,6 +187,10 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Linux Username cannot be empty"}, logger)
 		return
 	}
+	if !isValidPassword(request.Password) {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidPassword, logger)
+		return
+	}
 
 	// check if the linux username is valid first
 	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
@@ -132,7 +199,13 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.settingStore.OnboardUser(traceCtx, user.Role, user.ID, user.Email, user.StudentID.String, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	err = h.settingStore.OnboardUser(traceCtx, user.ID, pgtype.Text{String: request.FullName, Valid: true}, pgtype.Text{String: request.LinuxUsername, Valid: true})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.settingStore.UpdatePassword(traceCtx, user.ID, request.Password)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -341,7 +414,7 @@ func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string
 		}
 	}
 
-	if linuxUsername == "root" || linuxUsername == "admin" || linuxUsername == "administrator" {
+	if _, exists := Blacklist[linuxUsername]; exists {
 		return internal.ErrInvalidLinuxUsername{
 			Reason: "Linux username contain reserved keywords",
 		}
@@ -398,4 +471,38 @@ func isValidPassword(pass string) bool {
 	hasLetter := regexp.MustCompile(`[a-zA-Z]`).MatchString(pass)
 	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(pass)
 	return hasLetter && hasNumber
+}
+
+func loadSystemUsers() error {
+	file, err := os.Open("/etc/passwd")
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		closeErr := file.Close()
+		if err != nil {
+			err = closeErr
+		}
+	}(file)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines or comments
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		// /etc/passwd format: name:password:UID:GID:comment:home:shell
+		parts := strings.Split(line, ":")
+		if len(parts) > 0 {
+			username := strings.ToLower(strings.TrimSpace(parts[0]))
+			if username != "" {
+				Blacklist[username] = struct{}{}
+			}
+		}
+	}
+
+	return scanner.Err()
 }

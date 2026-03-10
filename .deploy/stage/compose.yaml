@@ -18,6 +18,8 @@ services:
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - NYCU_OAUTH_CLIENT_ID=${NYCU_OAUTH_CLIENT_ID}
       - NYCU_OAUTH_CLIENT_SECRET=${NYCU_OAUTH_CLIENT_SECRET}
+      - GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}
+      - GITHUB_OAUTH_CLIENT_SECRET=${GITHUB_OAUTH_CLIENT_SECRET}
       - SECRET=${SECRET}
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.stage.clustron.sdc.nycu.club
@@ -56,6 +58,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: clustron
+    volumes:
+      - db-data:/var/lib/postgresql
     networks:
       - internal
 
@@ -74,7 +78,9 @@ services:
       LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
       KEEP_EXISTING_CONFIG: "false"
     volumes:
-      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
     command: --copy-service --loglevel debug
     networks:
       - internal
@@ -93,3 +99,8 @@ networks:
   internal:
   traefik:
     external: true
+
+volumes:
+  db-data:
+  ldap-data:
+  ldap-config:

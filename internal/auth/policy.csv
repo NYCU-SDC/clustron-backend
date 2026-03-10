@@ -1,1 +1,2 @@
 p, user, /api/bind/oauth/:provider, POST
+p, user, /api/publickey/import, GET

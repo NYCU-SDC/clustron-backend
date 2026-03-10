@@ -26,3 +26,12 @@ SELECT gr.* FROM group_role AS gr JOIN memberships AS m ON m.role_id = gr.id WHE
 
 -- name: GetByName :one
 SELECT * FROM group_role WHERE role_name = $1;
+
+-- name: GetUpdatedUser :many
+SELECT
+    lu.uid_number,
+    m.group_id
+FROM memberships AS m
+JOIN group_role AS gr ON gr.id = m.role_id
+JOIN ldap_user AS lu ON lu.id = m.user_id
+WHERE gr.id = $1;

@@ -48,6 +48,8 @@ type Config struct {
 	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
 	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	GithubOauthClientID     string                    `yaml:"github_oauth_client_id"    envconfig:"GITHUB_OAUTH_CLIENT_ID"`
+	GithubOauthClientSecret string                    `yaml:"github_oauth_client_secret" envconfig:"GITHUB_OAUTH_CLIENT_SECRET"`
 	NYCUOauthClientID       string                    `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
 	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
 	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
@@ -129,6 +131,8 @@ func Load() (Config, *LogBuffer) {
 		OtelCollectorUrl:        "",
 		GoogleOauthClientID:     "",
 		GoogleOauthClientSecret: "",
+		GithubOauthClientID:     "",
+		GithubOauthClientSecret: "",
 	}
 
 	var err error
@@ -232,6 +236,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		OtelCollectorUrl:        os.Getenv("OTEL_COLLECTOR_URL"),
 		GoogleOauthClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 		GoogleOauthClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		GithubOauthClientID:     os.Getenv("GITHUB_OAUTH_CLIENT_ID"),
+		GithubOauthClientSecret: os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"),
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		LDAP: ldap.Config{
@@ -266,8 +272,10 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
 	flag.StringVar(&flagConfig.RedisURL, "redis_url", "", "redis url")
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
-	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "OAuth client ID")
-	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "OAuth client secret")
+	flag.StringVar(&flagConfig.GoogleOauthClientID, "google_oauth_client_id", "", "google OAuth client ID")
+	flag.StringVar(&flagConfig.GoogleOauthClientSecret, "google_oauth_client_secret", "", "google OAuth client secret")
+	flag.StringVar(&flagConfig.GithubOauthClientID, "github_oauth_client_id", "", "github OAuth client ID")
+	flag.StringVar(&flagConfig.GithubOauthClientSecret, "github_oauth_client_secret", "", "github OAuth client secret")
 	flag.StringVar(&flagConfig.NYCUOauthClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
 	flag.StringVar(&flagConfig.NYCUOauthClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
 
