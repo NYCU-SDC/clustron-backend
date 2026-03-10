@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,6 +64,7 @@ type LDAPClient interface {
 	AddUserToGroup(groupName string, memberUid string) error
 	RemoveUserFromGroup(groupName string, memberUid string) error
 	GetAllGIDNumbers() ([]string, error)
+	GetGroupInfo(groupName string) (*ldap.Entry, error)
 }
 
 type Service struct {
@@ -616,6 +618,131 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 	}
 
 	return newGroup, nil
+}
+
+func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteGroup")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		logger.Error("begin transaction failed", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func(tx pgx.Tx, ctx context.Context) {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			logger.Warn("failed to rollback transaction", zap.Error(err))
+		}
+	}(tx, ctx)
+
+	q := s.queries.WithTx(tx)
+	err = q.Delete(ctx, groupID)
+	if err != nil {
+		logger.Error("failed to delete group in database", zap.Error(err))
+		return err
+	}
+
+	// Fetch the LDAP CNs for both Base and Admin groups from the database
+	baseCN, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupID)
+	if err != nil {
+		logger.Error("failed to get CN of base group by group ID", zap.Error(err))
+		return err
+	}
+
+	adminCN, err := s.ldapGroupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupID)
+	if err != nil {
+		logger.Error("failed to get CN of admin group by group ID", zap.Error(err))
+		return err
+	}
+
+	// Fetch current state from LDAP for exact compensation
+	baseInfo, err := s.ldapClient.GetGroupInfo(baseCN)
+	if err != nil {
+		logger.Error("failed to get info of base group by group ID", zap.Error(err))
+		return err
+	}
+	baseGid := baseInfo.GetAttributeValue("gidNumber")
+	baseMembers := baseInfo.GetAttributeValues("memberUid")
+
+	adminInfo, err := s.ldapClient.GetGroupInfo(adminCN)
+	if err != nil {
+		logger.Error("failed to get info of admin group by group ID", zap.Error(err))
+		return err
+	}
+	adminGid := adminInfo.GetAttributeValue("gidNumber")
+	adminMembers := adminInfo.GetAttributeValues("memberUid")
+
+	// Initialize the Saga orchestration for LDAP operation
+	saga := internal.NewSaga(s.logger)
+
+	// Step 1: Delete the Base Group
+	saga.AddStep(internal.SagaStep{
+		Name: "Delete Base LDAP Group",
+		Action: func(c context.Context) error {
+			err = s.ldapClient.DeleteGroup(baseCN)
+			if err != nil {
+				s.logger.Error("failed to delete base group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(c context.Context) error {
+			// Compensation: Recreate the base group if subsequent steps fail
+			s.logger.Info("Compensating: Recreating Base LDAP Group", zap.String("cn", baseCN))
+			err = s.ldapClient.CreateGroup(baseCN, baseGid, baseMembers)
+			if err != nil {
+				s.logger.Error("failed to compensate for creating base group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	// Step 2: Delete the Admin Group
+	saga.AddStep(internal.SagaStep{
+		Name: "Delete Admin LDAP Group",
+		Action: func(c context.Context) error {
+			err = s.ldapClient.DeleteGroup(adminCN)
+			if err != nil {
+				s.logger.Error("failed to delete admin group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(c context.Context) error {
+			// Compensation: Recreate the admin group
+			s.logger.Info("Compensating: Recreating Admin LDAP Group", zap.String("cn", baseCN))
+			err = s.ldapClient.CreateGroup(adminCN, adminGid, adminMembers)
+			if err != nil {
+				s.logger.Error("failed to compensate for creating admin group in LDAP", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	// 3. Execute the Saga
+	if err := saga.Execute(traceCtx); err != nil { //
+		s.logger.Error("Failed to delete LDAP groups, saga aborted/compensated", zap.Error(err))
+		span.RecordError(err)
+		return fmt.Errorf("transaction aborted: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Error("failed to commit transaction", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	s.logger.Info("Successfully deleted LDAP groups", zap.String("group_id", groupID.String()))
+	return nil
 }
 
 func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error) {

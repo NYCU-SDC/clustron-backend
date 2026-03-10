@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id UUID REFERENCES groups(id) NOT NULL,
+    group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     url TEXT NOT NULL
 );

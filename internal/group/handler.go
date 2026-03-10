@@ -4,7 +4,6 @@ import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/membership"
-	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"net/http"
@@ -32,6 +31,7 @@ type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error)
+	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	GetTypeByUser(ctx context.Context, userRole string, userID uuid.UUID, groupID uuid.UUID) (grouprole.GroupRole, string, error)
@@ -236,11 +236,6 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Role != role.Admin.String() && user.Role != role.Organizer.String() {
-		handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-		return
-	}
-
 	var request CreateRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -321,6 +316,27 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)
 }
 
+func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "DeleteHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "DeleteHandler"))
+
+	groupID := r.PathValue("group_id")
+	groupUUID, err := handlerutil.ParseUUID(groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.Delete(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+}
+
 func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
 	defer span.End()
@@ -338,18 +354,6 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != grouprole.AccessLevelAdmin.String() {
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Archive(traceCtx, groupUUID)
@@ -401,18 +405,6 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		logger.DPanic("Can't find user in context, this should never happen")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if user.Role != grouprole.AccessLevelAdmin.String() {
-		accessLevel, err := h.store.GetUserGroupAccessLevel(traceCtx, user.ID, groupUUID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		if accessLevel != string(grouprole.AccessLevelOwner) {
-			handlerutil.WriteJSONResponse(w, http.StatusForbidden, nil)
-			return
-		}
 	}
 
 	group, err := h.store.Unarchive(traceCtx, groupUUID)
