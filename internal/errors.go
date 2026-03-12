@@ -35,6 +35,9 @@ var (
 	ErrInvalidFullName = errors.New("invalid full name")
 	ErrInvalidRoleType = errors.New("invalid role type")
 	ErrSelfDeletion    = errors.New("self deletion")
+
+	// Group Errors
+	ErrGroupNotFound = errors.New("group not found or user not in group")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -108,6 +111,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("cannot delete yourself")
 	case errors.Is(err, ErrInvalidPassword):
 		return problem.NewValidateProblem("invalid password")
+	case errors.Is(err, ErrGroupNotFound):
+		return problem.NewNotFoundProblem(err.Error())
 	// LDAP Client Errors
 	case errors.Is(err, ldap.ErrGIDNumberInUse):
 		return NewConflictProblem(err.Error())

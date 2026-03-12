@@ -277,8 +277,6 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 		group, err = s.Get(traceCtx, groupID)
 	}
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
-		span.RecordError(err)
 		return grouprole.UserScope{}, err
 	}
 
@@ -323,8 +321,6 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 		group, err = s.Get(traceCtx, groupID)
 	}
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "Get group by id")
-		span.RecordError(err)
 		return ResponseWithLinks{}, err
 	}
 
@@ -452,6 +448,10 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 
 	group, err := s.queries.GetByID(ctx, groupID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Group{}, internal.ErrGroupNotFound
+		}
+
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get group by id")
 		span.RecordError(err)
 		return Group{}, err
@@ -1028,6 +1028,10 @@ func (s *Service) GetUserGroupByID(ctx context.Context, userID uuid.UUID, groupI
 		GroupID: groupID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Group{}, internal.ErrGroupNotFound
+		}
+
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userID.String()+" "+groupID.String(), logger, "get membership")
 		span.RecordError(err)
 		return Group{}, err
@@ -1158,7 +1162,6 @@ func (s *Service) TransferOwner(ctx context.Context, groupID uuid.UUID, newOwner
 	if err != nil {
 		return grouprole.UserScope{}, err
 	}
-
 	return userScope, nil
 }
 
