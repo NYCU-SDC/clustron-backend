@@ -265,6 +265,7 @@ func main() {
 	mux.HandleFunc("GET /api/jobs/counts", authMiddleware.HandlerFunc(jobHandler.GetJobStateHandler))
 
 	if cfg.EnableInternalLogin {
+		logger.Warn("Internal login is enabled, make sure to disable it in production environment")
 		mux.HandleFunc("POST /api/internal/login", basicMiddleware.HandlerFunc(authHandler.InternalLogin))
 	}
 
