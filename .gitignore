@@ -14,3 +14,4 @@ queries.sql.go
 sqlc.yaml
 full_schema.sql
 full_policy.csv
+reports/
