@@ -95,3 +95,34 @@ To disable pre-push action until re-open it:
 ```
 left hook uninstall
 ```
+
+## Visualize Code Structure
+
+We use go-callvis to visualize the function call graph of the project, which helps in understanding the code structure and relations.
+
+### installation and basic usage
+To install this package, simply run:
+
+```
+go install github.com/ofabry/go-callvis@latest
+```
+
+To start an interactive visualization server (default at http://localhost:8080), simply run:
+
+```
+make visualize
+```
+
+### Focus on Specific Package or Function
+
+For larger projects, the full graph might be too complex. You can use PKG to set the entry point and LIMIT to filter the focus range:
+
+Analyze a specific package:
+```
+make visualize PKG=internal/auth
+```
+
+Focus on a specific module within the backend:
+```
+make visualize PKG=cmd/backend LIMIT=internal/service/slurm
+```

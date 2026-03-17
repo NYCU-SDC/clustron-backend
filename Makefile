@@ -51,3 +51,18 @@ gen:
 	@echo -e "  -> Running go generate..."
 	@go generate ./... || (echo -e "  -> $(RED)Go generate failed$(NC)" && exit 1)
 	@echo -e "==> $(BLUE)Generation completed$(NC)"
+
+MODULE_NAME = $(shell go list -m)
+PKG ?= .
+LIMIT ?= $(MODULE_NAME)
+
+visualize: gen
+	@echo -e ":: $(GREEN)Visualizing function calls...$(NC)"
+	@echo -e "-> Target Package: $(BLUE)$(PKG)$(NC)"
+	@echo -e "-> Focus Limit: $(BLUE)$(LIMIT)$(NC)"
+	@echo -e "-> Opening browser at http://localhost:8080 ..."
+	@go-callvis \
+		-focus "$(LIMIT)" \
+		-group pkg \
+		-nostd \
+		./$(PKG)
