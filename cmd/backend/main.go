@@ -209,7 +209,6 @@ func main() {
 	mux.HandleFunc("GET /api/oauth/debug/token", basicMiddleware.HandlerFunc(authHandler.DebugToken))
 	mux.HandleFunc("GET /api/refreshToken/{refreshToken}", basicMiddleware.HandlerFunc(jwtHandler.RefreshToken))
 	mux.HandleFunc("POST /api/bind/oauth/{provider}", authMiddleware.HandlerFunc(authHandler.BindLoginInfo))
-	mux.HandleFunc("POST /api/internal/login", basicMiddleware.HandlerFunc(authHandler.InternalLogin))
 
 	// Settings
 	mux.HandleFunc("POST /api/onboarding", authMiddleware.HandlerFunc(settingHandler.OnboardingHandler))
@@ -270,6 +269,11 @@ func main() {
 	mux.HandleFunc("POST /api/jobs", authMiddleware.HandlerFunc(jobHandler.CreateHandler))
 	mux.HandleFunc("GET /api/partitions", authMiddleware.HandlerFunc(jobHandler.GetPartitionsHandler))
 	mux.HandleFunc("GET /api/jobs/counts", authMiddleware.HandlerFunc(jobHandler.GetJobStateHandler))
+
+	if cfg.EnableInternalLogin {
+		logger.Warn("Internal login is enabled, make sure to disable it in production environment")
+		mux.HandleFunc("POST /api/internal/login", basicMiddleware.HandlerFunc(authHandler.InternalLogin))
+	}
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
