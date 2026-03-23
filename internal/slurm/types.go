@@ -103,3 +103,83 @@ type JobStateResponse struct {
 	Cancelled int `json:"cancelled"`
 	Unknown   int `json:"unknown"`
 }
+
+// UserResponse matches the Slurm v0.0.44 SlurmDB user response
+// UserRequest defines the payload required to create a new Slurm user in v0.0.43
+type UserRequest struct {
+	AdministratorLevel []string           `json:"administrator_level,omitempty"`
+	Associations       []AssociationShort `json:"associations,omitempty"`
+	Coordinators       []Coordinator      `json:"coordinators,omitempty"`
+	Default            UserDefault        `json:"default,omitempty"`
+	Flags              []string           `json:"flags,omitempty"`
+	Name               string             `json:"name" validate:"required"`
+}
+
+// SubmitUserRequest expects an array of users for the POST request
+type SubmitUserRequest struct {
+	Users []UserRequest `json:"users" validate:"required"`
+}
+type UserResponse struct {
+	AdministratorLevel []string           `json:"administrator_level"`
+	Associations       []AssociationShort `json:"associations"`
+	Coordinators       []Coordinator      `json:"coordinators"`
+	Default            UserDefault        `json:"default"`
+	Flags              []string           `json:"flags"`
+	Name               string             `json:"name"`
+	OldName            string             `json:"old_name,omitempty"`
+}
+
+type AssociationShort struct {
+	Account   string `json:"account"`
+	Cluster   string `json:"cluster"`
+	Partition string `json:"partition,omitempty"`
+	User      string `json:"user"`
+}
+
+type Coordinator struct {
+	Name   string `json:"name"`
+	Direct int    `json:"direct"` // 1 if direct, 0 if inherited
+}
+
+type UserDefault struct {
+	Qos     string `json:"qos"`
+	Account string `json:"account"`
+	Wckey   string `json:"wckey"`
+}
+
+// UsersResponse represents a list of users (e.g., from GET /slurmdb/v0.0.44/users/)
+type UsersResponse struct {
+	Users  []UserResponse `json:"users"`
+	Errors []SlurmError   `json:"errors,omitempty"`
+	Meta   SlurmMeta      `json:"meta,omitempty"`
+}
+
+// SlurmMeta contains API versioning and plugin info found in v0.0.44 responses
+type SlurmMeta struct {
+	Plugin  SlurmPlugin  `json:"plugin"`
+	Slurm   SlurmVersion `json:"slurm"`
+	Version APIVersion   `json:"version"`
+}
+
+type SlurmPlugin struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type SlurmVersion struct {
+	Major int `json:"major"`
+	Micro int `json:"micro"`
+	Minor int `json:"minor"`
+}
+
+type APIVersion struct {
+	Major int `json:"major"`
+	Micro int `json:"micro"`
+	Minor int `json:"minor"`
+}
+
+type SlurmError struct {
+	Description string `json:"description"`
+	ErrorCode   int    `json:"error_number"`
+	Source      string `json:"source"`
+}
