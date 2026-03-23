@@ -34,6 +34,7 @@ func TestHandler_GetByIDHandler(t *testing.T) {
 			name: "Valid group ID returns group details",
 			setupMock: func(store *mocks.Store, user jwt.User, groupID uuid.UUID) {
 				store.On("ListByIDWithLinks", mock.Anything, user, groupID).Return(group.ResponseWithLinks{}, nil)
+				store.On("GetLDAPBaseGroupNameByGroupID", mock.Anything, groupID).Return("ldapGroupName", nil)
 			},
 			resourceID: uuid.New().String(),
 			user: &jwt.User{
