@@ -80,9 +80,9 @@ type CreateResponse struct {
 }
 
 type CreateRequest struct {
-	Title         string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
+	Title         string                        `json:"title" validate:"required"`
 	Description   string                        `json:"description" validate:"required"`
-	LDAPGroupName string                        `json:"ldapGroupName" validate:"required"`
+	LDAPGroupName string                        `json:"ldapGroupName" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
 	Members       []membership.AddMemberRequest `json:"members"`
 	Links         []CreateLinkRequest
 }
