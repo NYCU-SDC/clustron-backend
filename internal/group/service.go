@@ -460,7 +460,7 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 	return group, nil
 }
 
-func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error) {
+func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, description string, ldapGroupName string) (Group, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateGroup")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -519,7 +519,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		return Group{}, fmt.Errorf("failed to parse gidNumber to int64: %w", err)
 	}
 
-	baseCN := strings.ReplaceAll(title, " ", "-")
+	baseCN := ldapGroupName
 	adminCN := fmt.Sprintf("%s-admin", baseCN)
 
 	// Create DB LDAP Group
