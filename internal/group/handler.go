@@ -41,6 +41,7 @@ type Store interface {
 	CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error)
 	UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error)
 	DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error
+	GetLDAPBaseGroupNameByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
 }
 
 type LinkResponse struct {
@@ -150,13 +151,19 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	groupResponse := make([]Response, len(userScopeResponse))
 	for i, group := range userScopeResponse {
+		ldapGroupName, err := h.store.GetLDAPBaseGroupNameByGroupID(traceCtx, group.ID)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
 		groupResponse[i] = Response{
-			ID:          group.ID.String(),
-			Title:       group.Title,
-			Description: group.Description.String,
-			IsArchived:  group.IsArchived.Bool,
-			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:            group.ID.String(),
+			Title:         group.Title,
+			LDAPGroupName: ldapGroupName,
+			Description:   group.Description.String,
+			IsArchived:    group.IsArchived.Bool,
+			CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
 		groupResponse[i].Me.Type = group.Me.Type
 		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
@@ -197,15 +204,22 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ldapGroupName, err := h.store.GetLDAPBaseGroupNameByGroupID(traceCtx, groupUUID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	groupResponse := WithLinksResponse{
 		// Basic group information
 		Response: Response{
-			ID:          userScopeResponse.ID.String(),
-			Title:       userScopeResponse.Title,
-			Description: userScopeResponse.Description.String,
-			IsArchived:  userScopeResponse.IsArchived.Bool,
-			CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:            userScopeResponse.ID.String(),
+			Title:         userScopeResponse.Title,
+			LDAPGroupName: ldapGroupName,
+			Description:   userScopeResponse.Description.String,
+			IsArchived:    userScopeResponse.IsArchived.Bool,
+			CreatedAt:     userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		},
 	}
 
