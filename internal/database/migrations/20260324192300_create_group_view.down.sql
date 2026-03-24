@@ -1,0 +1,1 @@
+DROP VIEW IF EXISTS groups_with_ldap_cn;

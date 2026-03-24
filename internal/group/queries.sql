@@ -5,17 +5,19 @@ SELECT COUNT(*) FROM groups;
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
 -- name: ListAscPaged :many
-SELECT * FROM groups ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
+SELECT * FROM groups_with_ldap_cn
+ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
 
 -- name: ListDescPaged :many
-SELECT * FROM groups ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
+SELECT * FROM groups_with_ldap_cn
+ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberAscPaged :many
 SELECT
     g.*,
     gr.*
 FROM
-    groups AS g
+    groups_with_ldap_cn AS g
 JOIN
     memberships AS m ON m.group_id = g.id
 JOIN
@@ -30,7 +32,7 @@ SELECT
     g.*,
     gr.*
 FROM
-    groups AS g
+    groups_with_ldap_cn AS g
 JOIN
     memberships AS m ON m.group_id = g.id
 JOIN
@@ -41,10 +43,10 @@ ORDER BY
     g.created_at DESC LIMIT @Size OFFSET @Skip;
 
 -- name: GetByID :one
-SELECT * FROM groups WHERE id = $1;
+SELECT * FROM groups_with_ldap_cn WHERE id = $1;
 
 -- name: GetIfMember :one
-SELECT g.* FROM groups AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2;
+SELECT g.* FROM groups_with_ldap_cn AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2;
 
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
