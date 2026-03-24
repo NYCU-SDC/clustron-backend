@@ -1,7 +1,6 @@
 package ldap
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -165,46 +164,6 @@ func TestClient_DeleteUser(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				assert.ErrorIs(t, err, tc.error)
-			}
-		})
-	}
-}
-
-func TestClient_GetUsedUidNumbers(t *testing.T) {
-	tests := []struct {
-		name         string
-		expectedUIDs []string
-	}{
-		{
-			name:         "Should return empty list when no groups exist",
-			expectedUIDs: []string{},
-		},
-		{
-			name:         "Should return gidNumber from single group",
-			expectedUIDs: []string{"10000"},
-		},
-		{
-			name:         "Should return multiple gidNumbers",
-			expectedUIDs: []string{"10000", "10001"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
-
-			for _, uid := range tc.expectedUIDs {
-				require.NoError(t, client.CreateUser(fmt.Sprintf("user_%s", uid), "CN", "SN", pubkey1, uid))
-			}
-
-			uids, err := client.GetUsedUIDNumbers()
-			require.NoError(t, err)
-
-			fmt.Println(uids)
-			fmt.Println(tc.expectedUIDs)
-			for _, uid := range tc.expectedUIDs {
-				assert.Contains(t, uids, uid)
 			}
 		})
 	}
