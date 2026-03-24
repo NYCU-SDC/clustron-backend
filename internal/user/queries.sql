@@ -61,8 +61,9 @@ ORDER BY identifier
 LIMIT @Size OFFSET @Skip;
 
 -- name: ListUsers :many
-SELECT id, full_name, email, student_id, role
-FROM users
+SELECT u.id, u.full_name, u.email, u.student_id, u.role, lu.uid_number
+FROM users AS u
+JOIN ldap_user AS lu ON u.id = lu.id
 WHERE
     (sqlc.narg('search')::text IS NULL OR (email ILIKE '%' || sqlc.narg('search') || '%' OR student_id ILIKE '%' || sqlc.narg('search') || '%' OR full_name ILIKE '%' || sqlc.narg('search') || '%'))
   AND (sqlc.narg('role')::text IS NULL OR role = sqlc.narg('role'))

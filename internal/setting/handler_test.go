@@ -11,6 +11,7 @@ import (
 	"clustron-backend/internal/user/role"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -537,7 +538,7 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 
 			userStore := mocks.NewUserStore(t)
 
-			h := setting.NewHandler(logger, validator.New(), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
+			h := setting.NewHandler(logger, internal.NewValidator(), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
 
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
@@ -809,6 +810,155 @@ func TestHandler_UpdatePasswordHandler(t *testing.T) {
 			} else {
 				assert.Panics(t, func() {
 					h.UpdatePasswordHandler(w, r)
+				}, tc.name)
+			}
+		})
+	}
+}
+
+func TestHandler_BindLDAPUserHandler(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           setting.BindLDAPUserRequest
+		jwtUser        *jwt.User
+		setupMock      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User)
+		customBody     []byte
+		customUserID   string
+		expectedStatus int
+	}{
+		{
+			name: "Should bind LDAP user successfully",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "testuser",
+			},
+			jwtUser: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, userStore *mocks.UserStore, jwtUser *jwt.User) {
+				store.On("BindLDAPUser", mock.Anything, jwtUser.ID, "testuser").Return(setting.LDAPUserInfo{}, nil)
+				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(true, nil).Once()
+				userStore.On("GetByID", mock.Anything, jwtUser.ID).Return(user.User{
+					ID:       jwtUser.ID,
+					Role:     role.User.String(),
+					FullName: pgtype.Text{String: "Test User", Valid: true},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Should return error when Linux username is empty",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "",
+			},
+			jwtUser:        &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when Linux username is too long",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "12345678901234567890123456789012345678901234567890",
+			},
+			jwtUser:        &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when Linux username contains invalid characters",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "invalid user",
+			},
+			jwtUser:        &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when Linux username contains invalid characters",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "invalid:user",
+			},
+			jwtUser:        &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when Linux username in blacklist",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "root",
+			},
+			jwtUser:        &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when user id is invalid",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "testuser",
+			},
+			jwtUser:        &jwt.User{ID: uuid.Nil, Role: role.User.String()},
+			customUserID:   "invalid-uuid",
+			setupMock:      func(store *mocks.Store, userStore *mocks.UserStore, user *jwt.User) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Should return error when DB fails",
+			body: setting.BindLDAPUserRequest{
+				LinuxUsername: "testuser",
+			},
+			jwtUser: &jwt.User{
+				ID:   uuid.New(),
+				Role: role.User.String(),
+			},
+			setupMock: func(store *mocks.Store, userStore *mocks.UserStore, jwtUser *jwt.User) {
+				store.On("BindLDAPUser", mock.Anything, jwtUser.ID, "testuser").Return(setting.LDAPUserInfo{}, assert.AnError)
+				store.On("IsLinuxUsernameExists", mock.Anything, "testuser").Return(true, nil).Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, err := zap.NewDevelopment()
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			store := mocks.NewStore(t)
+			userStore := mocks.NewUserStore(t)
+
+			if tc.setupMock != nil {
+				tc.setupMock(store, userStore, tc.jwtUser)
+			}
+
+			h := setting.NewHandler(logger, internal.NewValidator(), internal.NewProblemWriter(), store, userStore)
+
+			var requestBody []byte
+			if tc.customBody != nil {
+				requestBody = tc.customBody
+			} else {
+				requestBody, err = json.Marshal(tc.body)
+				if err != nil {
+					t.Fatalf("failed to marshal request body: %v", err)
+				}
+			}
+
+			r := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/users/%s/ldapBind", tc.jwtUser.ID.String()), bytes.NewReader(requestBody))
+			w := httptest.NewRecorder()
+
+			if tc.customUserID != "" {
+				r.SetPathValue("user_id", tc.customUserID)
+			} else {
+				r.SetPathValue("user_id", tc.jwtUser.ID.String())
+			}
+
+			if tc.jwtUser != nil {
+				r = r.WithContext(context.WithValue(r.Context(), internal.UserContextKey, *tc.jwtUser))
+				h.BindLDAPUserHandler(w, r)
+				assert.Equal(t, tc.expectedStatus, w.Code, tc.name)
+			} else {
+				assert.Panics(t, func() {
+					h.BindLDAPUserHandler(w, r)
 				}, tc.name)
 			}
 		})

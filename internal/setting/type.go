@@ -11,5 +11,3 @@ type LDAPPublicKey struct {
 	PublicKey   string
 	Title       string
 }
-
-type LinuxUsernameBlacklist map[string]struct{}

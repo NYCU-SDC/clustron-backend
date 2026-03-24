@@ -27,9 +27,10 @@ var (
 	ErrDatabaseConflict = errors.New("database conflict")
 
 	// Setting Errors
-	ErrInvalidPublicKey   = errors.New("invalid public key")
-	ErrInvalidFingerprint = errors.New("invalid fingerprint")
-	ErrInvalidPassword    = errors.New("invalid password")
+	ErrInvalidPublicKey     = errors.New("invalid public key")
+	ErrInvalidFingerprint   = errors.New("invalid fingerprint")
+	ErrInvalidPassword      = errors.New("invalid password")
+	ErrLDAPUserAlreadyBound = errors.New("LDAP user already bound to another account")
 
 	// User Errors
 	ErrInvalidFullName = errors.New("invalid full name")
@@ -71,6 +72,7 @@ func NewProblemWriter() *problem.HttpWriter {
 
 func ErrorHandler(err error) problem.Problem {
 	switch {
+	// Auth Errors
 	case errors.Is(err, ErrInvalidRefreshToken):
 		return problem.NewNotFoundProblem("refresh token not found")
 	case errors.Is(err, ErrProviderNotFound):
@@ -85,10 +87,16 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewForbiddenProblem("permission denied")
 	case errors.Is(err, ErrNotModuleOwner):
 		return problem.NewForbiddenProblem("user does not own this module")
-	case errors.Is(err, ErrDatabaseConflict):
-		return NewConflictProblem("database conflict")
+	case errors.Is(err, ErrBindingAccountConflict):
+		return problem.NewBadRequestProblem("binding account conflict")
 	case errors.Is(err, ErrAlreadyOnboarded):
 		return problem.NewBadRequestProblem("user already onboarded")
+	case errors.Is(err, ErrNewStateFailed):
+		return problem.NewInternalServerProblem("failed to generate new state")
+	// Database Errors
+	case errors.Is(err, ErrDatabaseConflict):
+		return NewConflictProblem("database conflict")
+	// Validation Errors
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")
 	case errors.As(err, new(*json.SyntaxError)):
@@ -97,20 +105,23 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid username: " + err.Error())
 	case errors.As(err, &ErrInvalidSetting{}):
 		return problem.NewValidateProblem("invalid setting: " + err.Error())
+	// Setting Errors
 	case errors.Is(err, ErrInvalidPublicKey):
 		return problem.NewValidateProblem("invalid public key")
 	case errors.Is(err, ErrInvalidFingerprint):
 		return problem.NewBadRequestProblem("invalid fingerprint")
-	case errors.Is(err, ErrBindingAccountConflict):
-		return problem.NewBadRequestProblem("binding account conflict")
+	case errors.Is(err, ErrInvalidPassword):
+		return problem.NewValidateProblem("invalid password")
+	case errors.Is(err, ErrLDAPUserAlreadyBound):
+		return problem.NewBadRequestProblem("LDAP user already bound to another account")
+	// User Errors
 	case errors.Is(err, ErrInvalidFullName):
 		return problem.NewValidateProblem("invalid full name")
 	case errors.Is(err, ErrInvalidRoleType):
 		return problem.NewValidateProblem("invalid role type")
 	case errors.Is(err, ErrSelfDeletion):
 		return problem.NewBadRequestProblem("cannot delete yourself")
-	case errors.Is(err, ErrInvalidPassword):
-		return problem.NewValidateProblem("invalid password")
+	// Group Errors
 	case errors.Is(err, ErrGroupNotFound):
 		return problem.NewNotFoundProblem(err.Error())
 	// LDAP Client Errors
