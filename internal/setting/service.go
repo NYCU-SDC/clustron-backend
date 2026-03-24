@@ -52,6 +52,7 @@ type LDAPClient interface {
 type Querier interface {
 	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error
+	UpdateLDAPUser(ctx context.Context, params UpdateLDAPUserParams) error
 	DeleteLDAPUser(ctx context.Context, userID uuid.UUID) error
 	ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetPublicKeys(ctx context.Context, userID uuid.UUID) ([]PublicKey, error)
@@ -61,6 +62,7 @@ type Querier interface {
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
 	GetAllUserInfoByUIDNumber(ctx context.Context, uidNumbers []int64) ([]GetAllUserInfoByUIDNumberRow, error)
+	ExistLDAPUserByUIDNumber(ctx context.Context, uidNumber int64) (bool, error)
 }
 
 type MembershipService interface {
@@ -606,4 +608,65 @@ func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassw
 
 	logger.Info("user password updated successfully", zap.String("userID", userID.String()), zap.String("uid", uidString))
 	return nil
+}
+
+func (s *Service) BindLDAPUser(ctx context.Context, userID uuid.UUID, linuxUsername string) (LDAPUserInfo, error) {
+	traceCtx, span := s.tracer.Start(ctx, "BindLDAPUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	ldapInfo, err := s.ldapClient.GetUserInfo(linuxUsername)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			logger.Warn("LDAP user not found", zap.String("linuxUsername", linuxUsername))
+			return LDAPUserInfo{}, err
+		}
+		logger.Error("failed to get LDAP user info by username", zap.String("linuxUsername", linuxUsername), zap.Error(err))
+		span.RecordError(err)
+		return LDAPUserInfo{}, err
+	}
+
+	uidNumberStr := ldapInfo.GetAttributeValue("uidNumber")
+	uidNumber, err := strconv.ParseInt(uidNumberStr, 10, 64)
+	if err != nil {
+		logger.Error("failed to parse uid number from LDAP user info", zap.String("uidNumberStr", uidNumberStr), zap.Error(err))
+		span.RecordError(err)
+		return LDAPUserInfo{}, fmt.Errorf("failed to parse uid number from LDAP user info: %w", err)
+	}
+
+	exists, err := s.query.ExistLDAPUserByUIDNumber(traceCtx, uidNumber)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "uid_number", fmt.Sprint(uidNumber), logger, "check LDAP user existence by uid number")
+		logger.Error("failed to check LDAP user existence by uid number", zap.Int64("uidNumber", uidNumber), zap.Error(err))
+		span.RecordError(err)
+		return LDAPUserInfo{}, err
+	}
+
+	if exists {
+		err = fmt.Errorf("%w with uid number %d already exists", internal.ErrLDAPUserAlreadyBound, uidNumber)
+		logger.Warn("LDAP user already bound to an application user", zap.String("linuxUsername", linuxUsername))
+		return LDAPUserInfo{}, err
+	}
+
+	err = s.query.UpdateLDAPUser(traceCtx, UpdateLDAPUserParams{
+		ID:        userID,
+		UidNumber: uidNumber,
+	})
+	if err != nil {
+		if errors.Is(err, databaseutil.ErrUniqueViolation) {
+			logger.Warn("ldap_user record already exists for user", zap.String("userID", userID.String()))
+			return LDAPUserInfo{}, internal.ErrDatabaseConflict
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_user", "id", userID.String(), logger, "update ldap user")
+		logger.Error("failed to update ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumber), zap.Error(err))
+		span.RecordError(err)
+		return LDAPUserInfo{}, err
+	}
+
+	logger.Info("successfully bound existing LDAP user to application user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername))
+	return LDAPUserInfo{
+		UIDNumber: uidNumber,
+		Username:  linuxUsername,
+		PublicKey: ldapInfo.GetAttributeValues("sshPublicKey"),
+	}, nil
 }

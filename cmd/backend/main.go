@@ -149,7 +149,7 @@ func main() {
 
 	// Service
 	redisService := redis.NewService(logger, cfg.RedisURL)
-	userService := user.NewService(logger, cfg.PresetUser, dbPool)
+	userService := user.NewService(logger, cfg.PresetUser, dbPool, ldapClient)
 	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
 	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
@@ -215,6 +215,7 @@ func main() {
 	mux.HandleFunc("GET /api/settings", authMiddleware.HandlerFunc(settingHandler.GetUserSettingHandler))
 	mux.HandleFunc("PUT /api/settings", authMiddleware.HandlerFunc(userHandler.UpdateFullNameHandler))
 	mux.HandleFunc("PUT /api/password", authMiddleware.HandlerFunc(settingHandler.UpdatePasswordHandler))
+	mux.HandleFunc("PUT /api/users/{user_id}/ldapBind", authMiddleware.HandlerFunc(settingHandler.BindLDAPUserHandler))
 
 	// Public Key
 	mux.HandleFunc("GET /api/publickey", authMiddleware.HandlerFunc(settingHandler.GetUserPublicKeysHandler))
