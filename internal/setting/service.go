@@ -39,7 +39,6 @@ type LDAPClient interface {
 	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
 	DeleteUser(uid string) error
 	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
-	GetAllUIDNumbers() ([]string, error)
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	ExistSSHPublicKey(publicKey string) (bool, error)
 	AddSSHPublicKey(uid string, publicKey string) error
@@ -61,6 +60,7 @@ type Querier interface {
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
 	GetAllUserInfoByUIDNumber(ctx context.Context, uidNumbers []int64) ([]GetAllUserInfoByUIDNumberRow, error)
+	GetNextLdapUid(ctx context.Context) (int32, error)
 }
 
 type MembershipService interface {
@@ -543,34 +543,14 @@ func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	uidNumbers, err := s.ldapClient.GetAllUIDNumbers()
+	uidInt, err := s.query.GetNextLdapUid(ctx)
 	if err != nil {
-		logger.Error("failed to get all uid numbers from LDAP", zap.Error(err))
+		logger.Error("failed to get next ldap uid from sequence", zap.Error(err))
 		span.RecordError(err)
-		return "", err
+		return "", fmt.Errorf("failed to get next ldap uid: %w", err)
 	}
 
-	uidNumbersMap := make(map[int]bool)
-	for _, uidStr := range uidNumbers {
-		var uid int
-		_, err := fmt.Sscanf(uidStr, "%d", &uid)
-		if err != nil {
-			logger.Warn("failed to parse uid number", zap.String("uidStr", uidStr), zap.Error(err))
-			continue
-		}
-		uidNumbersMap[uid] = true
-	}
-
-	for uid := 10000; uid < 60000; uid++ {
-		if !uidNumbersMap[uid] {
-			return fmt.Sprintf("%d", uid), nil
-		}
-	}
-
-	err = fmt.Errorf("no available uid number found")
-	logger.Error("failed to find available uid number", zap.Error(err))
-	span.RecordError(err)
-	return "", err
+	return strconv.Itoa(int(uidInt)), nil
 }
 
 func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
