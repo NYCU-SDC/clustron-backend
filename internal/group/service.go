@@ -1293,13 +1293,3 @@ func (s *Service) DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid
 
 	return nil
 }
-
-func (s *Service) GetLDAPBaseGroupNameByGroupID(ctx context.Context, groupID uuid.UUID) (string, error) {
-	ldapGroupName, err := s.ldapGroupStore.GetLDAPBaseGroupCNByGroupID(ctx, groupID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), s.logger, "get LDAP group name by group ID")
-		s.logger.Error("failed to get LDAP group name by group ID", zap.String("group_id", groupID.String()), zap.Error(err))
-		return "", err
-	}
-	return ldapGroupName, err
-}

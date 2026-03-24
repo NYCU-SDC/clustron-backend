@@ -41,7 +41,6 @@ type Store interface {
 	CreateLink(ctx context.Context, groupID uuid.UUID, title string, Url string) (Link, error)
 	UpdateLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID, title string, Url string) (Link, error)
 	DeleteLink(ctx context.Context, groupID uuid.UUID, linkID uuid.UUID) error
-	GetLDAPBaseGroupNameByGroupID(ctx context.Context, groupID uuid.UUID) (string, error)
 }
 
 type LinkResponse struct {
