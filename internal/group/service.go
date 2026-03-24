@@ -175,9 +175,10 @@ func (s *Service) ListWithUserScope(ctx context.Context, user jwt.User, page int
 		response = make([]grouprole.UserScope, len(groups))
 		for i, group := range groups {
 			response[i] = grouprole.UserScope{
-				Group: grouprole.Group{
+				GroupsWithLdapCn: grouprole.GroupsWithLdapCn{
 					ID:          group.ID,
 					Title:       group.Title,
+					LdapCn:      group.LdapCn,
 					Description: group.Description,
 					IsArchived:  group.IsArchived,
 					CreatedAt:   group.CreatedAt,
@@ -206,13 +207,14 @@ func buildRoleGroupIDMap(roles []ListMembershipsByUserRow) map[uuid.UUID]groupro
 	return m
 }
 
-func buildUserScopeGroups(groups []Group, roleMap map[uuid.UUID]grouprole.Role, isAdmin bool) []grouprole.UserScope {
+func buildUserScopeGroups(groups []GroupsWithLdapCn, roleMap map[uuid.UUID]grouprole.Role, isAdmin bool) []grouprole.UserScope {
 	result := make([]grouprole.UserScope, len(groups))
 	for i, g := range groups {
 		scope := grouprole.UserScope{
-			Group: grouprole.Group{
+			GroupsWithLdapCn: grouprole.GroupsWithLdapCn{
 				ID:          g.ID,
 				Title:       g.Title,
+				LdapCn:      g.LdapCn,
 				Description: g.Description,
 				IsArchived:  g.IsArchived,
 				CreatedAt:   g.CreatedAt,
@@ -232,12 +234,12 @@ func buildUserScopeGroups(groups []Group, roleMap map[uuid.UUID]grouprole.Role, 
 	return result
 }
 
-func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string, sortBy string) ([]Group, error) {
+func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string, sortBy string) ([]GroupsWithLdapCn, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var groups []Group
+	var groups []GroupsWithLdapCn
 	var err error
 	if sort == "asc" {
 		logger.Info("list in asc, sortBy", zap.String("sortBy", sortBy))
@@ -269,7 +271,7 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get group by ID
-	var group Group
+	var group GroupsWithLdapCn
 	var err error
 	if user.Role != role.Admin.String() {
 		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
@@ -290,9 +292,10 @@ func (s *Service) ListByIDWithUserScope(ctx context.Context, user jwt.User, grou
 
 	// Basic user scope with group information
 	response := grouprole.UserScope{
-		Group: grouprole.Group{
+		GroupsWithLdapCn: grouprole.GroupsWithLdapCn{
 			ID:          group.ID,
 			Title:       group.Title,
+			LdapCn:      group.LdapCn,
 			Description: group.Description,
 			IsArchived:  group.IsArchived,
 			CreatedAt:   group.CreatedAt,
@@ -313,7 +316,7 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get group by ID
-	var group Group
+	var group GroupsWithLdapCn
 	var err error
 	if user.Role != role.Admin.String() {
 		group, err = s.GetUserGroupByID(traceCtx, user.ID, groupID)
@@ -343,9 +346,10 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	response := ResponseWithLinks{
 		// Basic user scope with group information
 		UserScope: grouprole.UserScope{
-			Group: grouprole.Group{
+			GroupsWithLdapCn: grouprole.GroupsWithLdapCn{
 				ID:          group.ID,
 				Title:       group.Title,
+				LdapCn:      group.LdapCn,
 				Description: group.Description,
 				IsArchived:  group.IsArchived,
 				CreatedAt:   group.CreatedAt,
@@ -371,7 +375,7 @@ func (s *Service) ListByIDWithLinks(ctx context.Context, user jwt.User, groupID 
 	return response, nil
 }
 
-func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, size int, sort string, sortBy string) ([]Group, []GroupRole, error) {
+func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, size int, sort string, sortBy string) ([]GroupsWithLdapCn, []GroupRole, error) {
 	traceCtx, span := s.tracer.Start(ctx, "listByUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -389,12 +393,13 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			return nil, nil, err
 		}
 
-		groups := make([]Group, len(res))
+		groups := make([]GroupsWithLdapCn, len(res))
 		roles := make([]GroupRole, len(res))
 		for i, r := range res {
-			groups[i] = Group{
+			groups[i] = GroupsWithLdapCn{
 				ID:          r.ID,
 				Title:       r.Title,
+				LdapCn:      r.LdapCn,
 				Description: r.Description,
 				IsArchived:  r.IsArchived,
 				CreatedAt:   r.CreatedAt,
@@ -420,12 +425,13 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 			return nil, nil, err
 		}
 
-		groups := make([]Group, len(res))
+		groups := make([]GroupsWithLdapCn, len(res))
 		roles := make([]GroupRole, len(res))
 		for i, r := range res {
-			groups[i] = Group{
+			groups[i] = GroupsWithLdapCn{
 				ID:          r.ID,
 				Title:       r.Title,
+				LdapCn:      r.LdapCn,
 				Description: r.Description,
 				IsArchived:  r.IsArchived,
 				CreatedAt:   r.CreatedAt,
@@ -441,7 +447,7 @@ func (s *Service) listByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	}
 }
 
-func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
+func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (GroupsWithLdapCn, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -449,12 +455,12 @@ func (s *Service) Get(ctx context.Context, groupID uuid.UUID) (Group, error) {
 	group, err := s.queries.GetByID(ctx, groupID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Group{}, internal.ErrGroupNotFound
+			return GroupsWithLdapCn{}, internal.ErrGroupNotFound
 		}
 
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to get group by id")
 		span.RecordError(err)
-		return Group{}, err
+		return GroupsWithLdapCn{}, err
 	}
 
 	return group, nil
@@ -1018,7 +1024,7 @@ func (s *Service) Unarchive(ctx context.Context, groupID uuid.UUID) (Group, erro
 	return group, nil
 }
 
-func (s *Service) GetUserGroupByID(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (Group, error) {
+func (s *Service) GetUserGroupByID(ctx context.Context, userID uuid.UUID, groupID uuid.UUID) (GroupsWithLdapCn, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CheckIsUserInGroup")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -1029,12 +1035,12 @@ func (s *Service) GetUserGroupByID(ctx context.Context, userID uuid.UUID, groupI
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Group{}, internal.ErrGroupNotFound
+			return GroupsWithLdapCn{}, internal.ErrGroupNotFound
 		}
 
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "membership", "user_id and group_id", userID.String()+" "+groupID.String(), logger, "get membership")
 		span.RecordError(err)
-		return Group{}, err
+		return GroupsWithLdapCn{}, err
 	}
 
 	return group, nil

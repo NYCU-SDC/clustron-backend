@@ -151,20 +151,16 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	groupResponse := make([]Response, len(userScopeResponse))
 	for i, group := range userScopeResponse {
-		ldapGroupName, err := h.store.GetLDAPBaseGroupNameByGroupID(traceCtx, group.ID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
 		groupResponse[i] = Response{
 			ID:            group.ID.String(),
 			Title:         group.Title,
-			LDAPGroupName: ldapGroupName,
+			LDAPGroupName: group.LdapCn.String,
 			Description:   group.Description.String,
 			IsArchived:    group.IsArchived.Bool,
 			CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
+		h.logger.Info(group.LdapCn.String)
 		groupResponse[i].Me.Type = group.Me.Type
 		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
 	}
@@ -204,18 +200,12 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ldapGroupName, err := h.store.GetLDAPBaseGroupNameByGroupID(traceCtx, groupUUID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
 	groupResponse := WithLinksResponse{
 		// Basic group information
 		Response: Response{
 			ID:            userScopeResponse.ID.String(),
 			Title:         userScopeResponse.Title,
-			LDAPGroupName: ldapGroupName,
+			LDAPGroupName: userScopeResponse.LdapCn.String,
 			Description:   userScopeResponse.Description.String,
 			IsArchived:    userScopeResponse.IsArchived.Bool,
 			CreatedAt:     userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),

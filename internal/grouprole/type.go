@@ -45,7 +45,7 @@ var DefaultRoleToAccessLevel = map[DefaultRole]AccessLevel{
 }
 
 type UserScope struct {
-	Group
+	GroupsWithLdapCn
 	Me struct {
 		Type string // will be "membership" or "adminOverride"
 		Role Role
