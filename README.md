@@ -105,21 +105,20 @@ This project uses [go-callvis](https://github.com/ofabry/go-callvis) to visualiz
 go install github.com/ofabry/go-callvis@latest
 ```
 
-### **Usage**
+### Usage
 By default, this command opens an interactive graph in your web browser (press `Ctrl+C` to stop the server).
 
-- **Analyze Default Entry Point (`cmd/backend/main.go`):**
+- Analyze Default Entry Point (`cmd/backend/main.go`):
   ```bash
   make flow-chart
   ```
 
-- **Analyze a Specific Module:**
-  *(Note: You **must** provide the `FOCUS` variable for packages without a `main()` function.)*
+- Analyze a Specific Module:
   ```bash
   make flow-chart TARGET=./cmd/backend/main.go FOCUS=user
   ```
 
-- **Export to Image (No Browser):**
+- Export to Image (No Browser):
   Use `EXTRA_FLAGS` to save the output directly as an SVG or PNG file.
   ```bash
   make flow-chart TARGET=./internal/user FOCUS=user EXTRA_FLAGS="-format svg -file user_flow"
