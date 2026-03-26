@@ -96,33 +96,31 @@ To disable pre-push action until re-open it:
 left hook uninstall
 ```
 
-## Visualize Code Structure
+## Generate Call Graph (flow-chart)
 
-We use go-callvis to visualize the function call graph of the project, which helps in understanding the code structure and relations.
+This project uses [go-callvis](https://github.com/ofabry/go-callvis) to visualize Go code execution and function calls.
 
-### installation and basic usage
-To install this package, simply run:
-
-```
+### Prerequisite
+```bash
 go install github.com/ofabry/go-callvis@latest
 ```
 
-To start an interactive visualization server (default at http://localhost:8080), simply run:
+### **Usage**
+By default, this command opens an interactive graph in your web browser (press `Ctrl+C` to stop the server).
 
-```
-make visualize
-```
+- **Analyze Default Entry Point (`cmd/backend/main.go`):**
+  ```bash
+  make flow-chart
+  ```
 
-### Focus on Specific Package or Function
+- **Analyze a Specific Module:**
+  *(Note: You **must** provide the `FOCUS` variable for packages without a `main()` function.)*
+  ```bash
+  make flow-chart TARGET=./cmd/backend/main.go FOCUS=user
+  ```
 
-For larger projects, the full graph might be too complex. You can use PKG to set the entry point and LIMIT to filter the focus range:
-
-Analyze a specific package:
-```
-make visualize PKG=internal/auth
-```
-
-Focus on a specific module within the backend:
-```
-make visualize PKG=cmd/backend LIMIT=internal/service/slurm
-```
+- **Export to Image (No Browser):**
+  Use `EXTRA_FLAGS` to save the output directly as an SVG or PNG file.
+  ```bash
+  make flow-chart TARGET=./internal/user FOCUS=user EXTRA_FLAGS="-format svg -file user_flow"
+  ```
