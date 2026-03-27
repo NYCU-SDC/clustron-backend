@@ -1,6 +1,9 @@
 package grouprole
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 type DefaultRole string
 
@@ -45,7 +48,7 @@ var DefaultRoleToAccessLevel = map[DefaultRole]AccessLevel{
 }
 
 type UserScope struct {
-	GroupsWithLdapCn
+	GroupWithLdap
 	Me struct {
 		Type string // will be "membership" or "adminOverride"
 		Role Role
@@ -70,4 +73,14 @@ func (r Role) ToResponse() RoleResponse {
 		RoleName:    r.RoleName,
 		AccessLevel: r.AccessLevel,
 	}
+}
+
+type GroupWithLdap struct {
+	ID          uuid.UUID
+	Title       string
+	Description pgtype.Text
+	IsArchived  pgtype.Bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	LdapCn      pgtype.Text
 }

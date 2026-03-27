@@ -4,50 +4,88 @@ SELECT COUNT(*) FROM groups;
 -- name: CountByUser :one
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
--- name: ListAscPaged :many
-SELECT * FROM groups_with_ldap_cn
-ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
+-- -- name: ListAscPaged :many
+-- SELECT * FROM groups_with_ldap_cn
+-- ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
+--
+-- -- name: ListDescPaged :many
+-- SELECT * FROM groups_with_ldap_cn
+-- ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
 
--- name: ListDescPaged :many
-SELECT * FROM groups_with_ldap_cn
-ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
-
--- name: ListIfMemberAscPaged :many
+-- name: ListGroupsPaged :many
 SELECT
     g.*,
-    gr.*
-FROM
-    groups_with_ldap_cn AS g
-JOIN
-    memberships AS m ON m.group_id = g.id
-JOIN
-    group_role AS gr ON gr.id = m.role_id
-WHERE
-    m.user_id = $1
+    lg.ldap_cn
+FROM groups AS g
+LEFT JOIN ldap_groups AS lg ON g.id = lg.group_id AND lg.type = 'BASE'
 ORDER BY
-    g.created_at ASC LIMIT @Size OFFSET @Skip;
+    -- Dynamic Sorting Logic
+    CASE WHEN sqlc.narg('sort')::text = 'asc' THEN g.created_at END ASC,
+    CASE WHEN sqlc.narg('sort')::text = 'desc' THEN g.created_at END DESC,
+    -- Default fallback to ensure deterministic order
+    g.id ASC
+LIMIT @Size OFFSET @Skip;
 
--- name: ListIfMemberDescPaged :many
+-- -- name: ListIfMemberAscPaged :many
+-- SELECT
+--     g.*,
+--     gr.*
+-- FROM
+--     groups_with_ldap_cn AS g
+-- JOIN
+--     memberships AS m ON m.group_id = g.id
+-- JOIN
+--     group_role AS gr ON gr.id = m.role_id
+-- WHERE
+--     m.user_id = $1
+-- ORDER BY
+--     g.created_at ASC LIMIT @Size OFFSET @Skip;
+--
+-- -- name: ListIfMemberDescPaged :many
+-- SELECT
+--     g.*,
+--     gr.*
+-- FROM
+--     groups_with_ldap_cn AS g
+-- JOIN
+--     memberships AS m ON m.group_id = g.id
+-- JOIN
+--     group_role AS gr ON gr.id = m.role_id
+-- WHERE
+--     m.user_id = $1
+-- ORDER BY
+--     g.created_at DESC LIMIT @Size OFFSET @Skip;
+
+-- name: ListIfMemberPaged :many
 SELECT
     g.*,
-    gr.*
-FROM
-    groups_with_ldap_cn AS g
-JOIN
-    memberships AS m ON m.group_id = g.id
-JOIN
-    group_role AS gr ON gr.id = m.role_id
-WHERE
-    m.user_id = $1
+    gr.*,
+    lg.ldap_cn
+FROM groups AS g
+JOIN memberships AS m ON m.group_id = g.id
+JOIN group_role AS gr ON gr.id = m.role_id
+LEFT JOIN ldap_groups AS lg ON g.id = lg.group_id AND lg.type = 'BASE'
+WHERE m.user_id = $1
 ORDER BY
-    g.created_at DESC LIMIT @Size OFFSET @Skip;
+    -- Dynamic Sorting Logic
+    CASE WHEN sqlc.narg('sort')::text = 'asc' THEN g.created_at END ASC,
+    CASE WHEN sqlc.narg('sort')::text = 'desc' THEN g.created_at END DESC,
+    -- Default fallback to ensure deterministic order
+    g.id ASC
+LIMIT @Size OFFSET @Skip;
 
 -- name: GetByID :one
-SELECT * FROM groups_with_ldap_cn WHERE id = $1;
+SELECT g.*, lg.ldap_cn
+FROM groups AS g
+LEFT JOIN ldap_groups AS lg ON lg.group_id = g.id AND lg.type = 'BASE'
+WHERE g.id = $1;
 
 -- name: GetIfMember :one
-SELECT g.* FROM groups_with_ldap_cn AS g JOIN memberships AS m ON m.group_id = g.id WHERE m.user_id = $1 AND m.group_id = $2;
-
+SELECT g.*, lg.ldap_cn
+FROM groups AS g
+JOIN memberships AS m ON m.group_id = g.id
+LEFT JOIN ldap_groups AS lg ON lg.group_id = g.id AND lg.type = 'BASE'
+WHERE m.user_id = $1 AND m.group_id = $2;
 -- name: Create :one
 INSERT INTO groups (title, description) VALUES ($1, $2) RETURNING *;
 
