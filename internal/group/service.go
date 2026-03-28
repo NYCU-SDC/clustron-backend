@@ -239,7 +239,7 @@ func (s *Service) ListPaged(ctx context.Context, page int, size int, sort string
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	logger.Info("list in asc, sortBy", zap.String("sortBy", sortBy))
+	logger.Info("list in "+sort+", sortBy", zap.String("sortBy", sortBy))
 	params := ListGroupsPagedParams{
 		Sort: pgtype.Text{String: sort, Valid: true},
 		Size: int32(size),
