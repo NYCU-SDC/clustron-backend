@@ -1,0 +1,39 @@
+---
+- name: Install chrony
+  become: yes
+  apt:
+    name: chrony
+    state: present
+    update_cache: yes
+
+- name: Configure chrony to use Header Node as server
+  become: yes
+  lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: "^(server|pool|sourcedir) .*"
+    state: absent
+  notify: Restart Chrony Client
+
+- name: Add Header Node as the only NTP server
+  become: yes
+  lineinfile:
+    path: /etc/chrony/chrony.conf
+    line: "server {{ head_node_ip }} iburst"
+    state: present
+  notify: Restart Chrony Client
+
+- name: Ensure chrony service is enabled and started
+  become: true
+  service:
+    name: chrony
+    state: started
+    enabled: yes
+
+- name: Check which NTP server chrony is mounted on
+  command: chronyc sources
+  register: chronyc_sources
+  changed_when: false
+
+- name: Display chronyc sources
+  debug:
+    msg: "{{ chronyc_sources.stdout_lines }}"

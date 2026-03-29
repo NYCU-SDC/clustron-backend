@@ -1,0 +1,29 @@
+- name: Install NFS Client
+  become: yes
+  apt:
+    name: nfs-common
+    state: present
+    update_cache: yes
+
+- name: Ensure mount points exist on compute nodes
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - /home
+    - /opt
+    - /etc/slurm
+
+- name: Mount NFS Shares and update /etc/fstab
+  become: yes
+  mount:
+    path: "{{ item }}"
+    src: "{{ head_node_ip }}:{{ item }}"
+    fstype: nfs
+    opts: defaults,_netdev
+    state: mounted
+  loop:
+    - /home
+    - /opt
+    - /etc/slurm

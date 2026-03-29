@@ -1,0 +1,63 @@
+# TODO: make the check flexible
+- name: Check if Slurm packages already exist in cluster share
+  stat:
+    path: "/opt/cluster_share/slurm-smd_24.11.0-1_amd64.deb"
+  register: slurm_deb
+
+- name: Set rebuild flag
+  set_fact:
+    needs_build: "{{ not slurm_deb.stat.exists }}"
+
+- name: Install Debian packaging tools
+  become: true
+  apt:
+    name: [lbzip2, build-essential, fakeroot, devscripts, equivs]
+    state: present
+  when: needs_build
+
+- name: Create directory
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+    recurse: yes
+  when: needs_build
+  loop:
+    - /opt/slurm/src
+    - /opt/cluster_share
+
+- name: Download and Unpack Slurm source
+  become: yes
+  unarchive:
+    src: "https://download.schedmd.com/slurm/slurm-24.11.0.tar.bz2"
+    dest: /opt/slurm/src
+    remote_src: yes
+    extra_opts: ['--strip-components=1']
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  when: needs_build
+
+- name: Install dependencies (mk-build-deps)
+  become: true
+  shell: |
+    mk-build-deps -i debian/control -t "apt-get -y -o Debug::pkgProblemResolver=yes --no-install-recommends"
+  args:
+    chdir: /opt/slurm/src
+  when: needs_build
+
+- name: Build Slurm packages (this could take a while ...)
+  shell: debuild -b -uc -us
+  args:
+    chdir: /opt/slurm/src
+  register: build_output
+  async: 3600
+  poll: 30
+  when: needs_build
+
+- name: Move generated deb files to shared folder
+  shell: mv /opt/slurm/*.deb /opt/cluster_share/
+  become: true
+  when: needs_build
