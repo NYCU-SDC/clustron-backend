@@ -4,14 +4,6 @@ SELECT COUNT(*) FROM groups;
 -- name: CountByUser :one
 SELECT COUNT(*) FROM memberships WHERE user_id = $1;
 
--- -- name: ListAscPaged :many
--- SELECT * FROM groups_with_ldap_cn
--- ORDER BY created_at ASC LIMIT @Size OFFSET @Skip;
---
--- -- name: ListDescPaged :many
--- SELECT * FROM groups_with_ldap_cn
--- ORDER BY created_at DESC LIMIT @Size OFFSET @Skip;
-
 -- name: ListGroupsPaged :many
 SELECT
     g.*,
@@ -25,36 +17,6 @@ ORDER BY
     -- Default fallback to ensure deterministic order
     g.id ASC
 LIMIT @Size OFFSET @Skip;
-
--- -- name: ListIfMemberAscPaged :many
--- SELECT
---     g.*,
---     gr.*
--- FROM
---     groups_with_ldap_cn AS g
--- JOIN
---     memberships AS m ON m.group_id = g.id
--- JOIN
---     group_role AS gr ON gr.id = m.role_id
--- WHERE
---     m.user_id = $1
--- ORDER BY
---     g.created_at ASC LIMIT @Size OFFSET @Skip;
---
--- -- name: ListIfMemberDescPaged :many
--- SELECT
---     g.*,
---     gr.*
--- FROM
---     groups_with_ldap_cn AS g
--- JOIN
---     memberships AS m ON m.group_id = g.id
--- JOIN
---     group_role AS gr ON gr.id = m.role_id
--- WHERE
---     m.user_id = $1
--- ORDER BY
---     g.created_at DESC LIMIT @Size OFFSET @Skip;
 
 -- name: ListIfMemberPaged :many
 SELECT
