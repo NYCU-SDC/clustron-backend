@@ -1,4 +1,3 @@
-# 1. 預先回答網域問題 (Base DN)，但不再設定密碼
 - name: Preseed slapd domain configuration
   debconf:
     name: slapd
@@ -6,7 +5,6 @@
     value: 'clustron.prj.internal.sdc.nycu.club'
     vtype: 'string'
 
-# 2. 安裝 LDAP 伺服器
 - name: Install LDAP Server (slapd) and utils
   become: true
   apt:
@@ -16,7 +14,6 @@
     state: present
     update_cache: yes
 
-# 3. 確保 LDAP 服務正常啟動
 - name: Ensure LDAP is running
   become: true
   service:
@@ -28,7 +25,6 @@
   copy:
     dest: /tmp/base_structure.ldif
     content: |
-      # 建立最上層的 Root 節點 (必須先有這個，才有下面)
       dn: dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       objectClass: top
       objectClass: dcObject
@@ -46,9 +42,6 @@
       objectClass: organizationalUnit
       ou: Groups
 
-# 5. 匯入 LDIF (使用 SASL/EXTERNAL 認證)
-# -Y EXTERNAL: 使用系統身分認證 (root)
-# -H ldapi:/// : 透過 Unix Socket 通訊，不經過網路與密碼驗證
 - name: Apply base structure LDIF (Passwordless)
   become: true
   shell: |
@@ -59,3 +52,4 @@
     - "'Already exists' not in ldapadd_result.stderr"
   changed_when: 
     - ldapadd_result.rc == 0
+    
