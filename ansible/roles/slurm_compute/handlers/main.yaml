@@ -3,3 +3,4 @@
   service:
     name: slurmd
     state: restarted
+    

@@ -38,5 +38,3 @@
 - name: Save iptables rules
   become: true
   shell: netfilter-persistent save
-
-  
