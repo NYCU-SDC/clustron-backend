@@ -1,0 +1,44 @@
+- name: Create slurm group
+  become: true
+  group:
+    name: slurm
+    gid: 1002
+
+- name: Create slurm user
+  become: true
+  user:
+    name: slurm
+    uid: 1002
+    group: slurm
+    home: /var/lib/slurm
+    create_home: yes
+    shell: /bin/bash
+
+- name: Create local Slurm directories
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: slurm
+    group: slurm
+    mode: '0755'
+  loop:
+    - /var/spool/slurm
+    - /var/spool/slurm/d
+    - /var/log/slurm
+
+- name: Install Compute packages
+  become: true
+  apt:
+    deb: "/opt/cluster_share/{{ item }}"
+  loop:
+    - "slurm-smd_24.11.0-1_amd64.deb"
+    - "slurm-smd-client_24.11.0-1_amd64.deb"
+    - "slurm-smd-slurmd_24.11.0-1_amd64.deb"
+
+- name: Ensure slurmd is running and enabled
+  become: true
+  service:
+    name: slurmd
+    state: started
+    enabled: yes

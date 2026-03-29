@@ -1,0 +1,125 @@
+# 1. 建立 Slurm 使用者與群組
+- name: Create slurm group
+  become: yes
+  group:
+    name: slurm
+    gid: 1002
+
+- name: Create slurm user
+  become: yes
+  user:
+    name: slurm
+    uid: 1002
+    group: slurm
+    home: /var/lib/slurm
+    create_home: yes
+    shell: /bin/bash
+
+# 2. 依照新版 slurm.conf 建立對應的目錄結構
+- name: Create Slurm directories
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: slurm
+    group: slurm
+    mode: '0755'
+  loop:
+    - /etc/slurm
+    - /var/spool/slurm
+    - /var/spool/slurm/ctld    # 對應 StateSaveLocation
+    - /var/spool/slurm/d       # 對應 SlurmdSpoolDir
+    - /var/log/slurm           # 日誌存放處
+    - /var/run/slurmdbd
+
+# 3. 處理 JWT Key (放置於 NFS 共用目錄，取代 Munge)
+- name: Ensure JWT Secret Key exists
+  stat:
+    path: /etc/slurm/slurm.key
+  register: jwt_key_stat
+
+- name: Generate JWT Secret Key
+  become: yes
+  command: dd if=/dev/random of=/etc/slurm/slurm.key bs=32 count=1
+  when: not jwt_key_stat.stat.exists
+
+- name: Setup JWT Key permission
+  become: yes
+  file:
+    path: /etc/slurm/slurm.key
+    owner: slurm
+    group: slurm
+    mode: '0600'  # 權限極為重要，且 root (slurmd) 依然可以讀取
+
+# 4. 安裝 MariaDB 與建置 Slurmdbd 資料庫
+- name: Install MariaDB Server and Client
+  become: yes
+  apt:
+    name:
+      - mariadb-server
+      - mariadb-client
+    state: present
+
+- name: Ensure MariaDB is running
+  become: true
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Initialize Slurm Accounting Database
+  become: true
+  shell: |
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS slurm_acct_db;"
+    mysql -u root -e "CREATE USER IF NOT EXISTS 'slurm'@'localhost' IDENTIFIED BY 'password';"
+    mysql -u root -e "GRANT ALL PRIVILEGES ON slurm_acct_db.* TO 'slurm'@'localhost';"
+    mysql -u root -e "FLUSH PRIVILEGES;"
+  register: db_init
+  changed_when: false
+
+- name: Install Controller packages
+  become: yes
+  apt:
+    deb: "/opt/cluster_share/{{ item }}"
+  loop:
+    - "slurm-smd_24.11.0-1_amd64.deb"
+    - "slurm-smd-client_24.11.0-1_amd64.deb"
+    - "slurm-smd-slurmctld_24.11.0-1_amd64.deb"
+    - "slurm-smd-slurmdbd_24.11.0-1_amd64.deb"
+
+
+# 6. 派發設定檔 (存放於 /etc/slurm，Compute Nodes 透過 NFS 自動獲得)
+- name: Deploy slurmdbd.conf
+  become: yes
+  template:
+    src: slurmdbd.conf.j2
+    dest: /etc/slurm/slurmdbd.conf
+    owner: slurm
+    group: slurm
+    mode: '0600'
+  notify: Restart Slurmdbd
+
+- name: Deploy slurm.conf
+  become: true
+  template:
+    src: slurm.conf.j2
+    dest: /etc/slurm/slurm.conf
+    owner: slurm
+    group: slurm
+    mode: '0644'
+  notify: Reconfigure Slurm
+
+# 7. 確保服務啟動
+- name: Ensure slurmdbd is running and enabled
+  become: true
+  service:
+    name: slurmdbd
+    state: started
+    enabled: yes
+
+- name: Ensure slurmctld is running and enabled
+  become: true
+  service:
+    name: slurmctld
+    state: started
+    enabled: yes

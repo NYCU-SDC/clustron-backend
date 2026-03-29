@@ -1,0 +1,20 @@
+- name: Update apt cache and upgrade all packages
+  become: yes
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    upgrade: dist
+
+- name: Set timezone to Asia/Taipei
+  timezone:
+    name: Asia/Taipei
+
+- name: Generate /etc/hosts for all nodes
+  become: true
+  lineinfile:
+    path: /etc/hosts
+    regexp: ".* {{ item }}$"
+    line: "{{ hostvars[item].ansible_default_ipv4.address }} {{ item }}"
+    state: present
+  loop: "{{ groups['all'] }}"
+  when: hostvars[item].ansible_default_ipv4 is defined

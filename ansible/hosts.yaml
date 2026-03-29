@@ -1,0 +1,12 @@
+all:
+  vars:
+    head_node_ip: "192.168.211.40"
+  children:
+    head_nodes:
+      hosts:
+        ansible-head:
+          ansible_host: ansible_head
+    compute_nodes:
+      hosts:
+        ansible-cpu-1:
+          ansible_host: ansible_cpu_1

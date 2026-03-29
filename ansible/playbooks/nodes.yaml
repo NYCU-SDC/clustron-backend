@@ -1,0 +1,23 @@
+- name: Gather facts from all nodes
+  hosts: all
+  gather_facts: yes
+
+- name: setup Header Node
+  hosts: head_nodes
+  roles:
+    - common
+    - ntp_server
+    - nfs_server
+    - ldap_server
+    - slurm_builder
+    - slurm_controller
+  
+- name: set up Compute Nodes
+  hosts: compute_nodes
+  roles:
+    - common
+    - ntp_client
+    - nfs_client
+    - ldap_client
+    - slurm_builder
+    - slurm_compute
