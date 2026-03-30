@@ -22,12 +22,14 @@
 
 - name: Add iptables rule for compute nodes (UDP 123)
   become: yes
-  shell: |
-    iptables -C INPUT -p udp -s {{ hostvars[item].ansible_default_ipv4.address }} --dport 123 -j ACCEPT || \
-    iptables -I INPUT -p udp -s {{ hostvars[item].ansible_default_ipv4.address }} --dport 123 -j ACCEPT
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: udp
+    source: "{{ hostvars[item].ansible_default_ipv4.address }}"
+    destination_port: "123"
+    jump: ACCEPT
+    action: insert
   loop: "{{ groups['compute_nodes'] }}"
-  register: iptables_result
-  changed_when: "'iptables -I' in iptables_result.cmd"
 
 - name: Install iptables-persistent
   become: yes
