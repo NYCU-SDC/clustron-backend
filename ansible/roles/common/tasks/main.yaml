@@ -9,6 +9,11 @@
   timezone:
     name: Asia/Taipei
 
+- name: Set system hostname
+  become: yes
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
 - name: Generate /etc/hosts for all nodes
   become: true
   lineinfile:

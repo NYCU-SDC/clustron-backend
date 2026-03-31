@@ -24,7 +24,7 @@ MailProg=/usr/bin/true
 
 # COMPUTE NODES
 {% for host in groups['compute_nodes'] %}
-NodeName={{ host }} NodeAddr={{ hostvars[host]['ansible_host'] }}
+NodeName={{ host }} NodeAddr={{ hostvars[host].ansible_default_ipv4.address }}
 {% endfor %}
 
 PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
