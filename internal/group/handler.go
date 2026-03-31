@@ -30,7 +30,7 @@ type MemberStore interface {
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
-	Create(ctx context.Context, userID uuid.UUID, title, description string) (Group, error)
+	Create(ctx context.Context, userID uuid.UUID, title, description, ldapGroupName string) (Group, error)
 	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
@@ -55,13 +55,14 @@ type CreateLinkRequest struct {
 }
 
 type Response struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	IsArchived  bool   `json:"isArchived"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
-	Me          struct {
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	LDAPGroupName string `json:"ldapGroupName"`
+	Description   string `json:"description"`
+	IsArchived    bool   `json:"isArchived"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+	Me            struct {
 		Type string                 `json:"type"` // will be "membership" or "adminOverride"
 		Role grouprole.RoleResponse `json:"role"`
 	} `json:"me"`
@@ -78,10 +79,11 @@ type CreateResponse struct {
 }
 
 type CreateRequest struct {
-	Title       string                        `json:"title" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
-	Description string                        `json:"description" validate:"required"`
-	Members     []membership.AddMemberRequest `json:"members"`
-	Links       []CreateLinkRequest
+	Title         string                        `json:"title" validate:"required"`
+	Description   string                        `json:"description" validate:"required"`
+	LDAPGroupName string                        `json:"ldapGroupName" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9- ]*[a-zA-Z0-9])?$"`
+	Members       []membership.AddMemberRequest `json:"members"`
+	Links         []CreateLinkRequest
 }
 
 type TransferOwnerRequest struct {
@@ -149,13 +151,15 @@ func (h *Handler) GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	groupResponse := make([]Response, len(userScopeResponse))
 	for i, group := range userScopeResponse {
 		groupResponse[i] = Response{
-			ID:          group.ID.String(),
-			Title:       group.Title,
-			Description: group.Description.String,
-			IsArchived:  group.IsArchived.Bool,
-			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:            group.ID.String(),
+			Title:         group.Title,
+			LDAPGroupName: group.LdapCn.String,
+			Description:   group.Description.String,
+			IsArchived:    group.IsArchived.Bool,
+			CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		}
+		h.logger.Info(group.LdapCn.String)
 		groupResponse[i].Me.Type = group.Me.Type
 		groupResponse[i].Me.Role = group.Me.Role.ToResponse()
 	}
@@ -198,12 +202,13 @@ func (h *Handler) GetByIDHandler(w http.ResponseWriter, r *http.Request) {
 	groupResponse := WithLinksResponse{
 		// Basic group information
 		Response: Response{
-			ID:          userScopeResponse.ID.String(),
-			Title:       userScopeResponse.Title,
-			Description: userScopeResponse.Description.String,
-			IsArchived:  userScopeResponse.IsArchived.Bool,
-			CreatedAt:   userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:            userScopeResponse.ID.String(),
+			Title:         userScopeResponse.Title,
+			LDAPGroupName: userScopeResponse.LdapCn.String,
+			Description:   userScopeResponse.Description.String,
+			IsArchived:    userScopeResponse.IsArchived.Bool,
+			CreatedAt:     userScopeResponse.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     userScopeResponse.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		},
 	}
 
@@ -243,7 +248,7 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, err := h.store.Create(traceCtx, user.ID, request.Title, request.Description)
+	group, err := h.store.Create(traceCtx, user.ID, request.Title, request.Description, request.LDAPGroupName)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -297,12 +302,13 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	groupResponse := CreateResponse{
 		Response: Response{
-			ID:          group.ID.String(),
-			Title:       group.Title,
-			Description: group.Description.String,
-			IsArchived:  group.IsArchived.Bool,
-			CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:            group.ID.String(),
+			Title:         group.Title,
+			LDAPGroupName: request.LDAPGroupName,
+			Description:   group.Description.String,
+			IsArchived:    group.IsArchived.Bool,
+			CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		},
 		AddedResult: results,
 	}

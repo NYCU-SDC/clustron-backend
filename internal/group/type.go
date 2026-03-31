@@ -1,6 +1,8 @@
 package group
 
-import "clustron-backend/internal/grouprole"
+import (
+	"clustron-backend/internal/grouprole"
+)
 
 type ResponseWithLinks struct {
 	grouprole.UserScope
