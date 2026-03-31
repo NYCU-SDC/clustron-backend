@@ -1,4 +1,5 @@
 - name: Preseed slapd domain configuration
+  become: yes
   debconf:
     name: slapd
     question: 'slapd/domain'
@@ -12,7 +13,6 @@
       - slapd
       - ldap-utils
     state: present
-    update_cache: yes
 
 - name: Ensure LDAP is running
   become: true

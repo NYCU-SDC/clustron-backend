@@ -3,7 +3,6 @@
   apt:
     name: chrony
     state: present
-    update_cache: yes
 
 - name: Allow compute nodes to sync time
   become: true
