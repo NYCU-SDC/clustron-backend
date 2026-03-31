@@ -1,7 +1,7 @@
 # TODO: make the check flexible
 - name: Check if Slurm packages already exist in cluster share
   stat:
-    path: "/opt/cluster_share/slurm-smd_24.11.0-1_amd64.deb"
+    path: "/opt/cluster_share/slurm-smd_25.11.4-1_amd64.deb"
   register: slurm_deb
 
 - name: Set rebuild flag

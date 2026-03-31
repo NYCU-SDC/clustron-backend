@@ -32,18 +32,18 @@
 
 - name: Ensure JWT Secret Key exists
   stat:
-    path: /etc/slurm/slurm.key
+    path: /etc/slurm/jwt.key
   register: jwt_key_stat
 
 - name: Generate JWT Secret Key
   become: yes
-  command: dd if=/dev/random of=/etc/slurm/slurm.key bs=32 count=1
+  command: dd if=/dev/random of=/etc/slurm/jwt.key bs=32 count=1
   when: not jwt_key_stat.stat.exists
 
 - name: Setup JWT Key permission
   become: yes
   file:
-    path: /etc/slurm/slurm.key
+    path: /etc/slurm/jwt.key
     owner: slurm
     group: slurm
     mode: '0600'
@@ -78,10 +78,10 @@
   apt:
     deb: "/opt/cluster_share/{{ item }}"
   loop:
-    - "slurm-smd_24.11-latest_amd64.deb"
-    - "slurm-smd-client_24.11-latest_amd64.deb"
-    - "slurm-smd-slurmctld_24.11-latest_amd64.deb"
-    - "slurm-smd-slurmdbd_24.11-latest_amd64.deb"
+    - "slurm-smd_25.11.4-1_amd64.deb"
+    - "slurm-smd-client_25.11.4-1_amd64.deb"
+    - "slurm-smd-slurmctld_25.11.4-1_amd64.deb"
+    - "slurm-smd-slurmdbd_25.11.4-1_amd64.deb"
 
 - name: Deploy slurmdbd.conf
   become: yes
