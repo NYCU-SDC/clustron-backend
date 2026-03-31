@@ -22,5 +22,7 @@
     owner: root
     group: root
     mode: '0644'
-  notify: Reload NFS
   
+- name: Reload NFS
+  become: yes
+  command: exportfs -ra
