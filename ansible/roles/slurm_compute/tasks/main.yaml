@@ -32,9 +32,9 @@
   apt:
     deb: "/opt/cluster_share/{{ item }}"
   loop:
-    - "slurm-smd_24.11.0-1_amd64.deb"
-    - "slurm-smd-client_24.11.0-1_amd64.deb"
-    - "slurm-smd-slurmd_24.11.0-1_amd64.deb"
+    - "slurm-smd_25.11-latest_amd64.deb"
+    - "slurm-smd-client_25.11-latest_amd64.deb"
+    - "slurm-smd-slurmd_25.11-latest_amd64.deb"
 
 - name: Ensure slurmd is running and enabled
   become: true

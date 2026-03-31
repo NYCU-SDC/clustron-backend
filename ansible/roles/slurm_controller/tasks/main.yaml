@@ -78,10 +78,10 @@
   apt:
     deb: "/opt/cluster_share/{{ item }}"
   loop:
-    - "slurm-smd_24.11.0-1_amd64.deb"
-    - "slurm-smd-client_24.11.0-1_amd64.deb"
-    - "slurm-smd-slurmctld_24.11.0-1_amd64.deb"
-    - "slurm-smd-slurmdbd_24.11.0-1_amd64.deb"
+    - "slurm-smd_24.11-latest_amd64.deb"
+    - "slurm-smd-client_24.11-latest_amd64.deb"
+    - "slurm-smd-slurmctld_24.11-latest_amd64.deb"
+    - "slurm-smd-slurmdbd_24.11-latest_amd64.deb"
 
 - name: Deploy slurmdbd.conf
   become: yes

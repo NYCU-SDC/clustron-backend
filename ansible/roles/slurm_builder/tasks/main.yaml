@@ -20,8 +20,8 @@
   file:
     path: "/opt/slurm_build"
     state: "{{ item }}"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "ansible_svc"
+    group: "ansible_svc"
     mode: '0755'
   loop: [absent, directory]
   when: needs_build
@@ -35,12 +35,12 @@
 - name: Download and Unpack Slurm source
   become: yes
   unarchive:
-    src: "https://download.schedmd.com/slurm_build/slurm-24.11.0.tar.bz2"
+    src: "https://download.schedmd.com/slurm/slurm-25.11-latest.tar.bz2"
     dest: /opt/slurm_build/src
     remote_src: yes
     extra_opts: ['--strip-components=1']
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "ansible_svc"
+    group: "ansible_svc"
   when: needs_build
 
 - name: Install dependencies (mk-build-deps)
@@ -58,6 +58,16 @@
   register: build_output
   async: 3600
   poll: 30
+  when: needs_build
+
+- name: create clustron share folder
+  become: true
+  file:
+    path: "/opt/cluster_share"
+    state: "directory"
+    owner: "ansible_svc"
+    group: "ansible_svc"
+    mode: '0755'
   when: needs_build
 
 - name: Move generated deb files to shared folder

@@ -3,7 +3,6 @@
   apt:
     name: chrony
     state: present
-    update_cache: yes
 
 - name: Configure chrony to use Header Node as server
   become: yes
