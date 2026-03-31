@@ -31,7 +31,3 @@
   command: chronyc sources
   register: chronyc_sources
   changed_when: false
-
-- name: Display chronyc sources
-  debug:
-    msg: "{{ chronyc_sources.stdout_lines }}"
