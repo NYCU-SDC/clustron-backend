@@ -14,6 +14,11 @@
     create_home: yes
     shell: /bin/bash
 
+- name: Check if Slurm directories exist
+  stat:
+    path: /var/spool/slurm/d
+  register: slurm_dirs_stat
+
 - name: Create Slurm directories
   become: yes
   file:
@@ -24,20 +29,38 @@
     mode: '0755'
   loop:
     - /etc/slurm
-    - /var/spool/slurm
     - /var/spool/slurm/ctld
     - /var/spool/slurm/d
     - /var/log/slurm
     - /var/run/slurmdbd
+  when: not slurm_dirs_stat.stat.exists
 
-- name: Ensure JWT Secret Key exists
+- name: Ensure Slurm Native Auth Key exists
+  stat:
+    path: /etc/slurm/slurm.key
+  register: slurm_key_stat
+
+- name: Generate Slurm Native Auth Key
+  become: yes
+  command: dd if=/dev/urandom of=/etc/slurm/slurm.key bs=1024 count=1
+  when: not slurm_key_stat.stat.exists
+
+- name: Setup Slurm Native Auth Key permission
+  become: yes
+  file:
+    path: /etc/slurm/slurm.key
+    owner: slurm
+    group: slurm
+    mode: '0600'
+
+- name: Ensure JWT RSA Key exists
   stat:
     path: /etc/slurm/jwt.key
   register: jwt_key_stat
 
-- name: Generate JWT Secret Key
+- name: Generate JWT RSA Key
   become: yes
-  command: dd if=/dev/random of=/etc/slurm/jwt.key bs=32 count=1
+  command: openssl genrsa -out /etc/slurm/jwt.key 2048
   when: not jwt_key_stat.stat.exists
 
 - name: Setup JWT Key permission
@@ -70,10 +93,9 @@
     mysql -u root -e "CREATE USER IF NOT EXISTS 'slurm'@'localhost' IDENTIFIED BY 'password';"
     mysql -u root -e "GRANT ALL PRIVILEGES ON slurm_acct_db.* TO 'slurm'@'localhost';"
     mysql -u root -e "FLUSH PRIVILEGES;"
-  register: db_init
   changed_when: false
 
-- name: Install Controller packages
+- name: Install Controller packages (v25.11)
   become: yes
   apt:
     deb: "/opt/cluster_share/{{ item }}"
