@@ -60,7 +60,7 @@ type UpdatePasswordRequest struct {
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
-//go:generate mockery --name Store
+//mockery:generate: true
 type Store interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error)

@@ -146,11 +146,12 @@ func main() {
 
 	// Querier
 	settingQuerier := setting.New(dbPool)
+	jwtQuerier := jwt.New(dbPool)
 
 	// Service
 	redisService := redis.NewService(logger, cfg.RedisURL)
 	userService := user.NewService(logger, cfg.PresetUser, dbPool)
-	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, dbPool)
+	jwtService := jwt.NewService(logger, cfg.Secret, cfg.OAuthProxySecret, 15*time.Minute, 24*time.Hour, jwtQuerier)
 	authService := auth.NewService(logger, dbPool, userService, 15*time.Minute, cfg.PresetUser)
 	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
 	ldapGroupService := ldapgroup.NewService(logger, dbPool)

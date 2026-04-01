@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=Store
+//mockery:generate: true
 type Store interface {
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error)
 	SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error)
