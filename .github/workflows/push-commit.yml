@@ -46,7 +46,7 @@ jobs:
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: '3.7.0'
 
       - name: Build
         run: |
@@ -79,7 +79,7 @@ jobs:
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: '3.7.0'
 
       - name: Test
         run: make test
@@ -105,7 +105,7 @@ jobs:
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-            mockery-version: '2.53.3'
+          mockery-version: '3.7.0'
 
       - name: Build
         run: |
