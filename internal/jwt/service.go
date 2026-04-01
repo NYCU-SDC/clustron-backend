@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -12,13 +15,21 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 const Issuer = "clustron"
+
+//mockery:generate: true
+type Querier interface {
+	GetByID(ctx context.Context, id uuid.UUID) (RefreshToken, error)
+	GetUserByRefreshToken(ctx context.Context, id uuid.UUID) (User, error)
+	Create(ctx context.Context, arg CreateParams) (RefreshToken, error)
+	Inactivate(ctx context.Context, id uuid.UUID) (RefreshToken, error)
+	InactivateByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	DeleteExpired(ctx context.Context) (int64, error)
+}
 
 type Service struct {
 	logger                 *zap.Logger
@@ -27,10 +38,10 @@ type Service struct {
 	expiration             time.Duration
 	refreshTokenExpiration time.Duration
 	tracer                 trace.Tracer
-	queries                *Queries
+	queries                Querier
 }
 
-func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expiration, refreshTokenExpiration time.Duration, db DBTX) *Service {
+func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expiration, refreshTokenExpiration time.Duration, queries Querier) *Service {
 	return &Service{
 		logger:                 logger,
 		secret:                 secret,
@@ -38,7 +49,7 @@ func NewService(logger *zap.Logger, secret string, oauthProxySecret string, expi
 		expiration:             expiration,
 		refreshTokenExpiration: refreshTokenExpiration,
 		tracer:                 otel.Tracer("jwt/service"),
-		queries:                New(db),
+		queries:                queries,
 	}
 }
 

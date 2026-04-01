@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=Store
+//mockery:generate: true
 type Store interface {
 	GetAll(ctx context.Context) ([]GroupRole, error)
 	Create(ctx context.Context, roleName string, level AccessLevel) (GroupRole, error)

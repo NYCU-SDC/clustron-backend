@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name CasbinEnforcer
+//mockery:generate: true
 type CasbinEnforcer interface {
 	Enforce(role, path, method string) (bool, error)
 }
