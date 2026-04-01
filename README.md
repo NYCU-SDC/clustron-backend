@@ -43,7 +43,7 @@ brew upgrade mockery
 #### Go install 
 ```
 go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-go install github.com/vektra/mockery/v3@v3.2.2      # not recommanded by the documentation
+go install github.com/vektra/mockery/v3@v3.7.0
 ```
 
 You can also find more OS-spacific installing methods from the documentation.
