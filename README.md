@@ -31,7 +31,8 @@ make -v
 If the result is something like `make command not found`, install `make` before running the above command.
 
 ### Install other tools
-We use [sqlc](https://sqlc.dev) for database queries generation and [mockery](https://vektra.github.io/mockery/latest/) for mocking.
+We use [sqlc](https://sqlc.dev) for database queries generation and [mockery](https://vektra.github.io/mockery/latest/) for mocking. 
+Please make sure your mockery version is v3.7.0, otherwise the generated mock code will not work with our codebase.
 
 #### MacOS
 ```
