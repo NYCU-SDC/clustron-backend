@@ -96,3 +96,31 @@ To disable pre-push action until re-open it:
 ```
 left hook uninstall
 ```
+
+## Generate Call Graph (flow-chart)
+
+This project uses [go-callvis](https://github.com/ofabry/go-callvis) to visualize Go code execution and function calls.
+
+### Prerequisite
+```bash
+go install github.com/ofabry/go-callvis@latest
+```
+
+### Usage
+By default, this command opens an interactive graph in your web browser (press `Ctrl+C` to stop the server).
+
+- Analyze Default Entry Point (`cmd/backend/main.go`):
+  ```bash
+  make flow-chart
+  ```
+
+- Analyze a Specific Module:
+  ```bash
+  make flow-chart TARGET=./cmd/backend/main.go FOCUS=user
+  ```
+
+- Export to Image (No Browser):
+  Use `EXTRA_FLAGS` to save the output directly as an SVG or PNG file.
+  ```bash
+  make flow-chart TARGET=./internal/user FOCUS=user EXTRA_FLAGS="-format svg -file user_flow"
+  ```

@@ -51,3 +51,19 @@ gen:
 	@echo -e "  -> Running go generate..."
 	@mockery
 	@echo -e "==> $(BLUE)Generation completed$(NC)"
+
+TARGET ?= ./cmd/backend/main.go
+IGNORE_PKGS ?= go.uber.org/zap, go.opentelemetry.io/otel, github.com/google/uuid, regexp, strings, net/url, fmt, ssh, net/http, github.com/NYCU-SDC/summer/pkg/log, github.com/NYCU-SDC/summer/pkg/problem, github.com/NYCU-SDC/summer/pkg/database, strconv
+FOCUS ?=
+EXTRA_FLAGS ?= -nointer
+
+flow-chart:
+	@echo -e ":: $(GREEN)Generating call graph with go-callvis...$(NC)"
+	@echo -e "  -> Analyzing target: $(BLUE)$(TARGET)$(NC)..."
+	@if [ -n "$(FOCUS)" ]; then \
+		echo -e "  -> Focusing on package: $(BLUE)$(FOCUS)$(NC)..."; \
+		go-callvis -focus $(FOCUS) -ignore "$(IGNORE_PKGS)" $(EXTRA_FLAGS) $(TARGET) || (echo -e "  -> $(RED)Execution failed$(NC)" && exit 1); \
+	else \
+		go-callvis -ignore "$(IGNORE_PKGS)" $(EXTRA_FLAGS) $(TARGET) || (echo -e "  -> $(RED)Execution failed$(NC)" && exit 1); \
+	fi
+	@echo -e "==> $(BLUE)Call graph generation finished$(NC)"
