@@ -43,7 +43,7 @@ UPDATE ldap_user SET uid_number = $2 WHERE id = $1;
 -- name: DeleteLDAPUser :exec
 DELETE FROM ldap_user WHERE id = $1;
 
--- name: GetNextLdapUid :one
+-- name: GetNextLDAPUIDNumber :one
 SELECT nextval('ldap_uid_seq')::int;
 
 -- name: ExistLDAPUserByUIDNumber :one
