@@ -60,7 +60,7 @@ type Querier interface {
 	DeletePublicKey(ctx context.Context, id uuid.UUID) error
 	ExistByLinuxUsername(ctx context.Context, linuxUsername pgtype.Text) (bool, error)
 	GetAllUserInfoByUIDNumber(ctx context.Context, uidNumbers []int64) ([]GetAllUserInfoByUIDNumberRow, error)
-	GetNextLdapUid(ctx context.Context) (int32, error)
+	GetNextLDAPUIDNumber(ctx context.Context) (int32, error)
 }
 
 type MembershipService interface {
@@ -75,6 +75,8 @@ type Service struct {
 	membershipService MembershipService
 	ldapClient        LDAPClient
 }
+
+const maxLDAPUserCreateAttempts = 5
 
 func NewService(logger *zap.Logger, querier Querier, userStore UserStore, ldapClient LDAPClient) *Service {
 	return &Service{
@@ -155,19 +157,11 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 	saga.AddStep(internal.SagaStep{
 		Name: "Create LDAP User",
 		Action: func(ctx context.Context) error {
-			uidNumber, err = s.GetAvailableUIDNumber(ctx)
+			uidNumber, err = s.createLDAPUserWithRetry(ctx, logger, linuxUsername.String, fullName.String)
 			if err != nil {
-				return fmt.Errorf("failed to get available uid number: %w", err)
+				return err
 			}
 
-			err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
-			if err != nil {
-				if errors.Is(err, ldaputil.ErrUserExists) {
-					logger.Warn("LDAP user already exists", zap.String("linuxUsername", linuxUsername.String))
-					return internal.ErrAlreadyOnboarded
-				}
-				return fmt.Errorf("failed to create LDAP user: %w", err)
-			}
 			logger.Info("created LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.String("uidNumber", uidNumber))
 			return nil
 		},
@@ -543,7 +537,7 @@ func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	uidInt, err := s.query.GetNextLdapUid(ctx)
+	uidInt, err := s.query.GetNextLDAPUIDNumber(ctx)
 	if err != nil {
 		logger.Error("failed to get next ldap uid from sequence", zap.Error(err))
 		span.RecordError(err)
@@ -551,6 +545,56 @@ func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
 	}
 
 	return strconv.Itoa(int(uidInt)), nil
+}
+
+func (s *Service) createLDAPUserWithRetry(ctx context.Context, logger *zap.Logger, linuxUsername string, fullName string) (string, error) {
+	for attempt := 1; attempt <= maxLDAPUserCreateAttempts; attempt++ {
+		uidNumber, err := s.GetAvailableUIDNumber(ctx)
+		if err != nil {
+			return "", fmt.Errorf("failed to get available uid number: %w", err)
+		}
+
+		err = s.ldapClient.CreateUser(linuxUsername, fullName, "User", "", uidNumber)
+		if err == nil {
+			return uidNumber, nil
+		}
+
+		if errors.Is(err, ldaputil.ErrUserExists) {
+			logger.Warn("LDAP user already exists", zap.String("linuxUsername", linuxUsername))
+			return "", internal.ErrAlreadyOnboarded
+		}
+
+		if errors.Is(err, ldaputil.ErrUIDNumberInUse) {
+			logger.Warn("LDAP uidNumber already in use, retrying with next sequence value",
+				zap.String("linuxUsername", linuxUsername),
+				zap.String("uidNumber", uidNumber),
+				zap.Int("attempt", attempt),
+			)
+			continue
+		}
+
+		if errors.Is(err, ldaputil.ErrUserConstraintViolation) {
+			exists, existsErr := s.ldapClient.ExistUser(linuxUsername)
+			if existsErr != nil {
+				return "", fmt.Errorf("failed to verify LDAP username existence after constraint violation: %w", existsErr)
+			}
+			if exists {
+				logger.Warn("LDAP user already exists after constraint violation", zap.String("linuxUsername", linuxUsername))
+				return "", internal.ErrAlreadyOnboarded
+			}
+
+			logger.Warn("LDAP constraint violation detected, retrying with next sequence value",
+				zap.String("linuxUsername", linuxUsername),
+				zap.String("uidNumber", uidNumber),
+				zap.Int("attempt", attempt),
+			)
+			continue
+		}
+
+		return "", fmt.Errorf("failed to create LDAP user: %w", err)
+	}
+
+	return "", fmt.Errorf("failed to create LDAP user after %d attempts due to uidNumber conflicts", maxLDAPUserCreateAttempts)
 }
 
 func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {

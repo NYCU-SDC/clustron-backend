@@ -1,20 +1,31 @@
 package setting_test
 
 import (
+	"clustron-backend/internal"
 	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
+	"clustron-backend/internal/user"
+	"clustron-backend/internal/user/role"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zaptest"
 )
 
 var exampleFingerprint = "Sr7R03NsrTQ3vXO7XcRZzpJfixXJnwZXPi48i6XsLOY"
+
+type membershipServiceStub struct{}
+
+func (membershipServiceStub) ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error {
+	return nil
+}
 
 func TestService_GetSettingByUserID(t *testing.T) {
 	testCases := []struct {
@@ -720,5 +731,73 @@ func TestService_UpdatePassword(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestService_GetAvailableUIDNumber(t *testing.T) {
+	querier := new(mocks.Querier)
+	userStore := new(mocks.UserStore)
+	ldapClient := new(mocks.LDAPClient)
+	service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+
+	querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10001), nil)
+
+	uidNumber, err := service.GetAvailableUIDNumber(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "10001", uidNumber)
+}
+
+func TestService_OnboardUserRetriesUIDNumberConflict(t *testing.T) {
+	querier := new(mocks.Querier)
+	userStore := new(mocks.UserStore)
+	ldapClient := new(mocks.LDAPClient)
+	service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+	service.SetMembershipService(membershipServiceStub{})
+
+	userID := uuid.New()
+
+	userStore.On("GetByID", mock.Anything, userID).Return(exampleNotSetupUser(userID), nil)
+	userStore.On("UpdateFullName", mock.Anything, userID, "Test User").Return(exampleNotSetupUser(userID), nil)
+	userStore.On("SetupUserRole", mock.Anything, userID).Return("member", nil)
+
+	querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10000), nil).Once()
+	ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10000").Return(ldaputil.ErrUIDNumberInUse).Once()
+	querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10001), nil).Once()
+	ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10001").Return(nil).Once()
+	querier.On("CreateLDAPUser", mock.Anything, setting.CreateLDAPUserParams{ID: userID, UidNumber: 10001}).Return(nil).Once()
+
+	err := service.OnboardUser(context.Background(), userID, textValue("Test User"), textValue("testuser"))
+	assert.NoError(t, err)
+}
+
+func TestService_OnboardUserReturnsAlreadyOnboardedAfterConstraintViolationForExistingUser(t *testing.T) {
+	querier := new(mocks.Querier)
+	userStore := new(mocks.UserStore)
+	ldapClient := new(mocks.LDAPClient)
+	service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+
+	userID := uuid.New()
+
+	userStore.On("GetByID", mock.Anything, userID).Return(exampleNotSetupUser(userID), nil)
+	userStore.On("UpdateFullName", mock.Anything, userID, "Test User").Return(exampleNotSetupUser(userID), nil)
+	userStore.On("SetupUserRole", mock.Anything, userID).Return("member", nil)
+	querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10000), nil).Once()
+	ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10000").Return(ldaputil.ErrUserConstraintViolation).Once()
+	ldapClient.On("ExistUser", "testuser").Return(true, nil).Once()
+	userStore.On("UpdateRoleByID", mock.Anything, userID, role.NotSetup.String()).Return(exampleNotSetupUser(userID), nil)
+
+	err := service.OnboardUser(context.Background(), userID, textValue("Test User"), textValue("testuser"))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, internal.ErrAlreadyOnboarded))
+}
+
+func textValue(value string) pgtype.Text {
+	return pgtype.Text{String: value, Valid: true}
+}
+
+func exampleNotSetupUser(userID uuid.UUID) user.User {
+	return user.User{
+		ID:   userID,
+		Role: role.NotSetup.String(),
 	}
 }
