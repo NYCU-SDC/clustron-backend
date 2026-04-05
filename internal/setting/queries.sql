@@ -40,5 +40,5 @@ INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);
 -- name: DeleteLDAPUser :exec
 DELETE FROM ldap_user WHERE id = $1;
 
--- name: GetNextLdapUid :one
+-- name: GetNextLDAPUIDNumber :one
 SELECT nextval('ldap_uid_seq')::int;
