@@ -22,16 +22,17 @@ import (
 type Store interface {
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (User, error)
 	SearchByIdentifier(ctx context.Context, query string, page, size int) ([]string, int, error)
-	ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRow, int, error)
+	ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRowWithLinuxUsername, int, error)
 	UpdateRoleByID(ctx context.Context, id uuid.UUID, globalRole string) (User, error)
 }
 
 type Response struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	FullName  string    `json:"fullName"`
-	StudentID string    `json:"studentId"`
-	Role      string    `json:"role"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	FullName      string    `json:"fullName"`
+	StudentID     string    `json:"studentId"`
+	LinuxUsername string    `json:"linuxUsername"`
+	Role          string    `json:"role"`
 }
 
 type UpdateFullNameRequest struct {
@@ -192,11 +193,12 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	responseItems := make([]Response, len(items))
 	for i, item := range items {
 		responseItems[i] = Response{
-			ID:        item.ID,
-			FullName:  item.FullName.String,
-			Email:     item.Email,
-			StudentID: item.StudentID.String,
-			Role:      strings.ToUpper(item.Role),
+			ID:            item.ID,
+			FullName:      item.FullName.String,
+			Email:         item.Email,
+			StudentID:     item.StudentID.String,
+			LinuxUsername: item.LinuxUsername,
+			Role:          strings.ToUpper(item.Role),
 		}
 	}
 
