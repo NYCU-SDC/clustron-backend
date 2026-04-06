@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 
 	// check if uid is in use
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
@@ -77,7 +77,7 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 }
 
 func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 	filter := "(|"
 	for _, uid := range uids {
 		filter += fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
@@ -97,7 +97,7 @@ func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
 }
 
 func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
@@ -117,7 +117,7 @@ func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 }
 
 func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 	filter := fmt.Sprintf("(uidNumber=%s)", ldap.EscapeFilter(fmt.Sprint(uidNumber)))
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
@@ -137,7 +137,7 @@ func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
 }
 
 func (c *Client) ExistUser(uid string) (bool, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 
 	exist, err := c.entryExists(base, filter)
@@ -149,7 +149,7 @@ func (c *Client) ExistUser(uid string) (bool, error) {
 }
 
 func (c *Client) UpdateUser(uid string, cn string, sn string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.userBaseDN())
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Replace("cn", []string{cn})
 	modifyRequest.Replace("sn", []string{sn})
@@ -170,7 +170,7 @@ func (c *Client) UpdateUser(uid string, cn string, sn string) error {
 }
 
 func (c *Client) DeleteUser(uid string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.userBaseDN())
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 
 	err := c.Conn.Del(deleteRequest)
@@ -189,7 +189,7 @@ func (c *Client) DeleteUser(uid string) error {
 }
 
 func (c *Client) ExistSSHPublicKey(publicKey string) (bool, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.userBaseDN()
 	filter := fmt.Sprintf("(sshPublicKey=%s)", ldap.EscapeFilter(publicKey))
 
 	exist, err := c.entryExists(base, filter)
@@ -201,7 +201,7 @@ func (c *Client) ExistSSHPublicKey(publicKey string) (bool, error) {
 }
 
 func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.userBaseDN())
 
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Add("sshPublicKey", []string{publicKey})
@@ -226,7 +226,7 @@ func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
 }
 
 func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.userBaseDN())
 
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Delete("sshPublicKey", []string{publicKey})
@@ -252,7 +252,7 @@ func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
 }
 
 func (c *Client) UpdateUserPassword(uid string, password string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.userBaseDN())
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Replace("userPassword", []string{password})
 
