@@ -55,6 +55,7 @@ type Config struct {
 	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
 	LDAP                    ldap.Config               `yaml:"ldap"`
+	EnableInternalLogin     bool                      `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
 }
 
 type LogBuffer struct {
@@ -133,6 +134,7 @@ func Load() (Config, *LogBuffer) {
 		GoogleOauthClientSecret: "",
 		GithubOauthClientID:     "",
 		GithubOauthClientSecret: "",
+		EnableInternalLogin:     false,
 	}
 
 	var err error
@@ -250,6 +252,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			LDAPBindDN:  os.Getenv("LDAP_BIND_DN"),
 			LDAPBindPwd: os.Getenv("LDAP_BIND_PWD"),
 		},
+		EnableInternalLogin: os.Getenv("ENABLE_INTERNAL_LOGIN") == "true",
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -287,6 +290,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.LDAP.LDAPGroupDN, "ldap_group_dn", "", "ldap group dn")
 	flag.StringVar(&flagConfig.LDAP.LDAPBindDN, "ldap_bind_dn", "", "ldap bind dn")
 	flag.StringVar(&flagConfig.LDAP.LDAPBindPwd, "ldap_bind_pwd", "", "ldap bind password")
+	flag.BoolVar(&flagConfig.EnableInternalLogin, "enable_internal_login", false, "enable internal login")
 
 	flag.Parse()
 

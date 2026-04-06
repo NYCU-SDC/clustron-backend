@@ -29,3 +29,4 @@ ldap:
   ldap_group_dn: "ou=Groups,dc=clustron,dc=example,dc=com"
   ldap_bind_dn: "cn=admin,dc=clustron,dc=example,dc=com"
   ldap_bind_pwd: "admin"
+enable_internal_login: false # Set to true if you are in the testing phase.
