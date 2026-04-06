@@ -42,7 +42,7 @@ func (c *Client) entryExists(baseDN, filter string) (bool, error) {
 }
 
 func (c *Client) userInGroup(groupName, uid string) (bool, error) {
-	baseDN := fmt.Sprintf("cn=%s,ou=Groups,%s", groupName, c.Config.LDAPBaseDN)
+	baseDN := fmt.Sprintf("cn=%s,%s", groupName, c.groupBaseDN())
 	filter := fmt.Sprintf("(memberUid=%s)", ldap.EscapeFilter(uid))
 
 	result, err := c.SearchByFilter(baseDN, filter, []string{"dn"})
