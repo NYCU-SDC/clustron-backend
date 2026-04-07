@@ -55,6 +55,7 @@ type Config struct {
 	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
 	LDAP                    ldap.Config               `yaml:"ldap"`
+	EnableInternalLogin     bool                      `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
 }
 
 type LogBuffer struct {
@@ -105,14 +106,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.SlurmRestfulBaseURL == "" {
-		return ErrSlurmRestfulURLRequired
-	}
-
-	if c.SlurmTokenHelperURL == "" {
-		return ErrSlurmTokenHelperURLRequired
-	}
-
 	return nil
 }
 
@@ -133,6 +126,7 @@ func Load() (Config, *LogBuffer) {
 		GoogleOauthClientSecret: "",
 		GithubOauthClientID:     "",
 		GithubOauthClientSecret: "",
+		EnableInternalLogin:     false,
 	}
 
 	var err error
@@ -248,6 +242,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			LDAPBindDN:  os.Getenv("LDAP_BIND_DN"),
 			LDAPBindPwd: os.Getenv("LDAP_BIND_PWD"),
 		},
+		EnableInternalLogin: os.Getenv("ENABLE_INTERNAL_LOGIN") == "true",
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -278,6 +273,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.GithubOauthClientSecret, "github_oauth_client_secret", "", "github OAuth client secret")
 	flag.StringVar(&flagConfig.NYCUOauthClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
 	flag.StringVar(&flagConfig.NYCUOauthClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
+	flag.BoolVar(&flagConfig.EnableInternalLogin, "enable_internal_login", false, "enable internal login")
 
 	flag.Parse()
 

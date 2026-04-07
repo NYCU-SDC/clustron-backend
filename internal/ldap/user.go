@@ -100,7 +100,7 @@ func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 	attributes := []string{
-		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
+		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
 	}
 
 	result, err := c.SearchByFilter(base, filter, attributes)

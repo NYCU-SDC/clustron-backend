@@ -37,8 +37,14 @@ SELECT ldap_user.uid_number, u.* FROM ldap_user JOIN users u ON u.id = ldap_user
 -- name: CreateLDAPUser :exec
 INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);
 
+-- name: UpdateLDAPUser :exec
+UPDATE ldap_user SET uid_number = $2 WHERE id = $1;
+
 -- name: DeleteLDAPUser :exec
 DELETE FROM ldap_user WHERE id = $1;
 
 -- name: GetNextLDAPUIDNumber :one
 SELECT nextval('ldap_uid_seq')::int;
+
+-- name: ExistLDAPUserByUIDNumber :one
+SELECT EXISTS (SELECT 1 FROM ldap_user WHERE uid_number = $1) AS exists;

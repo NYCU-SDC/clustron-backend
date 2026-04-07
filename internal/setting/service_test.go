@@ -763,6 +763,127 @@ func TestService_GetAvailableUIDNumber(t *testing.T) {
 	}
 }
 
+func TestService_BindLDAPUser(t *testing.T) {
+	testCase := []struct {
+		name           string
+		userID         uuid.UUID
+		ldapUIDNumber  int64
+		ldapEntry      *ldap.Entry
+		linuxUsername  string
+		setupMock      func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, linuxUsername string, ldapUIDNumber int64, entry *ldap.Entry)
+		expectedHasErr bool
+		expectedError  error
+	}{
+		{
+			name:          "Bind LDAP user successfully",
+			userID:        uuid.New(),
+			ldapUIDNumber: 10001,
+			ldapEntry: &ldap.Entry{
+				DN: "uid=testuser,ou=users,dc=example,dc=com",
+				Attributes: []*ldap.EntryAttribute{
+					{Name: "uidNumber", Values: []string{"10001"}},
+					{Name: "uid", Values: []string{"testuser"}},
+				},
+			},
+			linuxUsername: "testuser",
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, linuxUsername string, ldapUIDNumber int64, entry *ldap.Entry) {
+				ldapClient.On("GetUserInfo", linuxUsername).Return(entry, nil)
+				store.On("ExistLDAPUserByUIDNumber", mock.Anything, ldapUIDNumber).Return(false, nil)
+				store.On("UpdateLDAPUser", mock.Anything, setting.UpdateLDAPUserParams{
+					ID:        userID,
+					UidNumber: ldapUIDNumber,
+				}).Return(nil)
+			},
+			expectedHasErr: false,
+		},
+		{
+			name:          "Fail to bind LDAP user when user already bound",
+			userID:        uuid.New(),
+			ldapUIDNumber: 10001,
+			ldapEntry: &ldap.Entry{
+				DN: "uid=testuser,ou=users,dc=example,dc=com",
+				Attributes: []*ldap.EntryAttribute{
+					{Name: "uidNumber", Values: []string{"10001"}},
+					{Name: "uid", Values: []string{"testuser"}},
+				},
+			},
+			linuxUsername: "testuser",
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, linuxUsername string, ldapUIDNumber int64, entry *ldap.Entry) {
+				ldapClient.On("GetUserInfo", linuxUsername).Return(entry, nil)
+				store.On("ExistLDAPUserByUIDNumber", mock.Anything, ldapUIDNumber).Return(true, nil)
+			},
+			expectedHasErr: true,
+			expectedError:  internal.ErrLDAPUserAlreadyBound,
+		},
+		{
+			name:          "Fail to bind LDAP user when LDAP user not found",
+			userID:        uuid.New(),
+			ldapUIDNumber: 10001,
+			ldapEntry:     nil,
+			linuxUsername: "testuser",
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, linuxUsername string, ldapUIDNumber int64, entry *ldap.Entry) {
+				ldapClient.On("GetUserInfo", linuxUsername).Return(nil, ldaputil.ErrUserNotFound)
+			},
+			expectedHasErr: true,
+			expectedError:  ldaputil.ErrUserNotFound,
+		},
+		{
+			name:          "Fail to bind LDAP user when DB error occurs",
+			userID:        uuid.New(),
+			ldapUIDNumber: 10001,
+			ldapEntry: &ldap.Entry{
+				DN: "uid=testuser,ou=users,dc=example,dc=com",
+				Attributes: []*ldap.EntryAttribute{
+					{Name: "uidNumber", Values: []string{"10001"}},
+					{Name: "uid", Values: []string{"testuser"}},
+				},
+			},
+			linuxUsername: "testuser",
+			setupMock: func(store *mocks.Querier, ldapClient *mocks.LDAPClient, userID uuid.UUID, linuxUsername string, ldapUIDNumber int64, entry *ldap.Entry) {
+				ldapClient.On("GetUserInfo", linuxUsername).Return(entry, nil)
+				store.On("ExistLDAPUserByUIDNumber", mock.Anything, ldapUIDNumber).Return(false, nil)
+				store.On("UpdateLDAPUser", mock.Anything, setting.UpdateLDAPUserParams{
+					ID:        userID,
+					UidNumber: ldapUIDNumber,
+				}).Return(assert.AnError)
+			},
+			expectedHasErr: true,
+			expectedError:  assert.AnError,
+		},
+	}
+
+	for _, tc := range testCase {
+		t.Run(tc.name, func(t *testing.T) {
+			querier := new(mocks.Querier)
+			userStore := new(mocks.UserStore)
+			ldapClient := new(mocks.LDAPClient)
+			service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+
+			if tc.setupMock != nil {
+				tc.setupMock(querier, ldapClient, tc.userID, tc.linuxUsername, tc.ldapUIDNumber, tc.ldapEntry)
+			}
+
+			ldapInfo, err := service.BindLDAPUser(context.Background(), tc.userID, tc.linuxUsername)
+			if tc.expectedHasErr {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				if !errors.Is(tc.expectedError, assert.AnError) && !errors.Is(err, tc.expectedError) {
+					t.Errorf("expected error %v, got %v", tc.expectedError, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if ldapInfo.Username != "testuser" {
+					t.Errorf("expected username 'testuser', got '%s'", ldapInfo.Username)
+				}
+			}
+
+		})
+	}
+}
+
 func TestService_OnboardUserLDAPUIDNumberRetry(t *testing.T) {
 	testCases := []struct {
 		name        string
