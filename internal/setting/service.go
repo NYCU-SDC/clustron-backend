@@ -63,6 +63,7 @@ type Querier interface {
 	GetNextLDAPUIDNumber(ctx context.Context) (int32, error)
 }
 
+//go:generate mockery --name MembershipService
 type MembershipService interface {
 	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
 }
