@@ -8,6 +8,7 @@ import (
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,25 +17,25 @@ import (
 	"go.uber.org/zap"
 )
 
+type LDAPClient interface {
+	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
+}
+
 type Service struct {
-	queries   *Queries
-	logger    *zap.Logger
-	presetMap map[string]config.PresetUserInfo
-	tracer    trace.Tracer
+	queries    *Queries
+	logger     *zap.Logger
+	presetMap  map[string]config.PresetUserInfo
+	tracer     trace.Tracer
+	ldapClient LDAPClient
 }
 
-type ServiceInterface interface {
-	GetByID(ctx context.Context, id uuid.UUID) (User, error)
-	GetIdByEmail(ctx context.Context, email string) (uuid.UUID, error)
-	GetIdByStudentId(ctx context.Context, studentID string) (uuid.UUID, error)
-}
-
-func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX) *Service {
+func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX, ldapClient LDAPClient) *Service {
 	return &Service{
-		queries:   New(db),
-		logger:    logger,
-		presetMap: presetMap,
-		tracer:    otel.Tracer("user/service"),
+		queries:    New(db),
+		logger:     logger,
+		presetMap:  presetMap,
+		ldapClient: ldapClient,
+		tracer:     otel.Tracer("user/service"),
 	}
 }
 
@@ -290,7 +291,7 @@ type ListUsersServiceParams struct {
 	Role   string
 }
 
-func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRow, int, error) {
+func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) ([]ListUsersRowWithLinuxUsername, int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListUsers")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -322,7 +323,20 @@ func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) 
 		return nil, 0, err
 	}
 
-	return items, int(totalCount), nil
+	var res = make([]ListUsersRowWithLinuxUsername, len(items))
+	for i, item := range items {
+		ldapInfo, err := s.ldapClient.GetUserInfoByUIDNumber(item.UidNumber)
+		if err != nil {
+			logger.Warn("Failed to get LDAP info for user", zap.String("userID", item.ID.String()), zap.Int64("uidNumber", item.UidNumber), zap.Error(err))
+			continue
+		}
+		res[i] = ListUsersRowWithLinuxUsername{
+			ListUsersRow:  item,
+			LinuxUsername: ldapInfo.GetAttributeValue("uid"),
+		}
+	}
+
+	return res, int(totalCount), nil
 }
 
 func (s *Service) HasAdmin(ctx context.Context) (bool, error) {

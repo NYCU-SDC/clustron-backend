@@ -1,13 +1,11 @@
 package setting
 
 import (
-	"bufio"
 	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,7 +24,7 @@ import (
 
 type OnboardingRequest struct {
 	FullName      string `json:"fullName" validate:"required"`
-	LinuxUsername string `json:"linuxUsername" validate:"required,excludesall= \t\r\n"`
+	LinuxUsername string `json:"linuxUsername" validate:"required,max=32,linux_username_format,linux_username_blacklist"`
 	Password      string `json:"password" validate:"required,min=8"`
 }
 
@@ -60,6 +58,19 @@ type UpdatePasswordRequest struct {
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
+type BindLDAPUserRequest struct {
+	LinuxUsername string `json:"linuxUsername" validate:"required,max=32,linux_username_format,linux_username_blacklist"`
+}
+
+type BindLDAPUserResponse struct {
+	ID            string `json:"id"`
+	FullName      string `json:"fullName"`
+	Email         string `json:"email"`
+	StudentID     string `json:"studentId"`
+	LinuxUsername string `json:"linuxUsername"`
+	Role          string `json:"role"`
+}
+
 //mockery:generate: true
 type Store interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
@@ -70,6 +81,7 @@ type Store interface {
 	OnboardUser(ctx context.Context, userID uuid.UUID, fullName pgtype.Text, linuxUsername pgtype.Text) error
 	IsLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error
+	BindLDAPUser(ctx context.Context, userID uuid.UUID, linuxUsername string) (LDAPUserInfo, error)
 }
 
 type Handler struct {
@@ -82,62 +94,6 @@ type Handler struct {
 	userStore    UserStore
 }
 
-var Blacklist = LinuxUsernameBlacklist{
-	// Core System Users
-	"root":          {},
-	"daemon":        {},
-	"bin":           {},
-	"sys":           {},
-	"sync":          {},
-	"games":         {},
-	"man":           {},
-	"lp":            {},
-	"mail":          {},
-	"news":          {},
-	"uucp":          {},
-	"proxy":         {},
-	"admin":         {},
-	"administrator": {},
-
-	// Service-Specific Accounts
-	"syslog":     {},
-	"www-data":   {},
-	"backup":     {},
-	"list":       {},
-	"irc":        {},
-	"gnats":      {},
-	"nobody":     {},
-	"nogroup":    {},
-	"messagebus": {},
-	"sshd":       {},
-
-	// Modern Systemd / Virtual Users
-	"systemd-network":  {},
-	"systemd-resolve":  {},
-	"systemd-timesync": {},
-	"systemd-coredump": {},
-	"_apt":             {},
-	"uuidd":            {},
-	"tcpdump":          {},
-
-	// Database and Common App Defaults
-	"mysql":    {},
-	"postgres": {},
-	"apache":   {},
-	"nginx":    {},
-	"postfix":  {},
-
-	// suggested system name
-	"dhcpcd":        {},
-	"pollinate":     {},
-	"polkitd":       {},
-	"tss":           {},
-	"landscape":     {},
-	"fwupd-refresh": {},
-	"usbmux":        {},
-	"sssd":          {},
-}
-
 func validatePublicKey(key string) error {
 	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key))
 	if err != nil {
@@ -147,10 +103,6 @@ func validatePublicKey(key string) error {
 }
 
 func NewHandler(logger *zap.Logger, v *validator.Validate, problemWriter *problem.HttpWriter, store Store, userStore UserStore) Handler {
-	err := loadSystemUsers()
-	if err != nil {
-		logger.Error("fail to read user from system")
-	}
 	return Handler{
 		logger:        logger,
 		validator:     v,
@@ -176,6 +128,27 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 	var request OnboardingRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			firstErr := validationErrors[0]
+			var reason string
+			switch firstErr.Tag() {
+			case "required":
+				reason = "Linux username cannot be empty"
+			case "min":
+				reason = fmt.Sprintf("%s must be at least %s characters long", firstErr.Field(), firstErr.Param())
+			case "max":
+				reason = fmt.Sprintf("%s cannot be longer than %s characters", firstErr.Field(), firstErr.Param())
+			case "linux_username_format":
+				reason = fmt.Sprintf("%s must start with a lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens, and can end with a dollar sign", firstErr.Field())
+			case "linux_username_blacklist":
+				reason = fmt.Sprintf("%s contain reserved keywords", firstErr.Field())
+			default:
+				reason = fmt.Sprintf("%s is invalid", firstErr.Field())
+			}
+			err = internal.ErrInvalidSetting{Reason: reason}
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -192,10 +165,14 @@ func (h *Handler) OnboardingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check if the linux username is valid first
-	err = h.IsLinuxUsernameValid(traceCtx, request.LinuxUsername)
+	// check if the linux username exists
+	exists, err := h.isLinuxUsernameExists(traceCtx, request.LinuxUsername)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if exists {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidLinuxUsername{Reason: "Linux username is already exists"}, logger)
 		return
 	}
 
@@ -380,60 +357,6 @@ func (h *Handler) DeletePublicKeyHandler(w http.ResponseWriter, r *http.Request)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }
 
-func (h *Handler) IsLinuxUsernameValid(ctx context.Context, linuxUsername string) error {
-	if len(linuxUsername) == 0 {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username cannot be empty",
-		}
-	}
-
-	if len(linuxUsername) > 32 {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username cannot be longer than 32 characters",
-		}
-	}
-
-	if linuxUsername[0] == '-' {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username cannot start with a hyphen",
-		}
-	}
-
-	if strings.ContainsAny(linuxUsername, " :/") {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username cannot contain colon or slash",
-		}
-	}
-
-	// check if the linux username matches the pattern. source: https://www.unix.com/man_page/linux/8/useradd/
-	pattern := `^[a-z_][a-z0-9_-]*[$]?$`
-	regex := regexp.MustCompile(pattern)
-	if !regex.MatchString(linuxUsername) {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username must start with a lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens, and can end with a dollar sign",
-		}
-	}
-
-	if _, exists := Blacklist[linuxUsername]; exists {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username contain reserved keywords",
-		}
-	}
-
-	isLinuxUsernameExists, err := h.settingStore.IsLinuxUsernameExists(ctx, linuxUsername)
-	if err != nil {
-		h.logger.Error("Failed to check if linux username exists", zap.Error(err))
-		return err
-	}
-
-	if isLinuxUsernameExists {
-		return internal.ErrInvalidLinuxUsername{
-			Reason: "Linux username already exists",
-		}
-	}
-	return nil
-}
-
 func (h *Handler) UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UpdatePasswordHandler")
 	defer span.End()
@@ -467,42 +390,94 @@ func (h *Handler) UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
 }
 
+func (h *Handler) BindLDAPUserHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "BindUserLDAPHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "BindUserLDAPHandler"))
+
+	idStr := r.PathValue("user_id")
+	userID, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req BindLDAPUserRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			firstErr := validationErrors[0]
+			var reason string
+			switch firstErr.Tag() {
+			case "required":
+				reason = "Linux username cannot be empty"
+			case "min":
+				reason = fmt.Sprintf("%s must be at least %s characters long", firstErr.Field(), firstErr.Param())
+			case "max":
+				reason = fmt.Sprintf("%s cannot be longer than %s characters", firstErr.Field(), firstErr.Param())
+			case "linux_username_format":
+				reason = fmt.Sprintf("%s must start with a lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens, and can end with a dollar sign", firstErr.Field())
+			case "linux_username_blacklist":
+				reason = fmt.Sprintf("%s contain reserved keywords", firstErr.Field())
+			default:
+				reason = fmt.Sprintf("%s is invalid", firstErr.Field())
+			}
+			err = internal.ErrInvalidSetting{Reason: reason}
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if strings.TrimSpace(req.LinuxUsername) == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidSetting{Reason: "Linux Username cannot be empty"}, logger)
+		return
+	}
+
+	exists, err := h.isLinuxUsernameExists(traceCtx, req.LinuxUsername)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if !exists {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidLinuxUsername{Reason: "Linux username doesn't exists in LDAP"}, logger)
+		return
+	}
+
+	ldapUserInfo, err := h.settingStore.BindLDAPUser(traceCtx, userID, req.LinuxUsername)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	updatedUser, err := h.userStore.GetByID(traceCtx, userID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, BindLDAPUserResponse{
+		ID:            updatedUser.ID.String(),
+		FullName:      updatedUser.FullName.String,
+		Email:         updatedUser.Email,
+		StudentID:     updatedUser.StudentID.String,
+		LinuxUsername: ldapUserInfo.Username,
+		Role:          strings.ToUpper(updatedUser.Role),
+	})
+}
+
+func (h *Handler) isLinuxUsernameExists(ctx context.Context, linuxUsername string) (bool, error) {
+	isLinuxUsernameExists, err := h.settingStore.IsLinuxUsernameExists(ctx, linuxUsername)
+	if err != nil {
+		h.logger.Error("Failed to check if linux username exists", zap.Error(err))
+		return false, err
+	}
+
+	return isLinuxUsernameExists, nil
+}
+
 func isValidPassword(pass string) bool {
 	hasLetter := regexp.MustCompile(`[a-zA-Z]`).MatchString(pass)
 	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(pass)
 	return hasLetter && hasNumber
-}
-
-func loadSystemUsers() error {
-	file, err := os.Open("/etc/passwd")
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		closeErr := file.Close()
-		if err != nil {
-			err = closeErr
-		}
-	}(file)
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Skip empty lines or comments
-		if len(line) == 0 || line[0] == '#' {
-			continue
-		}
-
-		// /etc/passwd format: name:password:UID:GID:comment:home:shell
-		parts := strings.Split(line, ":")
-		if len(parts) > 0 {
-			username := strings.ToLower(strings.TrimSpace(parts[0]))
-			if username != "" {
-				Blacklist[username] = struct{}{}
-			}
-		}
-	}
-
-	return scanner.Err()
 }
