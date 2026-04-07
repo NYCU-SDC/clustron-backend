@@ -106,14 +106,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.SlurmRestfulBaseURL == "" {
-		return ErrSlurmRestfulURLRequired
-	}
-
-	if c.SlurmTokenHelperURL == "" {
-		return ErrSlurmTokenHelperURLRequired
-	}
-
 	return nil
 }
 
