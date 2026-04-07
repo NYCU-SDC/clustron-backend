@@ -65,6 +65,7 @@ type Querier interface {
 	ExistLDAPUserByUIDNumber(ctx context.Context, uidNumber int64) (bool, error)
 }
 
+//go:generate mockery --name MembershipService
 type MembershipService interface {
 	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
 }
