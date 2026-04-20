@@ -19,6 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const root_token = "paste your root token here"
+
 type redisClient interface {
 	GetSlurmJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error)
 	SetSlurmJobs(ctx context.Context, userID uuid.UUID, jobs JobsResponse) error
@@ -438,22 +440,15 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	return tokenString, nil
 }
 
-func (s *Service) CreateUser(ctx context.Context, userID uuid.UUID, userRequest UserRequest) error {
+func (s *Service) CreateUser(ctx context.Context, userRequest []UserRequest) error {
 	traceCtx, span := s.tracer.Start(ctx, "CreateUser")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
-	// root token
-	slurmToken, err := s.GetNewToken(traceCtx, userID)
-	if err != nil {
-		logger.Error("failed to get new token", zap.Error(err))
-		span.RecordError(err)
-		return err
-	}
 
 	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
 
 	submitUserRequest := SubmitUserRequest{
-		Users: []UserRequest{userRequest},
+		Users: userRequest,
 	}
 
 	requestBody, err := json.Marshal(submitUserRequest)
@@ -470,7 +465,7 @@ func (s *Service) CreateUser(ctx context.Context, userID uuid.UUID, userRequest 
 		return err
 	}
 
-	httpRequest.Header.Add("X-SLURM-USER-TOKEN", slurmToken)
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
 	httpRequest.Header.Add("Content-Type", "application/json")
 
 	response, err := s.httpClient.Do(httpRequest)
@@ -488,13 +483,13 @@ func (s *Service) CreateUser(ctx context.Context, userID uuid.UUID, userRequest 
 	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
-		logger.Error("failed to create slurm user", zap.Error(err))
+		logger.Error("failed to create Slurm user", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
 
 	// Parse the response into UsersResponse (which will only contain Meta and Errors)
-	var usersResponse UsersResponse
+	var usersResponse Response
 	err = ParseResponse(traceCtx, response, &usersResponse)
 	if err != nil {
 		logger.Error("failed to parse response", zap.Error(err))
@@ -525,7 +520,175 @@ func (s *Service) CreateUser(ctx context.Context, userID uuid.UUID, userRequest 
 		}
 	}
 
-	logger.Info("successfully created user in slurm", zap.String("username", userRequest.Name))
+	logger.Info("successfully created users in slurm")
+	return nil
+}
+
+func (s *Service) CreateAccount(ctx context.Context, accountRequest []AccountRequest) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAccount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
+
+	submitAccountRequest := SubmitAccountRequest{
+		Accounts: accountRequest,
+	}
+
+	requestBody, err := json.Marshal(submitAccountRequest)
+	if err != nil {
+		logger.Error("failed to marshal user request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Parse the response into UsersResponse (which will only contain Meta and Errors)
+	var accountsResponse Response
+	err = ParseResponse(traceCtx, response, &accountsResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(accountsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range accountsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully created accounts in slurm")
+	return nil
+}
+
+func (s *Service) CreateAssociation(ctx context.Context, associationRequest []AssociationRequest) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAccount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
+
+	submitAccountRequest := SubmitAssociationRequest{
+		Associations: associationRequest,
+	}
+
+	requestBody, err := json.Marshal(submitAccountRequest)
+	if err != nil {
+		logger.Error("failed to marshal user request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Parse the response into UsersResponse (which will only contain Meta and Errors)
+	var assocaitionsResponse Response
+	err = ParseResponse(traceCtx, response, &response)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(assocaitionsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range assocaitionsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully created associations in slurm")
 	return nil
 }
 

@@ -104,6 +104,12 @@ type JobStateResponse struct {
 	Unknown   int `json:"unknown"`
 }
 
+// ignoring meta field in Slurm response
+type Response struct {
+	Errors   []SlurmError   `json:"errors"`
+	Warnings []SlurmWarning `json:"warnings"`
+}
+
 // UserResponse matches the Slurm v0.0.44 SlurmDB user response
 // UserRequest defines the payload required to create a new Slurm user in v0.0.43
 type UserRequest struct {
@@ -142,14 +148,13 @@ type AssociationRequest struct {
 type SubmitUserRequest struct {
 	Users []UserRequest `json:"users" validate:"required"`
 }
-type UserResponse struct {
-	AdministratorLevel []string           `json:"administrator_level"`
-	Associations       []AssociationShort `json:"associations"`
-	Coordinators       []Coordinator      `json:"coordinators"`
-	Default            UserDefault        `json:"default"`
-	Flags              []string           `json:"flags"`
-	Name               string             `json:"name"`
-	OldName            string             `json:"old_name,omitempty"`
+
+type SubmitAccountRequest struct {
+	Accounts []AccountRequest `json:"accounts" validate:"required"`
+}
+
+type SubmitAssociationRequest struct {
+	Associations []AssociationRequest `json:"associations" validate:"required"`
 }
 
 type AssociationShort struct {
@@ -173,5 +178,10 @@ type UserDefault struct {
 type SlurmError struct {
 	Description string `json:"description"`
 	ErrorCode   int    `json:"error_number"`
+	Source      string `json:"source"`
+}
+
+type SlurmWarning struct {
+	Description string `json:"description"`
 	Source      string `json:"source"`
 }
