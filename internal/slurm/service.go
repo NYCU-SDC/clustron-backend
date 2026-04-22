@@ -19,8 +19,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const root_token = "paste your root token here"
-
 type redisClient interface {
 	GetSlurmJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error)
 	SetSlurmJobs(ctx context.Context, userID uuid.UUID, jobs JobsResponse) error
@@ -41,18 +39,20 @@ type Service struct {
 	tracer              trace.Tracer
 	slurmRestfulBaseURL string
 	slurmTokenHelperURL string
+	slurmRootToken      string
 	httpClient          *http.Client
 	redisClient         redisClient
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore, redisClient redisClient) *Service {
+func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
 		logger:              logger,
 		tracer:              otel.Tracer("slurm/service"),
 		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
 		slurmTokenHelperURL: slurmTokenHelperURL,
+		slurmRootToken:      slurmRootToken,
 		httpClient:          &http.Client{},
 		redisClient:         redisClient,
 
@@ -465,7 +465,7 @@ func (s *Service) CreateUser(ctx context.Context, userRequest []UserRequest) err
 		return err
 	}
 
-	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
 	httpRequest.Header.Add("Content-Type", "application/json")
 
 	response, err := s.httpClient.Do(httpRequest)
@@ -549,7 +549,7 @@ func (s *Service) CreateAccount(ctx context.Context, accountRequest []AccountReq
 		return err
 	}
 
-	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
 	httpRequest.Header.Add("Content-Type", "application/json")
 
 	response, err := s.httpClient.Do(httpRequest)
@@ -633,7 +633,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 		return err
 	}
 
-	httpRequest.Header.Add("X-SLURM-USER-TOKEN", root_token)
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
 	httpRequest.Header.Add("Content-Type", "application/json")
 
 	response, err := s.httpClient.Do(httpRequest)

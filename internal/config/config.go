@@ -41,6 +41,7 @@ type Config struct {
 	SlurmTokenHelperURL     string                    `yaml:"slurm_token_helper_url"          envconfig:"SLURM_TOKEN_HELPER_URL"`
 	SlurmRestfulBaseURL     string                    `yaml:"slurm_restful_base_url"          envconfig:"SLURM_RESTFUL_BASE_URL"`
 	SlurmRestfulVersion     string                    `yaml:"slurm_restful_version"          envconfig:"SLURM_RESTFUL_VERSION"`
+	SlurmRootToken          string                    `yaml:"slurm_root_token" envconfig:"SLURM_ROOT_TOKEN"`
 	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
 	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
 	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
