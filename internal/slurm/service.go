@@ -529,7 +529,7 @@ func (s *Service) CreateAccount(ctx context.Context, accountRequest []AccountReq
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/accounts", s.slurmRestfulBaseURL)
 
 	submitAccountRequest := SubmitAccountRequest{
 		Accounts: accountRequest,
@@ -537,7 +537,7 @@ func (s *Service) CreateAccount(ctx context.Context, accountRequest []AccountReq
 
 	requestBody, err := json.Marshal(submitAccountRequest)
 	if err != nil {
-		logger.Error("failed to marshal user request", zap.Error(err))
+		logger.Error("failed to marshal account request", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
@@ -597,7 +597,7 @@ func (s *Service) CreateAccount(ctx context.Context, accountRequest []AccountReq
 		}
 
 		if hasFatalError {
-			apiErr := fmt.Errorf("slurm API rejected user creation: %s", strings.Join(errorMsgs, "; "))
+			apiErr := fmt.Errorf("slurm API rejected account creation: %s", strings.Join(errorMsgs, "; "))
 			logger.Error("slurm api returned errors", zap.Error(apiErr))
 			span.RecordError(apiErr)
 			return apiErr
@@ -613,7 +613,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/associations", s.slurmRestfulBaseURL)
 
 	submitAccountRequest := SubmitAssociationRequest{
 		Associations: associationRequest,
@@ -621,7 +621,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 
 	requestBody, err := json.Marshal(submitAccountRequest)
 	if err != nil {
-		logger.Error("failed to marshal user request", zap.Error(err))
+		logger.Error("failed to marshal associations request", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
@@ -651,14 +651,14 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
-		logger.Error("failed to create Slurm user", zap.Error(err))
+		logger.Error("failed to create Slurm association", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
 
 	// Parse the response into UsersResponse (which will only contain Meta and Errors)
-	var assocaitionsResponse Response
-	err = ParseResponse(traceCtx, response, &response)
+	var associationsResponse Response
+	err = ParseResponse(traceCtx, response, &associationsResponse)
 	if err != nil {
 		logger.Error("failed to parse response", zap.Error(err))
 		span.RecordError(err)
@@ -667,11 +667,11 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 
 	// Slurm returns HTTP 200 even for logical failures.
 	// We must iterate through the 'errors' array to see if any actual errors were returned.
-	if len(assocaitionsResponse.Errors) > 0 {
+	if len(associationsResponse.Errors) > 0 {
 		var errorMsgs []string
 		hasFatalError := false
 
-		for _, slurmErr := range assocaitionsResponse.Errors {
+		for _, slurmErr := range associationsResponse.Errors {
 			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
 			// Non-zero error codes indicate a real failure.
 			if slurmErr.ErrorCode != 0 {
@@ -681,7 +681,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 		}
 
 		if hasFatalError {
-			apiErr := fmt.Errorf("slurm API rejected user creation: %s", strings.Join(errorMsgs, "; "))
+			apiErr := fmt.Errorf("slurm API rejected association creation: %s", strings.Join(errorMsgs, "; "))
 			logger.Error("slurm api returned errors", zap.Error(apiErr))
 			span.RecordError(apiErr)
 			return apiErr
