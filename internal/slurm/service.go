@@ -692,6 +692,222 @@ func (s *Service) CreateAssociation(ctx context.Context, associationRequest []As
 	return nil
 }
 
+func (s *Service) DeleteUser(ctx context.Context, userName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/user/%s", s.slurmRestfulBaseURL, userName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteUserResponse DeleteUserResponse
+	err = ParseResponse(traceCtx, response, &deleteUserResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteUserResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteUserResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully delete user in slurm", zap.String("user", userName))
+	return nil
+}
+
+func (s *Service) DeleteAccount(ctx context.Context, accountName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteAccount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/account/%s", s.slurmRestfulBaseURL, accountName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm account", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteAccountResponse DeleteAccountResponse
+	err = ParseResponse(traceCtx, response, &deleteAccountResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteAccountResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteAccountResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected account deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully delete account in slurm", zap.String("account", accountName))
+	return nil
+}
+
+func (s *Service) DeleteAssociation(ctx context.Context, userName, accountName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteAssociation")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+	// Delete association between designated user and account
+	// TODO: delete only the association whose account = accountName and user = userName
+	requestPath := fmt.Sprintf("%s/associations/?user=%s&account=%s", s.slurmRestfulBaseURL, userName, accountName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm associations", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteAssociationResponse DeleteAssociationResponse
+	err = ParseResponse(traceCtx, response, &deleteAssociationResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteAssociationResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteAssociationResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected association deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	// TODO: parse removed association field
+
+	logger.Info("successfully delete associations in slurm", zap.String("user", userName), zap.String("account", accountName))
+	return nil
+}
+
 func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	_, span := otel.Tracer("slurm/service").Start(ctx, "ParseResponse")
 	defer span.End()

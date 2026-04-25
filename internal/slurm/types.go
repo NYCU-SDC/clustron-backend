@@ -110,6 +110,24 @@ type Response struct {
 	Warnings []SlurmWarning `json:"warnings"`
 }
 
+type DeleteUserResponse struct {
+	RemovedUsers []string       `json:"removed_users"`
+	Errors       []SlurmError   `json:"errors"`
+	Warnings     []SlurmWarning `json:"warnings"`
+}
+
+type DeleteAccountResponse struct {
+	RemovedAccounts []string       `json:"removed_accounts"`
+	Errors          []SlurmError   `json:"errors"`
+	Warnings        []SlurmWarning `json:"warnings"`
+}
+
+type DeleteAssociationResponse struct {
+	RemovedAssociations []string       `json:"removed_associations"`
+	Errors              []SlurmError   `json:"errors"`
+	Warnings            []SlurmWarning `json:"warnings"`
+}
+
 // UserResponse matches the Slurm v0.0.44 SlurmDB user response
 // UserRequest defines the payload required to create a new Slurm user in v0.0.43
 type UserRequest struct {
