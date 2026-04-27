@@ -128,7 +128,7 @@ type DeleteAssociationResponse struct {
 	Warnings            []SlurmWarning `json:"warnings"`
 }
 
-// User defines the payload required to create a new Slurm user in v0.0.43
+// User https://slurm.schedmd.com/rest_api.html#v0.0.44_user
 type User struct {
 	AdministratorLevel []string           `json:"administrator_level,omitempty"`
 	Associations       []AssociationShort `json:"associations,omitempty"`
@@ -137,6 +137,7 @@ type User struct {
 	Name               string             `json:"name" validate:"required"`
 }
 
+// Account https://slurm.schedmd.com/rest_api.html#v0.0.44_account
 type Account struct {
 	Associations []AssociationShort `json:"associations,omitempty"`
 	Coordinators []Coordinator      `json:"coordinators,omitempty"`
@@ -233,6 +234,7 @@ type AssociationRequest struct {
 	Associations []Association `json:"associations" validate:"required"`
 }
 
+// AssociationShort https://slurm.schedmd.com/rest_api.html#v0.0.44_assoc_short
 type AssociationShort struct {
 	Account   string `json:"account"`
 	Cluster   string `json:"cluster"`
