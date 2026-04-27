@@ -128,9 +128,8 @@ type DeleteAssociationResponse struct {
 	Warnings            []SlurmWarning `json:"warnings"`
 }
 
-// UserResponse matches the Slurm v0.0.44 SlurmDB user response
-// UserRequest defines the payload required to create a new Slurm user in v0.0.43
-type UserRequest struct {
+// User defines the payload required to create a new Slurm user in v0.0.43
+type User struct {
 	AdministratorLevel []string           `json:"administrator_level,omitempty"`
 	Associations       []AssociationShort `json:"associations,omitempty"`
 	Default            UserDefault        `json:"default,omitempty"`
@@ -138,7 +137,7 @@ type UserRequest struct {
 	Name               string             `json:"name" validate:"required"`
 }
 
-type AccountRequest struct {
+type Account struct {
 	Associations []AssociationShort `json:"associations,omitempty"`
 	Coordinators []Coordinator      `json:"coordinators,omitempty"`
 	Description  string             `json:"description" validate:"required"`
@@ -147,7 +146,8 @@ type AccountRequest struct {
 	Flags        []string           `json:"flags,omitempty"`
 }
 
-type AssociationRequest struct {
+// Association https://slurm.schedmd.com/rest_api.html#slurmdbV0044PostAssociations
+type Association struct {
 	Account       string   `json:"account,omitempty"`
 	Cluster       string   `json:"cluster,omitempty"`
 	Comment       string   `json:"comment,omitempty"`
@@ -162,17 +162,75 @@ type AssociationRequest struct {
 	User          string   `json:"user" validate:"required"`
 }
 
-// SubmitUserRequest expects an array of users for the POST request
-type SubmitUserRequest struct {
-	Users []UserRequest `json:"users" validate:"required"`
+type UserAssociationRequest struct {
+	AssociationCondition UserAddCondition `json:"association_condition" validate:"required"`
+	User                 UserShort        `json:"user" validate:"required"`
 }
 
-type SubmitAccountRequest struct {
-	Accounts []AccountRequest `json:"accounts" validate:"required"`
+// UserAddCondition https://slurm.schedmd.com/rest_api.html#v0.0.44_openapi_users_add_cond_resp
+type UserAddCondition struct {
+	Users       []string          `json:"users"`
+	Accounts    []string          `json:"accounts,omitempty"`
+	Association AssociationRecSet `json:"association,omitempty"`
+	Clusters    []string          `json:"clusters,omitempty"`
+	Partitions  []string          `json:"partitions,omitempty"`
+	Wckeys      []string          `json:"wckeys,omitempty"`
 }
 
-type SubmitAssociationRequest struct {
-	Associations []AssociationRequest `json:"associations" validate:"required"`
+// UserShort https://slurm.schedmd.com/rest_api.html#v0.0.44_user_short
+type UserShort struct {
+	AdminLevel     string `json:"adminlevel,omitempty"`
+	DefaultQos     string `json:"defaultqos,omitempty"`
+	DefaultAccount string `json:"defaultaccount,omitempty"`
+	DefaultWckey   string `json:"defaultwckey,omitempty"`
+}
+
+type AccountAssociationRequest struct {
+	AssociationCondition AccountAddCondition `json:"association_condition" validate:"required"`
+	Account              AccountShort        `json:"account" validate:"required"`
+}
+
+// AccountAddCondition https://slurm.schedmd.com/rest_api.html#v0.0.44_accounts_add_cond
+type AccountAddCondition struct {
+	Accounts    []string          `json:"accounts"`
+	Association AssociationRecSet `json:"association"`
+	Clusters    []string          `json:"clusters,omitempty"`
+}
+
+// AccountShort https://slurm.schedmd.com/rest_api.html#v0.0.44_account_short
+type AccountShort struct {
+	Description  string `json:"description,omitempty"`
+	Organization string `json:"organization,omitempty"`
+}
+
+// AssociationRecSet https://slurm.schedmd.com/rest_api.html#v0.0.44_assoc_rec_set
+type AssociationRecSet struct {
+	Comment               string        `json:"comment,omitempty"`
+	DefaultQos            string        `json:"defaultqos,omitempty"`
+	Parent                string        `json:"parent,omitempty"`
+	MaxWallDurationPerJob Uint32NoValue `json:"maxwalldurationperjob,omitempty"`
+	MaxSubmitJobs         Uint32NoValue `json:"maxsubmitjobs,omitempty"`
+	MaxJobs               Uint32NoValue `json:"maxjobs,omitempty"`
+}
+
+// Uint32NoValue https://slurm.schedmd.com/rest_api.html#v0.0.44_uint32_no_val_struct
+type Uint32NoValue struct {
+	Set      bool  `json:"set,omitempty"`
+	Infinite bool  `json:"infinite,omitempty"`
+	Number   int32 `json:"number,omitempty"`
+}
+
+// UserRequest expects an array of users for the POST request
+type UserRequest struct {
+	Users []User `json:"users" validate:"required"`
+}
+
+type AccountRequest struct {
+	Accounts []Account `json:"accounts" validate:"required"`
+}
+
+type AssociationRequest struct {
+	Associations []Association `json:"associations" validate:"required"`
 }
 
 type AssociationShort struct {
