@@ -1,12 +1,17 @@
-# TODO: make the check flexible
-- name: Check if Slurm packages already exist in cluster share
-  stat:
-    path: "/opt/cluster_share/slurm-smd_25.11.4-1_amd64.deb"
-  register: slurm_deb
+- name: set shared environment variable
+  set_fact:
+    # example: Ubuntu_22.04_x86_64
+    env_dir: "{{ ansible_distribution }}_{{ ansible_distribution_version }}_{{ ansible_architecture }}"
+
+- name: check if the file exists
+  find:
+    paths: "/opt/clustron_share/{{ env_dir }}"
+    patterns: "slurm-smd_*.deb"
+  register: existing_debs
 
 - name: Set rebuild flag
   set_fact:
-    needs_build: "{{ not slurm_deb.stat.exists }}"
+    needs_build: "{{ existing_debs.matched == 0 }}"
 
 - name: Install Debian packaging tools
   become: true
@@ -33,7 +38,7 @@
 - name: Download and Unpack Slurm source
   become: yes
   unarchive:
-    src: "https://download.schedmd.com/slurm/slurm-25.11-latest.tar.bz2"
+    src: "https://download.schedmd.com/slurm/slurm-25.11.4.tar.bz2"
     dest: /opt/slurm_build/src
     remote_src: yes
     extra_opts: ['--strip-components=1']
@@ -59,12 +64,12 @@
 - name: create clustron share folder
   become: true
   file:
-    path: "/opt/cluster_share"
+    path: "/opt/clustron_share/{{ env_dir }}"
     state: "directory"
     mode: '0755'
   when: needs_build
 
 - name: Move generated deb files to shared folder
-  shell: mv /opt/slurm_build/*.deb /opt/cluster_share/
+  shell: mv /opt/slurm_build/*.deb /opt/clustron_share/{{ env_dir }}/
   become: true
   when: needs_build

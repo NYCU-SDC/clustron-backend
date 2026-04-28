@@ -1,6 +1,7 @@
 all:
   vars:
     head_node_ip: "192.168.211.40"
+    slurm_version: "25.11.4-1"
   children:
     head_nodes:
       hosts:
