@@ -95,15 +95,15 @@
     mysql -u root -e "FLUSH PRIVILEGES;"
   changed_when: false
 
-- name: Install Controller packages (v25.11)
+- name: Install Controller packages
   become: yes
   apt:
-    deb: "/opt/cluster_share/{{ item }}"
+    deb: "/opt/clustron_share/{{ env_dir }}/{{ item }}"
   loop:
-    - "slurm-smd_25.11.4-1_amd64.deb"
-    - "slurm-smd-client_25.11.4-1_amd64.deb"
-    - "slurm-smd-slurmctld_25.11.4-1_amd64.deb"
-    - "slurm-smd-slurmdbd_25.11.4-1_amd64.deb"
+    - "slurm-smd_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-client_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-slurmctld_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-slurmdbd_{{ slurm_version }}_amd64.deb"
 
 - name: Deploy slurmdbd.conf
   become: yes
