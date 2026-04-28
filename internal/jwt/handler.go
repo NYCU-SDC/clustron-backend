@@ -2,6 +2,8 @@ package jwt
 
 import (
 	"context"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -10,10 +12,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
-//go:generate mockery --name JWTIssuer
+//mockery:generate: true
 type JWTIssuer interface {
 	New(ctx context.Context, user User) (string, error)
 	GetUserByRefreshToken(ctx context.Context, refreshToken uuid.UUID) (User, error)

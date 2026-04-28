@@ -49,7 +49,7 @@ gen:
 	@echo -e "  -> Generating Casbin Policyfile..."
 	@./scripts/create_full_policy.sh || (echo -e "  -> $(RED)Policyfile generation failed$(NC)" && exit 1)
 	@echo -e "  -> Running go generate..."
-	@go generate ./... || (echo -e "  -> $(RED)Go generate failed$(NC)" && exit 1)
+	@mockery
 	@echo -e "==> $(BLUE)Generation completed$(NC)"
 
 TARGET ?= ./cmd/backend/main.go

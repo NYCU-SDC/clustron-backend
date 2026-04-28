@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name UserStore
+//mockery:generate: true
 type UserStore interface {
 	GetByID(ctx context.Context, userID uuid.UUID) (user.User, error)
 	SetupUserRole(ctx context.Context, userID uuid.UUID) (string, error)
@@ -34,7 +34,7 @@ type UserStore interface {
 	ListLoginMethodsByID(ctx context.Context, userID uuid.UUID) ([]user.ListLoginMethodsRow, error)
 }
 
-//go:generate mockery --name LDAPClient
+//mockery:generate: true
 type LDAPClient interface {
 	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
 	DeleteUser(uid string) error
@@ -48,7 +48,7 @@ type LDAPClient interface {
 	UpdateUserPassword(uid string, password string) error
 }
 
-//go:generate mockery --name Querier
+//mockery:generate: true
 type Querier interface {
 	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error

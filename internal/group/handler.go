@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=MemberStore
+//mockery:generate: true
 type MemberStore interface {
 	Add(ctx context.Context, groupId uuid.UUID, memberIdentifier string, role uuid.UUID) (membership.JoinResult, error)
 	Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID, role uuid.UUID, isArchived bool) (membership.MemberResponse, error)
@@ -26,7 +26,7 @@ type MemberStore interface {
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (membership.MemberResponse, error)
 }
 
-//go:generate mockery --name=Store
+//mockery:generate: true
 type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)

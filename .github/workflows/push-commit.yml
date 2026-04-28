@@ -5,6 +5,11 @@ on:
     branches-ignore:
       - main
 
+env:
+  GO_VERSION: '1.24'
+  SQLC_VERSION: '1.28.0'
+  MOCKERY_VERSION: '3.7.0'
+
 jobs:
   check-if-in-pr:
     runs-on: ubuntu-latest
@@ -36,17 +41,17 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.24'
+            go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.28.0'
+          sqlc-version: ${{ env.SQLC_VERSION }}
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: ${{ env.MOCKERY_VERSION }}
 
       - name: Build
         run: |
@@ -69,17 +74,17 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.28.0'
+          sqlc-version: ${{ env.SQLC_VERSION }}
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: ${{ env.MOCKERY_VERSION }}
 
       - name: Test
         run: make test
@@ -95,17 +100,17 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.24'
+            go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.25.0'
+          sqlc-version: ${{ env.SQLC_VERSION }}
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-            mockery-version: '2.53.3'
+          mockery-version: ${{ env.MOCKERY_VERSION }}
 
       - name: Build
         run: |
