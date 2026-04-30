@@ -5,12 +5,15 @@ import (
 	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/setting/mocks"
+	"clustron-backend/internal/user"
+	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
 	"testing"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zaptest"
@@ -725,6 +728,41 @@ func TestService_UpdatePassword(t *testing.T) {
 	}
 }
 
+func TestService_GetAvailableUIDNumber(t *testing.T) {
+	testCases := []struct {
+		name              string
+		nextUIDNumber     int32
+		nextUIDNumberErr  error
+		expectedUIDNumber string
+		expectedErr       error
+	}{
+		{
+			name:              "Get next UID number from sequence",
+			nextUIDNumber:     10001,
+			expectedUIDNumber: "10001",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			querier := new(mocks.Querier)
+			userStore := new(mocks.UserStore)
+			ldapClient := new(mocks.LDAPClient)
+			service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+
+			querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(tc.nextUIDNumber, tc.nextUIDNumberErr)
+
+			uidNumber, err := service.GetAvailableUIDNumber(context.Background())
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedUIDNumber, uidNumber)
+		})
+	}
+}
+
 func TestService_BindLDAPUser(t *testing.T) {
 	testCase := []struct {
 		name           string
@@ -843,5 +881,73 @@ func TestService_BindLDAPUser(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestService_OnboardUserLDAPUIDNumberRetry(t *testing.T) {
+	testCases := []struct {
+		name        string
+		setupMock   func(querier *mocks.Querier, userStore *mocks.UserStore, ldapClient *mocks.LDAPClient, membershipService *mocks.MembershipService, userID uuid.UUID)
+		expectedErr error
+	}{
+		{
+			name: "Retry when UID number is already in use",
+			setupMock: func(querier *mocks.Querier, userStore *mocks.UserStore, ldapClient *mocks.LDAPClient, membershipService *mocks.MembershipService, userID uuid.UUID) {
+				userStore.On("GetByID", mock.Anything, userID).Return(exampleNotSetupUser(userID), nil)
+				userStore.On("UpdateFullName", mock.Anything, userID, "Test User").Return(exampleNotSetupUser(userID), nil)
+				userStore.On("SetupUserRole", mock.Anything, userID).Return("member", nil)
+				querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10000), nil).Once()
+				ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10000").Return(ldaputil.ErrUIDNumberInUse).Once()
+				querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10001), nil).Once()
+				ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10001").Return(nil).Once()
+				querier.On("CreateLDAPUser", mock.Anything, setting.CreateLDAPUserParams{ID: userID, UidNumber: 10001}).Return(nil).Once()
+				membershipService.On("ProcessPendingMemberships", mock.Anything, userID, "", "").Return(nil).Once()
+			},
+		},
+		{
+			name: "Return already onboarded when constraint violation is caused by existing user",
+			setupMock: func(querier *mocks.Querier, userStore *mocks.UserStore, ldapClient *mocks.LDAPClient, membershipService *mocks.MembershipService, userID uuid.UUID) {
+				userStore.On("GetByID", mock.Anything, userID).Return(exampleNotSetupUser(userID), nil)
+				userStore.On("UpdateFullName", mock.Anything, userID, "Test User").Return(exampleNotSetupUser(userID), nil)
+				userStore.On("SetupUserRole", mock.Anything, userID).Return("member", nil)
+				querier.On("GetNextLDAPUIDNumber", mock.Anything).Return(int32(10000), nil).Once()
+				ldapClient.On("CreateUser", "testuser", "Test User", "User", "", "10000").Return(ldaputil.ErrUserConstraintViolation).Once()
+				ldapClient.On("ExistUser", "testuser").Return(true, nil).Once()
+				userStore.On("UpdateRoleByID", mock.Anything, userID, role.NotSetup.String()).Return(exampleNotSetupUser(userID), nil).Once()
+			},
+			expectedErr: internal.ErrAlreadyOnboarded,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			querier := new(mocks.Querier)
+			userStore := new(mocks.UserStore)
+			ldapClient := new(mocks.LDAPClient)
+			membershipService := new(mocks.MembershipService)
+			service := setting.NewService(zaptest.NewLogger(t), querier, userStore, ldapClient)
+			service.SetMembershipService(membershipService)
+			userID := uuid.New()
+
+			tc.setupMock(querier, userStore, ldapClient, membershipService, userID)
+
+			err := service.OnboardUser(context.Background(), userID, textValue("Test User"), textValue("testuser"))
+			if tc.expectedErr != nil {
+				assert.True(t, errors.Is(err, tc.expectedErr))
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func textValue(value string) pgtype.Text {
+	return pgtype.Text{String: value, Valid: true}
+}
+
+func exampleNotSetupUser(userID uuid.UUID) user.User {
+	return user.User{
+		ID:   userID,
+		Role: role.NotSetup.String(),
 	}
 }
