@@ -1,0 +1,55 @@
+- name: Preseed slapd domain configuration
+  become: yes
+  debconf:
+    name: slapd
+    question: 'slapd/domain'
+    value: 'clustron.prj.internal.sdc.nycu.club'
+    vtype: 'string'
+
+- name: Install LDAP Server (slapd) and utils
+  become: true
+  apt:
+    name:
+      - slapd
+      - ldap-utils
+    state: present
+
+- name: Ensure LDAP is running
+  become: true
+  service:
+    name: slapd
+    state: started
+    enabled: yes
+
+- name: Create base structure LDIF file
+  copy:
+    dest: /tmp/base_structure.ldif
+    content: |
+      dn: dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: top
+      objectClass: dcObject
+      objectClass: organization
+      o: Clustron Project
+      dc: clustron
+
+      # ou=People
+      dn: ou=People,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: organizationalUnit
+      ou: People
+
+      # ou=Groups
+      dn: ou=Groups,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: organizationalUnit
+      ou: Groups
+
+- name: Apply base structure LDIF (Passwordless)
+  become: true
+  shell: |
+    ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/base_structure.ldif
+  register: ldapadd_result
+  failed_when: 
+    - ldapadd_result.rc != 0
+    - "'Already exists' not in ldapadd_result.stderr"
+  changed_when: 
+    - ldapadd_result.rc == 0
+    

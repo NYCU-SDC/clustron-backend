@@ -1,0 +1,30 @@
+ClusterName=head
+SlurmctldHost={{ ansible_facts['nodename'] }}
+SlurmUser=slurm
+SlurmdUser=root
+
+AuthType=auth/slurm
+CredType=cred/slurm
+
+StateSaveLocation=/var/spool/slurm/ctld
+SlurmdSpoolDir=/var/spool/slurm/d
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+
+# dbd
+AccountingStorageType=accounting_storage/slurmdbd
+AccountingStorageHost={{ ansible_facts['nodename'] }}
+AccountingStoragePort=6819
+
+# restd
+AuthAltTypes=auth/jwt
+AuthAltParameters=jwt_key=/etc/slurm/jwt.key
+
+MailProg=/usr/bin/true
+
+# COMPUTE NODES
+{% for host in groups['compute_nodes'] %}
+NodeName={{ host }} NodeAddr={{ hostvars[host].ansible_default_ipv4.address }}
+{% endfor %}
+
+PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP

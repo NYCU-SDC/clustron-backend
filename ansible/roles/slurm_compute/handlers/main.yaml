@@ -1,0 +1,6 @@
+- name: Restart Slurmd
+  become: true
+  service:
+    name: slurmd
+    state: restarted
+    

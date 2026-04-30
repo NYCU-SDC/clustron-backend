@@ -1,0 +1,8 @@
+# Ansible managed NFS exports for Compute Nodes
+# TODO: change to subnet? mount only /opt/clustron_share?
+{% for host in groups['compute_nodes'] %}
+{% set real_ip = hostvars[host]['ansible_default_ipv4']['address'] %}
+/home       {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+/opt        {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+/etc/slurm  {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+{% endfor %}
