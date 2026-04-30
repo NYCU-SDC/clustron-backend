@@ -103,3 +103,163 @@ type JobStateResponse struct {
 	Cancelled int `json:"cancelled"`
 	Unknown   int `json:"unknown"`
 }
+
+// ignoring meta field in Slurm response
+type Response struct {
+	Errors   []SlurmError   `json:"errors"`
+	Warnings []SlurmWarning `json:"warnings"`
+}
+
+type DeleteUserResponse struct {
+	RemovedUsers []string       `json:"removed_users"`
+	Errors       []SlurmError   `json:"errors"`
+	Warnings     []SlurmWarning `json:"warnings"`
+}
+
+type DeleteAccountResponse struct {
+	RemovedAccounts []string       `json:"removed_accounts"`
+	Errors          []SlurmError   `json:"errors"`
+	Warnings        []SlurmWarning `json:"warnings"`
+}
+
+type DeleteAssociationResponse struct {
+	RemovedAssociations []string       `json:"removed_associations"`
+	Errors              []SlurmError   `json:"errors"`
+	Warnings            []SlurmWarning `json:"warnings"`
+}
+
+// User https://slurm.schedmd.com/rest_api.html#v0.0.44_user
+type User struct {
+	AdministratorLevel []string           `json:"administrator_level,omitempty"`
+	Associations       []AssociationShort `json:"associations,omitempty"`
+	Default            UserDefault        `json:"default,omitempty"`
+	Flags              []string           `json:"flags,omitempty"`
+	Name               string             `json:"name" validate:"required"`
+}
+
+// Account https://slurm.schedmd.com/rest_api.html#v0.0.44_account
+type Account struct {
+	Associations []AssociationShort `json:"associations,omitempty"`
+	Coordinators []Coordinator      `json:"coordinators,omitempty"`
+	Description  string             `json:"description" validate:"required"`
+	Name         string             `json:"name" validate:"required"`
+	Organization string             `json:"organization" validate:"required"`
+	Flags        []string           `json:"flags,omitempty"`
+}
+
+// Association https://slurm.schedmd.com/rest_api.html#slurmdbV0044PostAssociations
+type Association struct {
+	Account       string   `json:"account,omitempty"`
+	Cluster       string   `json:"cluster,omitempty"`
+	Comment       string   `json:"comment,omitempty"`
+	Flags         string   `json:"flags,omitempty"`
+	Id            int32    `json:"id,omitempty"`
+	IsDefault     bool     `json:"is_default,omitempty"`
+	Lineage       string   `json:"lineage,omitempty"`
+	ParentAccount string   `json:"parent_account,omitempty"`
+	Partition     string   `json:"partition,omitempty"`
+	Qos           []string `json:"qos,omitempty"`
+	SharesRaw     int32    `json:"shares_raw,omitempty"`
+	User          string   `json:"user" validate:"required"`
+}
+
+type UserAssociationRequest struct {
+	AssociationCondition UserAddCondition `json:"association_condition" validate:"required"`
+	User                 UserShort        `json:"user" validate:"required"`
+}
+
+// UserAddCondition https://slurm.schedmd.com/rest_api.html#v0.0.44_openapi_users_add_cond_resp
+type UserAddCondition struct {
+	Users       []string          `json:"users"`
+	Accounts    []string          `json:"accounts,omitempty"`
+	Association AssociationRecSet `json:"association,omitempty"`
+	Clusters    []string          `json:"clusters,omitempty"`
+	Partitions  []string          `json:"partitions,omitempty"`
+	Wckeys      []string          `json:"wckeys,omitempty"`
+}
+
+// UserShort https://slurm.schedmd.com/rest_api.html#v0.0.44_user_short
+type UserShort struct {
+	AdminLevel     string `json:"adminlevel,omitempty"`
+	DefaultQos     string `json:"defaultqos,omitempty"`
+	DefaultAccount string `json:"defaultaccount,omitempty"`
+	DefaultWckey   string `json:"defaultwckey,omitempty"`
+}
+
+type AccountAssociationRequest struct {
+	AssociationCondition AccountAddCondition `json:"association_condition" validate:"required"`
+	Account              AccountShort        `json:"account" validate:"required"`
+}
+
+// AccountAddCondition https://slurm.schedmd.com/rest_api.html#v0.0.44_accounts_add_cond
+type AccountAddCondition struct {
+	Accounts    []string          `json:"accounts"`
+	Association AssociationRecSet `json:"association"`
+	Clusters    []string          `json:"clusters,omitempty"`
+}
+
+// AccountShort https://slurm.schedmd.com/rest_api.html#v0.0.44_account_short
+type AccountShort struct {
+	Description  string `json:"description,omitempty"`
+	Organization string `json:"organization,omitempty"`
+}
+
+// AssociationRecSet https://slurm.schedmd.com/rest_api.html#v0.0.44_assoc_rec_set
+type AssociationRecSet struct {
+	Comment               string        `json:"comment,omitempty"`
+	DefaultQos            string        `json:"defaultqos,omitempty"`
+	Parent                string        `json:"parent,omitempty"`
+	MaxWallDurationPerJob Uint32NoValue `json:"maxwalldurationperjob,omitempty"`
+	MaxSubmitJobs         Uint32NoValue `json:"maxsubmitjobs,omitempty"`
+	MaxJobs               Uint32NoValue `json:"maxjobs,omitempty"`
+}
+
+// Uint32NoValue https://slurm.schedmd.com/rest_api.html#v0.0.44_uint32_no_val_struct
+type Uint32NoValue struct {
+	Set      bool  `json:"set,omitempty"`
+	Infinite bool  `json:"infinite,omitempty"`
+	Number   int32 `json:"number,omitempty"`
+}
+
+// UserRequest expects an array of users for the POST request
+type UserRequest struct {
+	Users []User `json:"users" validate:"required"`
+}
+
+type AccountRequest struct {
+	Accounts []Account `json:"accounts" validate:"required"`
+}
+
+type AssociationRequest struct {
+	Associations []Association `json:"associations" validate:"required"`
+}
+
+// AssociationShort https://slurm.schedmd.com/rest_api.html#v0.0.44_assoc_short
+type AssociationShort struct {
+	Account   string `json:"account"`
+	Cluster   string `json:"cluster"`
+	Partition string `json:"partition,omitempty"`
+	User      string `json:"user"`
+}
+
+type Coordinator struct {
+	Name   string `json:"name"`
+	Direct int    `json:"direct"` // 1 if direct, 0 if inherited
+}
+
+type UserDefault struct {
+	Qos     string `json:"qos"`
+	Account string `json:"account"`
+	Wckey   string `json:"wckey"`
+}
+
+type SlurmError struct {
+	Description string `json:"description"`
+	ErrorCode   int    `json:"error_number"`
+	Source      string `json:"source"`
+}
+
+type SlurmWarning struct {
+	Description string `json:"description"`
+	Source      string `json:"source"`
+}
