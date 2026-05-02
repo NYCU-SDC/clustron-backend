@@ -22,3 +22,6 @@ preset_user:
   'YOUR_EMAIL':
     role: admin
 enable_internal_login: false # Set to true if you are in the testing phase.
+linux_username_blacklist:
+  - blacklist1
+  - blacklist2
