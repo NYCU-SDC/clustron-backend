@@ -141,7 +141,7 @@ func main() {
 		logger.Fatal("Failed to initialize OpenTelemetry", zap.Error(err))
 	}
 
-	validator := internal.NewValidator()
+	validator := internal.NewValidator(cfg)
 	problemWriter := internal.NewProblemWriter()
 
 	// Querier
