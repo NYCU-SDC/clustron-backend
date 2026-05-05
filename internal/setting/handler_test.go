@@ -337,6 +337,17 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
+			name: "Should block linux username in blacklist in config file",
+			body: setting.OnboardingRequest{
+				FullName:      "testuser",
+				LinuxUsername: "testblacklist",
+				Password:      "str0ngpassword",
+			},
+			setupMock: func(store *mocks.Store) {
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
 			name: "Should block linux username with space",
 			body: setting.OnboardingRequest{
 				FullName:      "testuser",
@@ -535,10 +546,9 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			}
 			store := mocks.NewStore(t)
 			tc.setupMock(store)
-
 			userStore := mocks.NewUserStore(t)
 
-			h := setting.NewHandler(logger, internal.NewValidator(), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
+			h := setting.NewHandler(logger, internal.NewValidator([]string{"testblacklist"}), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
 
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
@@ -931,7 +941,7 @@ func TestHandler_BindLDAPUserHandler(t *testing.T) {
 				tc.setupMock(store, userStore, tc.jwtUser)
 			}
 
-			h := setting.NewHandler(logger, internal.NewValidator(), internal.NewProblemWriter(), store, userStore)
+			h := setting.NewHandler(logger, internal.NewValidator([]string{"testblacklist"}), internal.NewProblemWriter(), store, userStore)
 
 			var requestBody []byte
 			if tc.customBody != nil {

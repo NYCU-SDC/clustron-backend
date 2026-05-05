@@ -56,6 +56,7 @@ type Config struct {
 	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
 	LDAP                    ldap.Config               `yaml:"ldap"`
 	EnableInternalLogin     bool                      `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
+	LinuxUsernameBlacklist  []string                  `yaml:"linux_username_blacklist" envconfig:"LINUX_USERNAME_BLACKLIST"`
 }
 
 type LogBuffer struct {

@@ -65,8 +65,11 @@ var LinuxUserBlacklist = map[string]struct{}{
 	"sssd":          {},
 }
 
-func NewValidator() *validator.Validate {
+func NewValidator(customLinuxUsernameBlacklist []string) *validator.Validate {
 	v := validator.New()
+	for i := range customLinuxUsernameBlacklist {
+		LinuxUserBlacklist[customLinuxUsernameBlacklist[i]] = struct{}{}
+	}
 	err := loadSystemUsers()
 	if err != nil {
 		panic(err)
