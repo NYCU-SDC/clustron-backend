@@ -3,7 +3,6 @@ package setting_test
 import (
 	"bytes"
 	"clustron-backend/internal"
-	"clustron-backend/internal/config"
 	"clustron-backend/internal/jwt"
 	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
@@ -547,12 +546,9 @@ func TestHandler_OnboardingHandler(t *testing.T) {
 			}
 			store := mocks.NewStore(t)
 			tc.setupMock(store)
-			cfg := config.Config{
-				LinuxUsernameBlacklist: []string{"testblacklist"},
-			}
 			userStore := mocks.NewUserStore(t)
 
-			h := setting.NewHandler(logger, internal.NewValidator(cfg), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
+			h := setting.NewHandler(logger, internal.NewValidator([]string{"testblacklist"}), problem.NewWithMapping(internal.ErrorHandler), store, userStore)
 
 			requestBody, err := json.Marshal(tc.body)
 			if err != nil {
@@ -944,10 +940,8 @@ func TestHandler_BindLDAPUserHandler(t *testing.T) {
 			if tc.setupMock != nil {
 				tc.setupMock(store, userStore, tc.jwtUser)
 			}
-			cfg := config.Config{
-				LinuxUsernameBlacklist: []string{"testblacklist"},
-			}
-			h := setting.NewHandler(logger, internal.NewValidator(cfg), internal.NewProblemWriter(), store, userStore)
+
+			h := setting.NewHandler(logger, internal.NewValidator([]string{"testblacklist"}), internal.NewProblemWriter(), store, userStore)
 
 			var requestBody []byte
 			if tc.customBody != nil {
