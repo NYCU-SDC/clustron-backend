@@ -71,7 +71,7 @@ type BindLDAPUserResponse struct {
 	Role          string `json:"role"`
 }
 
-//go:generate mockery --name Store
+//mockery:generate: true
 type Store interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error)
 	GetPublicKeysByUserID(ctx context.Context, userID uuid.UUID) ([]LDAPPublicKey, error)

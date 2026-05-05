@@ -1,0 +1,13 @@
+dir: "{{.InterfaceDir}}/mocks"
+pkgname: "mocks"
+filename: "{{.InterfaceName}}.go"
+structname: "{{.InterfaceName}}"
+template: testify
+exclude-subpkg-regex:
+  - "mocks"
+
+packages:
+  clustron-backend/internal:
+    config:
+      recursive: true
+
