@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bufio"
-	"clustron-backend/internal/config"
 	"os"
 	"regexp"
 	"strings"
@@ -66,10 +65,10 @@ var LinuxUserBlacklist = map[string]struct{}{
 	"sssd":          {},
 }
 
-func NewValidator(cfg config.Config) *validator.Validate {
+func NewValidator(customLinuxUsernameBlacklist []string) *validator.Validate {
 	v := validator.New()
-	for i := range cfg.LinuxUsernameBlacklist {
-		LinuxUserBlacklist[cfg.LinuxUsernameBlacklist[i]] = struct{}{}
+	for i := range customLinuxUsernameBlacklist {
+		LinuxUserBlacklist[customLinuxUsernameBlacklist[i]] = struct{}{}
 	}
 	err := loadSystemUsers()
 	if err != nil {
