@@ -2,6 +2,7 @@ package ldap
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
@@ -55,6 +56,22 @@ func (c *Client) Close() {
 	}
 }
 
+func (c *Client) userBaseDN() string {
+	if strings.TrimSpace(c.Config.LDAPUserDN) != "" {
+		return c.Config.LDAPUserDN
+	}
+
+	return "ou=People," + c.Config.LDAPBaseDN
+}
+
+func (c *Client) groupBaseDN() string {
+	if strings.TrimSpace(c.Config.LDAPGroupDN) != "" {
+		return c.Config.LDAPGroupDN
+	}
+
+	return "ou=Groups," + c.Config.LDAPBaseDN
+}
+
 func (c *Client) Validate() error {
 	// Check if base DN exists
 	searchRequest := ldap.NewSearchRequest(
@@ -76,37 +93,37 @@ func (c *Client) Validate() error {
 	}
 
 	searchPeopleOURequest := ldap.NewSearchRequest(
-		fmt.Sprintf("ou=People,%s", c.Config.LDAPBaseDN),
+		c.userBaseDN(),
 		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
-		"(objectClass=organizationalUnit)",
+		"(objectClass=*)",
 		[]string{"dn"},
 		nil,
 	)
 	sr, err = c.Conn.Search(searchPeopleOURequest)
 	if err != nil {
-		c.Logger.Error("Failed to search for People OU", zap.Error(err))
-		return fmt.Errorf("failed to search for People OU: %w", err)
+		c.Logger.Error("Failed to search for LDAP user DN", zap.String("userDN", c.userBaseDN()), zap.Error(err))
+		return fmt.Errorf("failed to search for LDAP user DN: %w", err)
 	}
 	if len(sr.Entries) == 0 {
-		c.Logger.Error("People OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
-		return fmt.Errorf("people OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+		c.Logger.Error("LDAP user DN does not exist in LDAP", zap.String("userDN", c.userBaseDN()))
+		return fmt.Errorf("LDAP user DN does not exist in LDAP: %s", c.userBaseDN())
 	}
 
 	searchGroupsOURequest := ldap.NewSearchRequest(
-		fmt.Sprintf("ou=Groups,%s", c.Config.LDAPBaseDN),
+		c.groupBaseDN(),
 		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
-		"(objectClass=organizationalUnit)",
+		"(objectClass=*)",
 		[]string{"dn"},
 		nil,
 	)
 	sr, err = c.Conn.Search(searchGroupsOURequest)
 	if err != nil {
-		c.Logger.Error("Failed to search for Groups OU", zap.Error(err))
-		return fmt.Errorf("failed to search for Groups OU: %w", err)
+		c.Logger.Error("Failed to search for LDAP group DN", zap.String("groupDN", c.groupBaseDN()), zap.Error(err))
+		return fmt.Errorf("failed to search for LDAP group DN: %w", err)
 	}
 	if len(sr.Entries) == 0 {
-		c.Logger.Error("Groups OU does not exist in LDAP", zap.String("baseDN", c.Config.LDAPBaseDN))
-		return fmt.Errorf("groups OU does not exist in LDAP: %s", c.Config.LDAPBaseDN)
+		c.Logger.Error("LDAP group DN does not exist in LDAP", zap.String("groupDN", c.groupBaseDN()))
+		return fmt.Errorf("LDAP group DN does not exist in LDAP: %s", c.groupBaseDN())
 	}
 
 	c.Logger.Info("LDAP structure validated successfully")

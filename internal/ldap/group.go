@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Client) CreateGroup(groupName string, gidNumber string, memberUids []string) error {
-	base := "ou=Groups," + c.Config.LDAPBaseDN
+	base := c.groupBaseDN()
 
 	filter := fmt.Sprintf("(gidNumber=%s)", ldap.EscapeFilter(gidNumber))
 	exist, err := c.entryExists(base, filter)
@@ -33,7 +33,7 @@ func (c *Client) CreateGroup(groupName string, gidNumber string, memberUids []st
 		return fmt.Errorf("%w: %s", ErrGroupNameExists, groupName)
 	}
 
-	dn := fmt.Sprintf("cn=%s,ou=Groups,%s", groupName, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("cn=%s,%s", groupName, c.groupBaseDN())
 	addRequest := ldap.NewAddRequest(dn, nil)
 	addRequest.Attribute("objectClass", []string{"top", "posixGroup"})
 	addRequest.Attribute("cn", []string{groupName})
@@ -67,7 +67,7 @@ func (c *Client) GetGroupInfo(groupName string) (*ldap.Entry, error) {
 	filter := fmt.Sprintf("(cn=%s)", ldap.EscapeFilter(groupName))
 	attributes := []string{"dn", "cn", "memberUid"}
 
-	result, err := c.SearchByFilter("ou=Groups,"+c.Config.LDAPBaseDN, filter, attributes)
+	result, err := c.SearchByFilter(c.groupBaseDN(), filter, attributes)
 	if err != nil {
 		c.Logger.Error("failed to search group", zap.String("groupName", groupName), zap.Error(err))
 		return nil, fmt.Errorf("failed to search group: %w", err)
@@ -82,7 +82,7 @@ func (c *Client) GetGroupInfo(groupName string) (*ldap.Entry, error) {
 }
 
 func (c *Client) DeleteGroup(groupName string) error {
-	dn := fmt.Sprintf("cn=%s,ou=Groups,%s", groupName, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("cn=%s,%s", groupName, c.groupBaseDN())
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 	err := c.Conn.Del(deleteRequest)
 	if err != nil {
@@ -110,7 +110,7 @@ func (c *Client) AddUserToGroup(groupName string, memberUid string) error {
 		return fmt.Errorf("%w: %s", ErrUserAlreadyInGroup, memberUid)
 	}
 
-	dn := fmt.Sprintf("cn=%s,ou=Groups,%s", groupName, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("cn=%s,%s", groupName, c.groupBaseDN())
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Add("memberUid", []string{memberUid})
 
@@ -135,7 +135,7 @@ func (c *Client) RemoveUserFromGroup(groupName string, memberUid string) error {
 		return fmt.Errorf("%w: %s", ErrUserNotInGroup, memberUid)
 	}
 
-	dn := fmt.Sprintf("cn=%s,ou=Groups,%s", groupName, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("cn=%s,%s", groupName, c.groupBaseDN())
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Delete("memberUid", []string{memberUid})
 
@@ -150,7 +150,7 @@ func (c *Client) RemoveUserFromGroup(groupName string, memberUid string) error {
 }
 
 func (c *Client) GetGroupsForUser(uid string) ([]*ldap.Entry, error) {
-	userBase := "ou=People," + c.Config.LDAPBaseDN
+	userBase := c.userBaseDN()
 	userFilter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 	exists, err := c.entryExists(userBase, userFilter)
 	if err != nil {
@@ -160,7 +160,7 @@ func (c *Client) GetGroupsForUser(uid string) ([]*ldap.Entry, error) {
 		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, uid)
 	}
 
-	groupBase := "ou=Groups," + c.Config.LDAPBaseDN
+	groupBase := c.groupBaseDN()
 	groupFilter := fmt.Sprintf("(memberUid=%s)", ldap.EscapeFilter(uid))
 	groupAttributes := []string{"dn", "cn"}
 	result, err := c.SearchByFilter(groupBase, groupFilter, groupAttributes)
@@ -179,7 +179,7 @@ func (c *Client) GetGroupsForUser(uid string) ([]*ldap.Entry, error) {
 }
 
 func (c *Client) GetAllGIDNumbers() ([]string, error) {
-	base := "ou=Groups," + c.Config.LDAPBaseDN
+	base := c.groupBaseDN()
 	filter := "(gidNumber=*)"
 	attributes := []string{"gidNumber"}
 

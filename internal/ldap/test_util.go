@@ -19,6 +19,11 @@ import (
 
 func newTestClient(t *testing.T) (*Client, func()) {
 	t.Helper()
+	return newTestClientWithDNs(t, "", "")
+}
+
+func newTestClientWithDNs(t *testing.T, userDN, groupDN string) (*Client, func()) {
+	t.Helper()
 
 	logger, _ := zap.NewDevelopment()
 
@@ -66,6 +71,8 @@ func newTestClient(t *testing.T) (*Client, func()) {
 		LDAPHost:    "localhost",
 		LDAPPort:    port,
 		LDAPBaseDN:  "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
+		LDAPUserDN:  userDN,
+		LDAPGroupDN: groupDN,
 		LDAPBindDN:  "cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
 		LDAPBindPwd: "admin",
 	}
@@ -73,7 +80,7 @@ func newTestClient(t *testing.T) (*Client, func()) {
 	client, err := NewClient(cfg, logger)
 	require.NoError(t, err)
 
-	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
+	require.NoError(t, setupBaseDIT(client.Conn, client.userBaseDN(), client.groupBaseDN()))
 
 	return client, cleanup
 }
@@ -111,13 +118,11 @@ func waitForLDAPReady(pool *dockertest.Pool, resource *dockertest.Resource, time
 	})
 }
 
-func setupBaseDIT(c *ldap.Conn, baseDN string) error {
-	orgUnits := []string{"People", "Groups"}
-
-	for _, ou := range orgUnits {
-		req := ldap.NewAddRequest(fmt.Sprintf("ou=%s,%s", ou, baseDN), nil)
+func setupBaseDIT(c *ldap.Conn, dns ...string) error {
+	for _, dn := range dns {
+		req := ldap.NewAddRequest(dn, nil)
 		req.Attribute("objectClass", []string{"organizationalUnit"})
-		req.Attribute("ou", []string{ou})
+		req.Attribute("ou", []string{extractRDNValue(dn, "ou")})
 
 		err := c.Add(req)
 		if err != nil {
@@ -125,10 +130,27 @@ func setupBaseDIT(c *ldap.Conn, baseDN string) error {
 			if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultEntryAlreadyExists {
 				continue
 			}
-			return fmt.Errorf("failed to create ou=%s: %w", ou, err)
+			return fmt.Errorf("failed to create dn=%s: %w", dn, err)
 		}
 	}
 	return nil
+}
+
+func extractRDNValue(dn, key string) string {
+	parts := strings.SplitN(dn, ",", 2)
+	if len(parts) == 0 {
+		return ""
+	}
+
+	rdnParts := strings.SplitN(parts[0], "=", 2)
+	if len(rdnParts) != 2 {
+		return ""
+	}
+	if !strings.EqualFold(strings.TrimSpace(rdnParts[0]), key) {
+		return ""
+	}
+
+	return strings.TrimSpace(rdnParts[1])
 }
 
 func setupUser(t *testing.T, c *Client, uid, cn, sn, key, uidNumber string) {

@@ -22,3 +22,11 @@ preset_user:
   'YOUR_EMAIL':
     role: admin
 enable_internal_login: false # Set to true if you are in the testing phase.
+ldap:
+  ldap_host: "localhost"
+  ldap_port: "389"
+  ldap_base_dn: "dc=clustron,dc=example,dc=com"
+  ldap_user_dn: "ou=People,dc=clustron,dc=example,dc=com"
+  ldap_group_dn: "ou=Groups,dc=clustron,dc=example,dc=com"
+  ldap_bind_dn: "cn=admin,dc=clustron,dc=example,dc=com"
+  ldap_bind_pwd: "admin"
