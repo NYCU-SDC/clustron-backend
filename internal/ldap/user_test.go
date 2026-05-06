@@ -44,8 +44,7 @@ func TestClient_CreateUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			if tc.error != nil {
 				setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
@@ -81,8 +80,7 @@ func TestClient_GetUserInfo(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
 
@@ -118,8 +116,7 @@ func TestClient_UpdateUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
 
@@ -155,8 +152,7 @@ func TestClient_DeleteUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
 
@@ -191,8 +187,7 @@ func TestClient_GetUsedUidNumbers(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			for _, uid := range tc.expectedUIDs {
 				require.NoError(t, client.CreateUser(fmt.Sprintf("user_%s", uid), "CN", "SN", pubkey1, uid))
@@ -239,8 +234,7 @@ func TestClient_AddSSHPublicKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
 
@@ -283,8 +277,7 @@ func TestClient_DeleteSSHPublicKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user, "CN", "SN", pubkey1, uidNumber)
 

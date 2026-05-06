@@ -4,41 +4,42 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"go.uber.org/zap"
 	"log"
 	"time"
+
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/moby/moby/api/types/container"
+	"github.com/ory/dockertest/v4"
+	"go.uber.org/zap"
 )
 
-func setupPostgres(pool *dockertest.Pool, logger *zap.Logger) (*pgxpool.Pool, string, func(), error) {
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        "11",
-		Env: []string{
+func setupPostgres(pool dockertest.ClosablePool, logger *zap.Logger) (*pgxpool.Pool, string, func(), error) {
+	ctx := context.Background()
+	resource, err := pool.Run(ctx, "postgres",
+		dockertest.WithTag("18"),
+		dockertest.WithEnv([]string{
 			"POSTGRES_PASSWORD=password",
 			"POSTGRES_USER=postgres",
 			"POSTGRES_DB=dbname",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
+		}),
+		dockertest.WithHostConfig(func(config *container.HostConfig) {
+			config.AutoRemove = true
+			config.RestartPolicy = container.RestartPolicy{Name: "no"}
+		}),
+	)
 	if err != nil {
 		logger.Fatal("Could not start resource", zap.Error(err))
 		return nil, "", nil, err
 	}
 
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	databaseURL := fmt.Sprintf("postgres://postgres:password@%s/dbname?sslmode=disable", hostAndPort)
+	hostAndPort := resource.GetPort("5432/tcp")
+	databaseURL := fmt.Sprintf("postgres://postgres:password@localhost:%s/dbname?sslmode=disable", hostAndPort)
 	logger.Info("Launching Postgres", zap.String("url", databaseURL))
 
 	// Wait for the database to be ready
-	pool.MaxWait = 120 * time.Second
-	retryCount := 0
-	if err = pool.Retry(func() error {
+	retryCount := 5
+	if err = pool.Retry(ctx, 120*time.Second, func() error {
 		db, err := sql.Open("postgres", databaseURL)
 		if err != nil {
 			return err
@@ -77,7 +78,7 @@ func setupPostgres(pool *dockertest.Pool, logger *zap.Logger) (*pgxpool.Pool, st
 	cleanup := func() {
 		dbPool.Close()
 
-		err = pool.Purge(resource)
+		err = pool.Close(ctx)
 		if err != nil {
 			logger.Error("Failed to purge resource", zap.Error(err))
 		} else {
@@ -88,7 +89,7 @@ func setupPostgres(pool *dockertest.Pool, logger *zap.Logger) (*pgxpool.Pool, st
 	return dbPool, databaseURL, cleanup, nil
 }
 
-func setupPostgresWithMigrations(pool *dockertest.Pool, logger *zap.Logger, sourceURL string) (*pgxpool.Pool, string, func(), error) {
+func setupPostgresWithMigrations(pool dockertest.ClosablePool, logger *zap.Logger) (*pgxpool.Pool, string, func(), error) {
 	dbPool, databaseURL, cleanup, err := setupPostgres(pool, logger)
 	if err != nil {
 		return nil, "", nil, err

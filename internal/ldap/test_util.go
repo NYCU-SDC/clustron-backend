@@ -1,56 +1,58 @@
 package ldap
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/moby/moby/api/types/container"
+	"github.com/ory/dockertest/v4"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
-func newTestClient(t *testing.T) (*Client, func()) {
+func newTestClient(t *testing.T) *Client {
 	t.Helper()
 
 	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
 
-	pool, err := dockertest.NewPool("")
+	pool, err := dockertest.NewPool(ctx, "")
 	require.NoError(t, err)
-	pool.MaxWait = 120 * time.Second
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "osixia/openldap",
-		Tag:        "1.5.0",
-		Env: []string{
+	resource, err := pool.Run(ctx, "osixia/openldap",
+		dockertest.WithTag("1.5.0"),
+		dockertest.WithEnv([]string{
 			"LDAP_ORGANISATION=Clustron",
 			"LDAP_DOMAIN=clustron.prj.internal.sdc.nycu.club",
 			"LDAP_ADMIN_PASSWORD=admin",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-	})
+		}),
+		dockertest.WithHostConfig(func(config *container.HostConfig) {
+			config.AutoRemove = true
+			config.RestartPolicy = container.RestartPolicy{Name: "no"}
+		}),
+	)
 	require.NoError(t, err)
-	require.NoError(t, waitForLDAPReady(pool, resource, 30*time.Second))
+	require.NoError(t, waitForLDAPReady(ctx, pool, resource, 120*time.Second))
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		logger.Info("cleaning up test resources")
-
-		err = pool.Purge(resource)
-		if err != nil {
-			logger.Error("failed to purge resource", zap.Error(err))
+		if err := resource.Close(ctx); err != nil {
+			logger.Error("failed to close resource", zap.Error(err))
 		}
-	}
+		if err := pool.Close(ctx); err != nil {
+			logger.Error("failed to close pool", zap.Error(err))
+		}
+	})
 
 	port := resource.GetPort("389/tcp")
-	require.NoError(t, pool.Retry(func() error {
+	logger.Info("Starting LDAP connection check...", zap.String("port", port))
+	require.NoError(t, pool.Retry(ctx, 60*time.Second, func() error {
+		logger.Info("Attempting Dial...")
 		conn, err := ldap.DialURL(fmt.Sprintf("ldap://localhost:%s", port))
 		if err != nil {
 			return err
@@ -59,6 +61,7 @@ func newTestClient(t *testing.T) (*Client, func()) {
 			_ = conn.Close()
 		}(conn)
 
+		conn.SetTimeout(2 * time.Second)
 		return conn.Bind("cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club", "admin")
 	}))
 
@@ -75,36 +78,20 @@ func newTestClient(t *testing.T) (*Client, func()) {
 
 	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
 
-	return client, cleanup
+	return client
 }
 
-func waitForLDAPReady(pool *dockertest.Pool, resource *dockertest.Resource, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
+func waitForLDAPReady(ctx context.Context, pool dockertest.ClosablePool, resource dockertest.Resource, timeout time.Duration) error {
 	const readyStr = "slapd starting"
 
-	return pool.Retry(func() error {
-		var logs strings.Builder
-
-		err := pool.Client.Logs(docker.LogsOptions{
-			Context:      ctx,
-			Container:    resource.Container.ID,
-			OutputStream: &logs,
-			ErrorStream:  &logs,
-			Stdout:       true,
-			Stderr:       true,
-			Timestamps:   false,
-		})
+	return pool.Retry(ctx, timeout, func() error {
+		stdout, stderr, err := resource.Logs(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get logs: %w", err)
 		}
 
-		scanner := bufio.NewScanner(strings.NewReader(logs.String()))
-		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), readyStr) {
-				return nil
-			}
+		if strings.Contains(stdout, readyStr) || strings.Contains(stderr, readyStr) {
+			return nil
 		}
 
 		return errors.New("slapd not ready yet")

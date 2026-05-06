@@ -12,16 +12,15 @@ func TestDemo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get resource manager: %v", err)
 	}
-	defer resourceManager.Cleanup()
+	defer resourceManager.Cleanup(t.Context())
 
 	t.Run("test", func(t *testing.T) {
 		t.Logf("test")
 
-		db, rollback, err := resourceManager.SetupPostgres()
+		db := resourceManager.SetupPostgres(t)
 		if err != nil {
 			t.Fatalf("failed to setup postgres: %v", err)
 		}
-		defer rollback()
 
 		builder := dbtestdata.NewBuilder(t, db)
 		user := builder.User().Create()
