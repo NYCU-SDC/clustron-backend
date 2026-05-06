@@ -437,7 +437,7 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	return tokenString, nil
 }
 
-func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
+func ParseResponse(ctx context.Context, r *http.Response, s any) error {
 	_, span := otel.Tracer("slurm/service").Start(ctx, "ParseResponse")
 	defer span.End()
 
