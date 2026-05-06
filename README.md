@@ -60,12 +60,16 @@ For user to be able to import public key from GitHub, enable GitHub OAuth Servic
 
 We recommend to deploy Clustron with docker container.
 
+You can find the docker images on https://hub.docker.com/r/nycusdc/clustron-backend
+
+Tag `stage` for latested released stable version. Tag `dev` for development version.
+
 ```yaml
 name: clustron
 
 services:
   backend:
-    image: nycusdc/clustron-backend # change as needed
+    image: nycusdc/clustron-backend:stage # change as needed
     networks:
       - internal
       - traefik
