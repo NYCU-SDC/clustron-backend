@@ -48,8 +48,7 @@ func TestClient_CreateGroup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 
@@ -87,8 +86,7 @@ func TestClient_GetGroupInfo(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 			setupGroup(t, client, groupName, gidNumber, []string{user1})
@@ -125,8 +123,7 @@ func TestClient_DeleteGroup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 			setupGroup(t, client, groupName, gidNumber, []string{user1})
@@ -161,8 +158,7 @@ func TestClient_AddUserToGroup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 			setupUser(t, client, user2, "CN2", "SN2", "ssh-rsa AAAA2", "10002")
@@ -198,8 +194,7 @@ func TestClient_RemoveUserFromGroup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 			setupUser(t, client, user2, "CN2", "SN2", "ssh-rsa AAAA2", "10002")
@@ -240,8 +235,7 @@ func TestClient_GetGroupsForUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			setupUser(t, client, user1, "CN1", "SN1", "ssh-rsa AAAA1", "10001")
 			setupUser(t, client, user2, "CN2", "SN2", "ssh-rsa AAAA2", "10002")
@@ -284,8 +278,7 @@ func TestClient_GetUsedGidNumbers(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			client, done := newTestClient(t)
-			defer done()
+			client := newTestClient(t)
 
 			for _, gid := range tc.groups {
 				require.NoError(t, client.CreateGroup(fmt.Sprintf("group_%s", gid), gid, []string{}))
