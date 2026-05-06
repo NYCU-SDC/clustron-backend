@@ -88,7 +88,7 @@ services:
       - BASE_URL=https://api.stage.clustron.sdc.nycu.club # change as needed
       - SLURM_TOKEN_HELPER_URL=${SLURM_TOKEN_HELPER_URL} # change as needed
       - SLURM_RESTFUL_BASE_URL=${SLURM_RESTFUL_BASE_URL} # change as needed
-      - SLURM_RESTFUL_VERSION=v0.0.43
+      - SLURM_RESTFUL_VERSION=v0.0.44
       - MIGRATION_SOURCE=file:///app/migrations
       - CASBIN_POLICY_SOURCE=policy.csv
       - CASBIN_MODEL_SOURCE=model.conf
@@ -108,16 +108,71 @@ services:
 The backend can be configured via environment variables, config file and flags.
 We recommend to use the environment varialbles the configure.
 
+### General
+
+| Variable      | Description                                                                                              | Required |
+| ------------- | -------------------------------------------------------------------------------------------------------- | -------- |
+| ENV           | Application environment. Will be presented in the log but won't affect any function. Default to `no-env` | No       |
+| HOST          | Host address the server binds to                                                                         | Yes      |
+| SECRET        | Secret key used for signing JWT tokens                                                                   | Yes      |
+| BASE_URL      | Public base URL of the backend API                                                                       | Yes      |
+| ALLOW_ORIGINS | Comma-separated list of allowed CORS origins (`*` for all)                                               | Yes      |
+
 ### Authentication (OAuth)
 
-| Variable                   | Description | Required |
-| -------------------------- | ----------- | -------- |
-| GOOGLE_OAUTH_CLIENT_ID     |
-| GOOGLE_OAUTH_CLIENT_SECRET |
-| NYCU_OAUTH_CLIENT_ID       |
-| NYCU_OAUTH_CLIENT_SECRET   |
-| GITHUB_OAUTH_CLIENT_ID     |
-| GITHUB_OAUTH_CLIENT_SECRET |
+| Variable                   | Description                           | Required                                       |
+| -------------------------- | ------------------------------------- | ---------------------------------------------- |
+| GOOGLE_OAUTH_CLIENT_ID     | Client ID of Google OAuth Service     | Choose one between Google OAuth and NYCU OAuth |
+| GOOGLE_OAUTH_CLIENT_SECRET | Client Secret of Google OAuth Service | Choose one between Google OAuth and NYCU OAuth |
+| NYCU_OAUTH_CLIENT_ID       | Client ID of NYCU OAuth Service       | Choose one between Google OAuth and NYCU OAuth |
+| NYCU_OAUTH_CLIENT_SECRET   | Client Secret of NYCU OAuth Service   | Choose one between Google OAuth and NYCU OAuth |
+| GITHUB_OAUTH_CLIENT_ID     | Client ID of GitHub OAuth Service     | No                                             |
+| GITHUB_OAUTH_CLIENT_SECRET | Client Secret of GitHub OAuth Service | No                                             |
+
+### Database
+
+| Variable         | Description                                                         | Required |
+| ---------------- | ------------------------------------------------------------------- | -------- |
+| DATABASE_URL     | PostgreSQL connection string (e.g., `postgres://user:pass@host/db`) | Yes      |
+| MIGRATION_SOURCE | Path to database migration files (e.g., `file:///app/migrations`)   | Yes      |
+
+### Authorization
+
+| Variable             | Description                                               | Required |
+| -------------------- | --------------------------------------------------------- | -------- |
+| CASBIN_POLICY_SOURCE | Path to the Casbin policy file (e.g., `policy.csv`)       | Yes      |
+| CASBIN_MODEL_SOURCE  | Path to the Casbin model config file (e.g., `model.conf`) | Yes      |
+
+### LDAP
+
+| Variable      | Description                                        | Required |
+| ------------- | -------------------------------------------------- | -------- |
+| LDAP_DEBUG    | Enable LDAP debug logging (`true` / `false`)       | No       |
+| LDAP_HOST     | Hostname of the LDAP server                        | Yes      |
+| LDAP_PORT     | Port of the LDAP server (default: `389`)           | Yes      |
+| LDAP_BASE_DN  | Base Distinguished Name for LDAP queries           | Yes      |
+| LDAP_BIND_DN  | Distinguished Name used to bind to the LDAP server | Yes      |
+| LDAP_BIND_PWD | Password for the LDAP bind DN                      | Yes      |
+
+### Slurm
+
+| Variable               | Description                                        | Required |
+| ---------------------- | -------------------------------------------------- | -------- |
+| SLURM_TOKEN_HELPER_URL | URL of the Slurm token helper service              | Yes      |
+| SLURM_RESTFUL_BASE_URL | Base URL of the Slurm RESTful API node             | Yes      |
+| SLURM_RESTFUL_VERSION  | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
+
+### Observability
+
+| Variable           | Description                                          | Required |
+| ------------------ | ---------------------------------------------------- | -------- |
+| OTEL_COLLECTOR_URL | Address of the OpenTelemetry collector (`host:port`) | No       |
+
+### Cache
+
+| Variable  | Description                                     | Required |
+| --------- | ----------------------------------------------- | -------- |
+| REDIS_URL | Address of the Redis server (e.g., `host:port`) | No       |
 
 # Get Started
 
