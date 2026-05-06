@@ -167,7 +167,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (User, error) {
 
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
-	token, err := jwt.ParseWithClaims(tokenString, &claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &claims{}, func(token *jwt.Token) (any, error) {
 		return []byte(s.secret), nil
 	})
 	if err != nil {
@@ -223,7 +223,7 @@ func (s Service) ParseState(ctx context.Context, tokenString string) (string, st
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	secret := func(token *jwt.Token) (interface{}, error) {
+	secret := func(token *jwt.Token) (any, error) {
 		return []byte(s.oauthProxySecret), nil
 	}
 

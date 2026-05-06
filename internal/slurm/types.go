@@ -73,10 +73,10 @@ type JobRequest struct {
 	MinimumNodes   int               `json:"minimum_nodes,omitempty"`
 	Tasks          int               `json:"tasks"  validate:"required"`
 	CPUsPerTask    int               `json:"cpus_per_task"  validate:"required"`
-	MemoryPerCPU   NumberFlagRequest `json:"memory_per_cpu,omitempty"`
-	MemoryPerNode  NumberFlagRequest `json:"memory_per_node,omitempty"`
+	MemoryPerCPU   NumberFlagRequest `json:"memory_per_cpu"`
+	MemoryPerNode  NumberFlagRequest `json:"memory_per_node"`
 	Partition      string            `json:"partition,omitempty"`
-	TimeLimit      NumberFlagRequest `json:"time_limit,omitempty"`
+	TimeLimit      NumberFlagRequest `json:"time_limit"`
 	StandardInput  string            `json:"standard_input,omitempty"`
 	StandardOutput string            `json:"standard_output,omitempty"`
 	StandardError  string            `json:"standard_error,omitempty"`
