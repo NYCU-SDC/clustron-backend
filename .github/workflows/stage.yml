@@ -38,9 +38,9 @@ jobs:
           make gen
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.0
+          version: v2.12
 
   Test:
     needs: Lint
