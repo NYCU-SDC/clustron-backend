@@ -37,7 +37,7 @@ func newTestClient(t *testing.T) *Client {
 		}),
 	)
 	require.NoError(t, err)
-	require.NoError(t, waitForLDAPReady(ctx, pool, resource, 120*time.Second))
+	require.NoError(t, waitForLDAPReady(ctx, pool, resource, 30*time.Second))
 
 	t.Cleanup(func() {
 		logger.Info("cleaning up test resources")
