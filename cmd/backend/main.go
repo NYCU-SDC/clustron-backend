@@ -233,6 +233,8 @@ func main() {
 	// Groups
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/title", authMiddleware.HandlerFunc(groupHandler.UpdateTitleHandler))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/description", authMiddleware.HandlerFunc(groupHandler.UpdateDescriptionHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.DeleteHandler))
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))
