@@ -23,7 +23,7 @@ Clustron depend the following services to work properly.
 ## LDAP Initialization
 
 Clustron require specific class and path to be exist in LDAP.
-The initialization `ldif` look like bellow:
+The initialization `ldif` looks like bellow:
 
 ```ldif
 # ou=People
@@ -37,18 +37,18 @@ objectClass: organizationalUnit
 ou: Groups
 ```
 
-Subsitute the `your_dc` part as needed.
+Substitute the `your_dc` part as needed.
 
 ## OAuth
 
 Clustron authorize login via 3rd-party OAuth service.
 
-For user to be able to login to the system, enable one of the following:
+For users to be able to login to the system, enable one of the following:
 
 - Google OAuth
 - NYCU OAuth
 
-For user to be able to import public key from GitHub, enable GitHub OAuth Service.
+For users to be able to import public keys from GitHub, enable GitHub OAuth Service.
 
 | OAuth Service | Environment Variables                                  | Redirect URL                                                                      | Relative Functions            |
 | ------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- | ----------------------------- |
@@ -62,7 +62,7 @@ We recommend to deploy Clustron with docker container.
 
 You can find the docker images on https://hub.docker.com/r/nycusdc/clustron-backend
 
-Tag `stage` for latested released stable version. Tag `dev` for development version.
+Tag `stage` for latest released stable version. Tag `dev` for development version.
 
 ```yaml
 name: clustron
@@ -110,7 +110,7 @@ services:
 ## Configuration
 
 The backend can be configured via environment variables, config file and flags.
-We recommend to use the environment varialbles the configure.
+We recommend to configure with environment variables.
 
 ### General
 
