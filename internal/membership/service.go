@@ -86,20 +86,27 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 	}
 }
 
-func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sortDir string, sortBy string) ([]MemberResponse, error) {
+func (s *Service) ListWithPaged(ctx context.Context, userID, groupID uuid.UUID, page int, size int, sortDir string, sortBy string) ([]MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// check if the user has access to the group (group owner or group admin)
-	if !s.HasGroupControlAccess(traceCtx, groupId) {
+	exists, err := s.Exists(traceCtx, userID, groupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupID.String(), userID.String()), logger, "check if user has access to the group")
+		logger.Error("check if user has access to the group failed", zap.Error(err))
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		logger.Warn("user does not have access to the group")
 		return nil, handlerutil.ErrForbidden
 	}
 
 	// get base group member list from LDAP
-	ldapBaseGroupCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupId)
+	ldapBaseGroupCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP base group CN by group ID")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "get LDAP base group CN by group ID")
 		logger.Error("get ldap base group cn failed", zap.Error(err))
 		span.RecordError(err)
 		return nil, err
@@ -113,9 +120,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	}
 
 	// get admin group member list from LDAP
-	ldapAdminGroupCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupId)
+	ldapAdminGroupCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP admin group CN by group ID")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupID.String(), logger, "get LDAP admin group CN by group ID")
 		logger.Error("get ldap admin group cn failed", zap.Error(err))
 		span.RecordError(err)
 		return nil, err
@@ -151,9 +158,9 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		logger.Warn("failed to fetch user IDs from DB, proceeding with LDAP data only", zap.Error(err))
 	}
 
-	dbGroupMember, err := s.queries.GetAll(traceCtx, groupId)
+	dbGroupMember, err := s.queries.GetAll(traceCtx, groupID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id", groupId.String(), logger, "get all group members")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id", groupID.String(), logger, "get all group members")
 		logger.Error("get all group members failed", zap.Error(err))
 		span.RecordError(err)
 		return nil, err
@@ -173,7 +180,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 			res.Email = userInfo.Email
 			res.StudentID = userInfo.StudentID.String
 			res.OnlyInLDAP = false
-			member, err := s.GetByUser(traceCtx, userInfo.ID, groupId)
+			member, err := s.GetByUser(traceCtx, userInfo.ID, groupID)
 			if err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					res.Role = grouprole.RoleResponse{
@@ -806,6 +813,24 @@ func (s *Service) Update(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 			AccessLevel: roleResponse.AccessLevel,
 		},
 	}, nil
+}
+
+func (s *Service) Exists(ctx context.Context, groupId uuid.UUID, userId uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Exists")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.queries.Exists(traceCtx, ExistsParams{
+		GroupID: groupId,
+		UserID:  userId,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupId.String(), userId.String()), logger, "failed to check if membership exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (s *Service) updateRole(ctx context.Context, tx pgx.Tx, groupId uuid.UUID, userId uuid.UUID, role uuid.UUID) (Membership, error) {
