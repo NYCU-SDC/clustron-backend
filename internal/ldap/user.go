@@ -3,6 +3,7 @@ package ldap
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-ldap/ldap/v3"
 	"go.uber.org/zap"
@@ -78,16 +79,20 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 
 func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
-	filter := "(|"
+	var filter strings.Builder
+	filter.WriteString("(|")
 	for _, uid := range uids {
-		filter += fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
+		_, err := fmt.Fprintf(&filter, "(uid=%s)", ldap.EscapeFilter(uid))
+		if err != nil {
+			return nil, err
+		}
 	}
-	filter += ")"
+	filter.WriteString(")")
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
 	}
 
-	result, err := c.SearchByFilter(base, filter, attributes)
+	result, err := c.SearchByFilter(base, filter.String(), attributes)
 	if err != nil {
 		c.Logger.Error("failed to search users", zap.Error(err))
 		return nil, fmt.Errorf("failed to search users: %w", err)

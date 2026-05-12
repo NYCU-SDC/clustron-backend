@@ -51,7 +51,7 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 	testCases := []struct {
 		name         string
 		refreshToken jwt.RefreshToken
-		userRowVals  []interface{}
+		userRowVals  []any
 		expired      bool
 		expectErr    bool
 		errContains  string
@@ -60,7 +60,7 @@ func TestService_GetUserByRefreshToken(t *testing.T) {
 		{
 			name:         "valid refresh token",
 			refreshToken: jwt.RefreshToken{ID: id, UserID: id, IsActive: pgtype.Bool{Bool: true, Valid: true}, ExpirationDate: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}},
-			userRowVals:  []interface{}{user.ID, user.Email, user.Role, user.FullName, user.StudentID, user.CreatedAt, user.UpdatedAt},
+			userRowVals:  []any{user.ID, user.Email, user.Role, user.FullName, user.StudentID, user.CreatedAt, user.UpdatedAt},
 			expired:      false,
 			expectErr:    false,
 			setupMock: func() {

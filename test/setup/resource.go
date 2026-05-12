@@ -3,24 +3,24 @@ package setup
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"sync"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ory/dockertest/v4"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type ResourceManager struct {
 	mu     sync.Mutex
 	logger *zap.Logger
 
-	pool     *dockertest.Pool
+	pool     dockertest.ClosablePool
 	postgres *pgxpool.Pool
 
-	resources map[string]*dockertest.Resource
-	cleanups  []func()
+	cleanups []func()
 }
 
 // SetupPostgres ensures that a PostgreSQL container is running and returns a new transaction.
@@ -32,34 +32,31 @@ type ResourceManager struct {
 //
 //	tx, rollback, err := rm.SetupPostgres()
 //	defer rollback()
-func (r *ResourceManager) SetupPostgres() (pgx.Tx, func(), error) {
-	if r.postgres == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
+func (r *ResourceManager) SetupPostgres(t *testing.T) pgx.Tx {
+	t.Helper()
 
-		pool, _, cleanup, err := setupPostgresWithMigrations(r.pool, r.logger, "file://../../internal/database/migrations")
-		if err != nil {
-			return nil, nil, err
-		}
+	r.mu.Lock()
+	if r.postgres == nil {
+
+		pool, _, cleanup, err := setupPostgresWithMigrations(r.pool, r.logger)
+		require.NoError(t, err, "Failed to set up PostgreSQL")
 
 		r.postgres = pool
-		r.resources = make(map[string]*dockertest.Resource)
 		r.cleanups = append(r.cleanups, cleanup)
 	}
+	r.mu.Unlock()
 
 	tx, err := r.postgres.Begin(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
+	require.NoError(t, err, "Failed to begin transaction")
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		err := tx.Rollback(context.Background())
 		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			r.logger.Error("Failed to rollback transaction", zap.Error(err))
 		}
-	}
+	})
 
-	return tx, cleanup, nil
+	return tx
 }
 
 // WithPostgresTx provides a convenient way to run a test within a PostgreSQL transaction.
@@ -81,36 +78,42 @@ func (r *ResourceManager) SetupPostgres() (pgx.Tx, func(), error) {
 //
 // The transaction will always be rolled back, even if the test fails or panics.
 func (r *ResourceManager) WithPostgresTx(t *testing.T, fn func(tx pgx.Tx)) {
-	tx, cleanup, err := r.SetupPostgres()
-	require.NoError(t, err)
-	defer cleanup()
+	tx := r.SetupPostgres(t)
 
 	fn(tx)
 }
 
-func (r *ResourceManager) Cleanup() {
-	for _, c := range r.cleanups {
-		c()
+func (r *ResourceManager) Cleanup(ctx context.Context) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.postgres != nil {
+		r.postgres.Close()
+		r.postgres = nil
 	}
 
-	for _, resource := range r.resources {
-		err := r.pool.Purge(resource)
-		if err != nil {
-			r.logger.Error("Failed to purge resource", zap.Error(err))
+	for i := len(r.cleanups) - 1; i >= 0; i-- {
+		r.cleanups[i]()
+	}
+	r.cleanups = nil
+
+	if r.pool != nil {
+		if err := r.pool.Close(ctx); err != nil {
+			r.logger.Error("Failed to close pool", zap.Error(err))
 		}
 	}
 }
 
 func NewResourceManager(logger *zap.Logger) (*ResourceManager, error) {
-	pool, err := dockertest.NewPool("")
+	ctx := context.Background()
+	pool, err := dockertest.NewPool(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 
 	return &ResourceManager{
-		pool:      pool,
-		logger:    logger,
-		resources: make(map[string]*dockertest.Resource),
-		cleanups:  make([]func(), 0),
+		pool:     pool,
+		logger:   logger,
+		cleanups: make([]func(), 0),
 	}, nil
 }
