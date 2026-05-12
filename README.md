@@ -23,7 +23,7 @@ Clustron depend the following services to work properly.
 ## LDAP Initialization
 
 Clustron require specific class and path to be exist in LDAP.
-The initialization `ldif` looks like bellow:
+The initialization `ldif` looks like below:
 
 ```ldif
 # ou=People
