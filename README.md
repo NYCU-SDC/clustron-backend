@@ -43,7 +43,7 @@ Substitute the `your_dc` part as needed.
 
 Clustron authorize login via 3rd-party OAuth service.
 
-For users to be able to login to the system, enable one of the following:
+Please set up one of the following OAuth service to let users to login the system:
 
 - Google OAuth
 - NYCU OAuth
@@ -60,7 +60,7 @@ For users to be able to import public keys from GitHub, enable GitHub OAuth Serv
 
 We recommend to deploy Clustron with docker container.
 
-You can find the docker images on https://hub.docker.com/r/nycusdc/clustron-backend
+You can find the docker images on https://hub.docker.com/r/nycusdc/clustron-backend.
 
 Tag `stage` for latest released stable version. Tag `dev` for development version.
 
@@ -178,7 +178,7 @@ We recommend to configure with environment variables.
 | --------- | ----------------------------------------------- | -------- |
 | REDIS_URL | Address of the Redis server (e.g., `host:port`) | No       |
 
-# Get Started
+# Local Development
 
 ## Install Go
 
