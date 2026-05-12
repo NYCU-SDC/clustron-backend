@@ -166,6 +166,14 @@ We recommend to configure with environment variables.
 | SLURM_RESTFUL_BASE_URL | Base URL of the Slurm RESTful API node             | Yes      |
 | SLURM_RESTFUL_VERSION  | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
 
+**Slurm Token Helper** is a service that retrieves a Slurm JWT token for Slurm RESTful API access.
+
+Set `SLURM_TOKEN_HELPER_URL` to the URL of your Slurm Token Helper instance.
+
+Clustron communicates with Slurm via the Slurm RESTful API, which requires a JWT token for authentication. Unfortunately, tokens can only be obtained via CLI. We built a minimal service to expose token retrieval as an API endpoint so that the backend can authenticate with the Slurm RESTful API.
+
+You can get the Slurm Token Helper here: https://github.com/NYCU-SDC/slurm-token-helper.
+
 ### Observability
 
 | Variable           | Description                                          | Required |
