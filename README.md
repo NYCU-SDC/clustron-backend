@@ -4,7 +4,7 @@
 
 This is the backend of NYCU SDC Clustron Project.
 
-We aim to create a service to visuallize the LDAP access managing, Slurm operation, and resource usage on remote computer cluster.
+We aim to create a service to visualize the LDAP access managing, Slurm operation, and resource usage on remote computer cluster.
 
 # Table of Content
 
@@ -15,14 +15,14 @@ We aim to create a service to visuallize the LDAP access managing, Slurm operati
 
 ## Dependent Services
 
-Clustron depend the following services to work properly.
+Clustron depends on the following services to work properly.
 
 1. Postgres 18: for data storage.
 2. OpenLDAP 1.5.0: one of the main purpose of Clustron is to manage system user account with LDAP.
 
 ## LDAP Initialization
 
-Clustron require specific class and path to be exist in LDAP.
+Clustron requires specific class and path to exist in LDAP.
 The initialization `ldif` looks like below:
 
 ```ldif
@@ -234,7 +234,7 @@ go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 go install github.com/vektra/mockery/v3@v3.7.0
 ```
 
-You can also find more OS-spacific installing methods from the documentation.
+You can also find more OS-specific installing methods from the documentation.
 
 ## Run the backend
 
@@ -256,7 +256,7 @@ The binary file will be `./bin/backend`.
 
 ## Pre-push hook (Optional)
 
-We recommand you enable the pre-push hook if wish to commit to this repository.
+We recommend you enable the pre-push hook if wish to commit to this repository.
 This will run checks before the code is pushed to the remote.
 
 The pre-push hook is run via [lefthook](https://lefthook.dev).
@@ -273,17 +273,17 @@ brew install lefthook
 go install github.com/evilmartians/lefthook@latest
 ```
 
-You can also find more OS-spacific installing methods from the documentation.
+You can also find more OS-specific installing methods from the documentation.
 
 After installed lefthook, update git hook to use lefthook:
 
 ```bash
 # run at project root
-left hook install
+lefthook install
 ```
 
 Then you are good to go!
-The pre-push checks will be envoked when you do `git push`.
+The pre-push checks will be invoked when you do `git push`.
 
 If the checks didn't pass, the push will be blocked.
 
@@ -296,7 +296,7 @@ git push origin --no-verify
 To disable pre-push action until re-open it:
 
 ```bash
-left hook uninstall
+lefthook uninstall
 ```
 
 ## Generate Call Graph (flow-chart)
