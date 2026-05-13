@@ -1,6 +1,7 @@
 package slurm
 
 import (
+	"bufio"
 	"bytes"
 	"clustron-backend/internal/setting"
 	"context"
@@ -32,6 +33,18 @@ type redisClient interface {
 
 type settingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
+}
+
+type CreateUserAssociationResponse struct {
+	AddedUsers     []string
+	DefaultAccount string
+	Associations   []Association
+}
+
+type createAccountAssociationResponse struct {
+	AddedAccounts []string
+	Description   string
+	Organization  string
 }
 
 type Service struct {
@@ -1102,4 +1115,129 @@ func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	}
 
 	return nil
+}
+
+func ParseUserAssociationResponse(input string) CreateUserAssociationResponse {
+	var result CreateUserAssociationResponse
+
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	var section string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" {
+			continue
+		}
+
+		// Detect section headers (single leading space, no leading double space)
+		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
+			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
+			section = strings.ToLower(header)
+			continue
+		}
+
+		// Parse content lines (double leading space = content under a section)
+		switch section {
+			case "adding user(s)":
+				result.AddedUsers = append(result.AddedUsers, trimmed)
+
+			case "settings":
+				key, value, found := strings.Cut(trimmed, "=")
+				if !found {
+					continue
+				}
+				key = strings.TrimSpace(key)
+				value = strings.TrimSpace(value)
+				if strings.EqualFold(key, "Default Account") {
+					result.DefaultAccount = value
+				}
+
+			case "associations":
+			if assoc, ok := ParseAssociation(trimmed); ok {
+				result.Associations = append(result.Associations, assoc)
+			}
+		}
+	}
+
+	return result
+}
+
+func parseAccounts(input string) createAccountAssociationResponse {
+	var result createAccountAssociationResponse
+
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	var section string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" {
+			continue
+		}
+
+		// Root-level line (no leading space): freeform messages
+		if !strings.HasPrefix(line, " ") {
+			continue
+		}
+
+		// Section header: exactly 1 leading space
+		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
+			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
+			section = strings.ToLower(strings.TrimSpace(header))
+			continue
+		}
+
+		// Content line: 2+ leading spaces
+		switch section {
+			case "adding account(s)":
+				result.AddedAccounts = append(result.AddedAccounts, trimmed)
+
+			case "settings":
+				key, value, found := strings.Cut(trimmed, "=")
+				if !found {
+					continue
+				}
+				key = strings.TrimSpace(key)
+				value = strings.TrimSpace(value)
+				switch strings.ToLower(key) {
+					case "description":
+						result.Description = value
+					case "organization":
+						result.Organization = value
+				}
+
+
+		}
+	}
+
+	return result
+}
+
+// parseAssociation parses "C = head       A = base" into an Association.
+func ParseAssociation(line string) (Association, bool) {
+	var assoc Association
+
+	fields := strings.Fields(line) // ["C", "=", "head", "A", "=", "base"]
+	for i := 0; i+2 < len(fields); i++ {
+		if fields[i+1] != "=" {
+			continue
+		}
+		switch strings.ToUpper(fields[i]) {
+			case "C":
+				assoc.Cluster = fields[i+2]
+			case "A":
+				assoc.Account = fields[i+2]
+			case "U":
+				assoc.User = fields[i+2]
+		}
+		i += 2
+	}
+
+	if assoc.Cluster == "" && assoc.Account == "" {
+		return assoc, false
+	}
+	return assoc, true
 }
