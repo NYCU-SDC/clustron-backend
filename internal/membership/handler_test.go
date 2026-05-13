@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -265,15 +266,15 @@ func TestHandler_UpdateGroupMemberHandler(t *testing.T) {
 func TestHandler_ListGroupMembersPagedHandler(t *testing.T) {
 	testCases := []struct {
 		name           string
-		setupMock      func(store *mocks.Store, userID, groupID uuid.UUID)
+		setupMock      func(store *mocks.Store, user *jwt.User, groupID uuid.UUID)
 		resourceID     string
 		user           *jwt.User
 		expectedStatus int
 	}{
 		{
 			name: "Valid request lists group members",
-			setupMock: func(store *mocks.Store, userID, groupID uuid.UUID) {
-				store.On("ListWithPaged", mock.Anything, userID, groupID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.MemberResponse{
+			setupMock: func(store *mocks.Store, user *jwt.User, groupID uuid.UUID) {
+				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.MemberResponse{
 					{
 						ID: uuid.New(),
 					},
@@ -286,10 +287,19 @@ func TestHandler_ListGroupMembersPagedHandler(t *testing.T) {
 		},
 		{
 			name:           "Invalid resource ID returns bad request",
-			setupMock:      func(store *mocks.Store, userID, groupID uuid.UUID) {},
+			setupMock:      func(store *mocks.Store, user *jwt.User, groupID uuid.UUID) {},
 			resourceID:     "invalid-uuid",
 			user:           &jwt.User{ID: uuid.New(), Role: role.Admin.String()},
 			expectedStatus: 400,
+		},
+		{
+			name: "Does not exists member returns forbidden",
+			setupMock: func(store *mocks.Store, user *jwt.User, groupID uuid.UUID) {
+				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, handlerutil.ErrForbidden)
+			},
+			resourceID:     uuid.New().String(),
+			user:           &jwt.User{ID: uuid.New(), Role: role.User.String()},
+			expectedStatus: 403,
 		},
 	}
 
@@ -303,7 +313,7 @@ func TestHandler_ListGroupMembersPagedHandler(t *testing.T) {
 
 			resourceID, err := uuid.Parse(tc.resourceID)
 			if tc.setupMock != nil && err == nil {
-				tc.setupMock(store, tc.user.ID, resourceID)
+				tc.setupMock(store, tc.user, resourceID)
 			}
 
 			h := membership.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)

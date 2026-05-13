@@ -86,21 +86,23 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 	}
 }
 
-func (s *Service) ListWithPaged(ctx context.Context, userID, groupID uuid.UUID, page int, size int, sortDir string, sortBy string) ([]MemberResponse, error) {
+func (s *Service) ListWithPaged(ctx context.Context, userID, groupID uuid.UUID, globalRole string, page int, size int, sortDir string, sortBy string) ([]MemberResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.Exists(traceCtx, userID, groupID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupID.String(), userID.String()), logger, "check if user has access to the group")
-		logger.Error("check if user has access to the group failed", zap.Error(err))
-		span.RecordError(err)
-		return nil, err
-	}
-	if !exists {
-		logger.Warn("user does not have access to the group")
-		return nil, handlerutil.ErrForbidden
+	if globalRole != role.Admin.String() {
+		exists, err := s.Exists(traceCtx, groupID, userID)
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupID.String(), userID.String()), logger, "check if user has access to the group")
+			logger.Error("check if user has access to the group failed", zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+		if !exists {
+			logger.Warn("user does not have access to the group")
+			return nil, handlerutil.ErrForbidden
+		}
 	}
 
 	// get base group member list from LDAP
