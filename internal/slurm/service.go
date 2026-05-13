@@ -35,26 +35,28 @@ type settingStore interface {
 }
 
 type Service struct {
-	logger              *zap.Logger
-	tracer              trace.Tracer
-	slurmRestfulBaseURL string
-	slurmTokenHelperURL string
-	slurmRootToken      string
-	httpClient          *http.Client
-	redisClient         redisClient
+	logger               *zap.Logger
+	tracer               trace.Tracer
+	slurmRestfulBaseURL  string
+	slurmDatabaseBaseURL string
+	slurmTokenHelperURL  string
+	slurmRootToken       string
+	httpClient           *http.Client
+	redisClient          redisClient
 
 	settingStore settingStore
 }
 
 func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
-		logger:              logger,
-		tracer:              otel.Tracer("slurm/service"),
-		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmTokenHelperURL: slurmTokenHelperURL,
-		slurmRootToken:      slurmRootToken,
-		httpClient:          &http.Client{},
-		redisClient:         redisClient,
+		logger:               logger,
+		tracer:               otel.Tracer("slurm/service"),
+		slurmRestfulBaseURL:  fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmDatabaseBaseURL: fmt.Sprintf("%s/slurmdb/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmTokenHelperURL:  slurmTokenHelperURL,
+		slurmRootToken:       slurmRootToken,
+		httpClient:           &http.Client{},
+		redisClient:          redisClient,
 
 		settingStore: settingStore,
 	}
@@ -445,7 +447,7 @@ func (s *Service) CreateUser(ctx context.Context, users []User) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/users", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/users", s.slurmDatabaseBaseURL)
 
 	userRequest := UserRequest{
 		Users: users,
@@ -528,7 +530,7 @@ func (s *Service) CreateAccount(ctx context.Context, accounts []Account) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/accounts", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/accounts", s.slurmDatabaseBaseURL)
 
 	accountRequest := AccountRequest{
 		Accounts: accounts,
@@ -611,7 +613,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associations []Associat
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/associations", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/associations", s.slurmDatabaseBaseURL)
 
 	associationRequest := AssociationRequest{
 		Associations: associations,
@@ -694,7 +696,7 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/users_association", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/users_association", s.slurmDatabaseBaseURL)
 
 	request := UserAssociationRequest{
 		AssociationCondition: UserAddCondition{
@@ -782,7 +784,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/accounts_association", s.slurmRestfulBaseURL)
+	requestPath := fmt.Sprintf("%s/accounts_association", s.slurmDatabaseBaseURL)
 
 	request := AccountAssociationRequest{
 		AssociationCondition: AccountAddCondition{
@@ -869,7 +871,7 @@ func (s *Service) DeleteUser(ctx context.Context, userName string) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/user/%s", s.slurmRestfulBaseURL, userName)
+	requestPath := fmt.Sprintf("%s/user/%s", s.slurmDatabaseBaseURL, userName)
 
 	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
 	if err != nil {
@@ -940,7 +942,7 @@ func (s *Service) DeleteAccount(ctx context.Context, accountName string) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf("%s/account/%s", s.slurmRestfulBaseURL, accountName)
+	requestPath := fmt.Sprintf("%s/account/%s", s.slurmDatabaseBaseURL, accountName)
 
 	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
 	if err != nil {
@@ -1011,7 +1013,7 @@ func (s *Service) DeleteAssociation(ctx context.Context, userName, accountName s
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 	// Delete association between designated user and account
-	requestPath := fmt.Sprintf("%s/associations/?user=%s&account=%s", s.slurmRestfulBaseURL, userName, accountName)
+	requestPath := fmt.Sprintf("%s/associations/?user=%s&account=%s", s.slurmDatabaseBaseURL, userName, accountName)
 
 	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
 	if err != nil {

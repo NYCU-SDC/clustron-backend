@@ -2,6 +2,8 @@ package config
 
 import (
 	"clustron-backend/internal/ldap"
+	"clustron-backend/internal/slurm"
+	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"encoding/base64"
 	"encoding/json"
@@ -25,39 +27,32 @@ var (
 	ErrSlurmTokenHelperURLRequired = errors.New("slurm_token_helper_url is required")
 )
 
-type PresetUserInfo struct {
-	Role string `yaml:"role"`
-}
-
 type Config struct {
-	Debug                   bool                      `yaml:"debug"              envconfig:"DEBUG"`
-	Host                    string                    `yaml:"host"               envconfig:"HOST"`
-	Port                    string                    `yaml:"port"               envconfig:"PORT"`
-	BaseURL                 string                    `yaml:"base_url"          envconfig:"BASE_URL"`
-	OAuthProxyBaseURL       string                    `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
-	OAuthProxySecret        string                    `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
-	Secret                  string                    `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL             string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	SlurmTokenHelperURL     string                    `yaml:"slurm_token_helper_url"          envconfig:"SLURM_TOKEN_HELPER_URL"`
-	SlurmRestfulBaseURL     string                    `yaml:"slurm_restful_base_url"          envconfig:"SLURM_RESTFUL_BASE_URL"`
-	SlurmRestfulVersion     string                    `yaml:"slurm_restful_version"          envconfig:"SLURM_RESTFUL_VERSION"`
-	SlurmRootToken          string                    `yaml:"slurm_root_token" envconfig:"SLURM_ROOT_TOKEN"`
-	MigrationSource         string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	CasbinPolicySource      string                    `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
-	CasbinModelSource       string                    `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
-	RedisURL                string                    `yaml:"redis_url"          envconfig:"REDIS_URL"`
-	OtelCollectorUrl        string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	GoogleOauthClientID     string                    `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
-	GoogleOauthClientSecret string                    `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
-	GithubOauthClientID     string                    `yaml:"github_oauth_client_id"    envconfig:"GITHUB_OAUTH_CLIENT_ID"`
-	GithubOauthClientSecret string                    `yaml:"github_oauth_client_secret" envconfig:"GITHUB_OAUTH_CLIENT_SECRET"`
-	NYCUOauthClientID       string                    `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
-	NYCUOauthClientSecret   string                    `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
-	AllowOrigins            []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
-	PresetUser              map[string]PresetUserInfo `yaml:"preset_user"`
-	LDAP                    ldap.Config               `yaml:"ldap"`
-	EnableInternalLogin     bool                      `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
-	LinuxUsernameBlacklist  []string                  `yaml:"linux_username_blacklist" envconfig:"LINUX_USERNAME_BLACKLIST"`
+	Debug                   bool                           `yaml:"debug"              envconfig:"DEBUG"`
+	Host                    string                         `yaml:"host"               envconfig:"HOST"`
+	Port                    string                         `yaml:"port"               envconfig:"PORT"`
+	BaseURL                 string                         `yaml:"base_url"          envconfig:"BASE_URL"`
+	OAuthProxyBaseURL       string                         `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
+	OAuthProxySecret        string                         `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
+	Secret                  string                         `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL             string                         `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	Slurm                   slurm.Config                   `yaml:"slurm"`
+	MigrationSource         string                         `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	CasbinPolicySource      string                         `yaml:"casbin_policy_source" envconfig:"CASBIN_POLICY_SOURCE"`
+	CasbinModelSource       string                         `yaml:"casbin_model_source"   envconfig:"CASBIN_MODEL_SOURCE"`
+	RedisURL                string                         `yaml:"redis_url"          envconfig:"REDIS_URL"`
+	OtelCollectorUrl        string                         `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	GoogleOauthClientID     string                         `yaml:"google_oauth_client_id"    envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOauthClientSecret string                         `yaml:"google_oauth_client_secret" envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	GithubOauthClientID     string                         `yaml:"github_oauth_client_id"    envconfig:"GITHUB_OAUTH_CLIENT_ID"`
+	GithubOauthClientSecret string                         `yaml:"github_oauth_client_secret" envconfig:"GITHUB_OAUTH_CLIENT_SECRET"`
+	NYCUOauthClientID       string                         `yaml:"nycu_oauth_client_id"    envconfig:"NYCU_OAUTH_CLIENT_ID"`
+	NYCUOauthClientSecret   string                         `yaml:"nycu_oauth_client_secret" envconfig:"NYCU_OAUTH_CLIENT_SECRET"`
+	AllowOrigins            []string                       `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
+	PresetUser              map[string]user.PresetUserInfo `yaml:"preset_user"`
+	LDAP                    ldap.Config                    `yaml:"ldap"`
+	EnableInternalLogin     bool                           `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
+	LinuxUsernameBlacklist  []string                       `yaml:"linux_username_blacklist" envconfig:"LINUX_USERNAME_BLACKLIST"`
 }
 
 type LogBuffer struct {
@@ -102,8 +97,8 @@ func (c *Config) Validate() error {
 		return ErrDatabaseURLRequired
 	}
 
-	for _, user := range c.PresetUser {
-		if !role.IsValidGlobalRole(user.Role) {
+	for _, u := range c.PresetUser {
+		if !role.IsValidGlobalRole(u.Role) {
 			return ErrInvalidUserRole
 		}
 	}
@@ -182,7 +177,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 
 	// parse the preset user config from environment variable
 	var res []PresetUserJson
-	config.PresetUser = make(map[string]PresetUserInfo)
+	config.PresetUser = make(map[string]user.PresetUserInfo)
 
 	presetUserString := os.Getenv("PRESET_USER") // encode with base64
 
@@ -198,12 +193,12 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			return config, err
 		}
 
-		for _, user := range res {
-			if !role.IsValidGlobalRole(user.Role) {
-				logger.Warn("Invalid user role in PRESET_USER", ErrInvalidUserRole, map[string]string{"user": user.User, "role": user.Role})
+		for _, u := range res {
+			if !role.IsValidGlobalRole(u.Role) {
+				logger.Warn("Invalid user role in PRESET_USER", ErrInvalidUserRole, map[string]string{"user": u.User, "role": u.Role})
 				return config, ErrInvalidUserRole
 			}
-			config.PresetUser[user.User] = PresetUserInfo{Role: user.Role}
+			config.PresetUser[u.User] = user.PresetUserInfo{Role: u.Role}
 		}
 	}
 
@@ -214,17 +209,20 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 	}
 
 	envConfig := &Config{
-		Debug:                   os.Getenv("DEBUG") == "true",
-		Host:                    os.Getenv("HOST"),
-		Port:                    os.Getenv("PORT"),
-		BaseURL:                 os.Getenv("BASE_URL"),
-		OAuthProxyBaseURL:       os.Getenv("OAUTH_PROXY_BASE_URL"),
-		OAuthProxySecret:        os.Getenv("OAUTH_PROXY_SECRET"),
-		Secret:                  os.Getenv("SECRET"),
-		DatabaseURL:             os.Getenv("DATABASE_URL"),
-		SlurmTokenHelperURL:     os.Getenv("SLURM_TOKEN_HELPER_URL"),
-		SlurmRestfulBaseURL:     os.Getenv("SLURM_RESTFUL_BASE_URL"),
-		SlurmRestfulVersion:     os.Getenv("SLURM_RESTFUL_VERSION"),
+		Debug:             os.Getenv("DEBUG") == "true",
+		Host:              os.Getenv("HOST"),
+		Port:              os.Getenv("PORT"),
+		BaseURL:           os.Getenv("BASE_URL"),
+		OAuthProxyBaseURL: os.Getenv("OAUTH_PROXY_BASE_URL"),
+		OAuthProxySecret:  os.Getenv("OAUTH_PROXY_SECRET"),
+		Secret:            os.Getenv("SECRET"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		Slurm: slurm.Config{
+			SlurmRootToken:      os.Getenv("SLURM_ROOT_TOKEN"),
+			SlurmTokenHelperURL: os.Getenv("SLURM_TOKEN_HELPER_URL"),
+			SlurmRestfulBaseURL: os.Getenv("SLURM_RESTFUL_BASE_URL"),
+			SlurmRestfulVersion: os.Getenv("SLURM_RESTFUL_VERSION"),
+		},
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
 		CasbinModelSource:       os.Getenv("CASBIN_MODEL_SOURCE"),
@@ -261,9 +259,10 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OAuthProxySecret, "oauth_proxy_secret", "", "OAuth proxy secret")
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
-	flag.StringVar(&flagConfig.SlurmTokenHelperURL, "slurm_token_helper_url", "", "slurm token helper url")
-	flag.StringVar(&flagConfig.SlurmRestfulBaseURL, "slurm_restful_base_url", "", "slurm restful base url")
-	flag.StringVar(&flagConfig.SlurmRestfulVersion, "slurm_restful_version", "", "slurm restful version")
+	flag.StringVar(&flagConfig.Slurm.SlurmTokenHelperURL, "slurm_token_helper_url", "", "slurm token helper url")
+	flag.StringVar(&flagConfig.Slurm.SlurmRestfulBaseURL, "slurm_restful_base_url", "", "slurm restful base url")
+	flag.StringVar(&flagConfig.Slurm.SlurmRestfulVersion, "slurm_restful_version", "", "slurm restful version")
+	flag.StringVar(&flagConfig.Slurm.SlurmRootToken, "slurm_root_token", "", "slurm root token")
 	flag.StringVar(&flagConfig.MigrationSource, "migration_source", "", "migration source")
 	flag.StringVar(&flagConfig.CasbinPolicySource, "casbin_policy_source", "", "casbin policy source")
 	flag.StringVar(&flagConfig.CasbinModelSource, "casbin_model_source", "", "casbin model source")
