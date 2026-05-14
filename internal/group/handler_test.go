@@ -176,6 +176,9 @@ func TestHandler_UpdateTitleHandler(t *testing.T) {
 				requestBody = tc.customBody
 			} else {
 				requestBody, err = json.Marshal(tc.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
@@ -292,6 +295,9 @@ func TestHandler_UpdateDescriptionHandler(t *testing.T) {
 				requestBody = tc.customBody
 			} else {
 				requestBody, err = json.Marshal(tc.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
 			}
 
 			h := group.NewHandler(logger, validator.New(), internal.NewProblemWriter(), store, nil)
