@@ -62,7 +62,11 @@ FROM memberships AS m
 JOIN group_role AS gr ON gr.id = m.role_id
 JOIN users AS u ON u.id = m.user_id
 LEFT JOIN ldap_user AS l ON l.id = u.id
-WHERE group_id = $1;
+WHERE group_id = $1 AND (
+    u.full_name ILIKE '%' || @search::TEXT || '%' OR
+    u.email ILIKE '%' || @search::TEXT || '%' OR
+    u.student_id ILIKE '%' || @search::TEXT || '%'
+);
 
 -- name: GetByUser :one
 SELECT
@@ -140,7 +144,7 @@ SELECT
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
-WHERE pm.group_id = $1
+WHERE pm.group_id = $1 AND (pm.user_identifier ILIKE '%' || @search::TEXT || '%')
 ORDER BY gr.role_name DESC
 LIMIT @Size OFFSET @Skip;
 
@@ -154,9 +158,14 @@ SELECT
     gr.access_level
 FROM pending_memberships AS pm
 JOIN group_role AS gr ON gr.id = pm.role_id
-WHERE pm.group_id = $1
+WHERE pm.group_id = $1 AND (pm.user_identifier ILIKE '%' || @search::TEXT || '%')
 ORDER BY gr.role_name ASC
 LIMIT @Size OFFSET @Skip;
+
+-- name: CountPendingMembersWithSearch :one
+SELECT COUNT(*)
+FROM pending_memberships
+WHERE group_id = $1 AND (user_identifier ILIKE '%' || @search::TEXT || '%');
 
 -- name: CountPendingByGroupID :one
 SELECT COUNT(*) FROM pending_memberships

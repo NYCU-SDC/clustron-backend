@@ -18,6 +18,8 @@ type LDAPClient interface {
 	DeleteSSHPublicKey(uid string, publicKey string) error
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	GetGroupInfo(groupName string) (*ldap.Entry, error)
+	GetAllUserByUIDList(uidList []string) ([]*ldap.Entry, error)
+	SearchUserByUIDList(uidList []string, query string) ([]*ldap.Entry, error)
 	RemoveUserFromGroup(groupName, memberUid string) error
 	ExistSSHPublicKey(publicKey string) (bool, error)
 	GetAllUIDNumbers() ([]string, error)

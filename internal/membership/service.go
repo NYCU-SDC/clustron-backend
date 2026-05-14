@@ -57,6 +57,7 @@ type LDAPClient interface {
 	RemoveUserFromGroup(groupCN string, username string) error
 	GetGroupInfo(groupCN string) (*ldap.Entry, error)
 	GetAllUserByUIDList(uidList []string) ([]*ldap.Entry, error)
+	SearchUserByUIDList(uidList []string, query string) ([]*ldap.Entry, error)
 }
 
 type Service struct {
@@ -86,58 +87,102 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 	}
 }
 
-func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sortDir string, sortBy string) ([]MemberResponse, error) {
+func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sortDir string, sortBy string, search string) ([]MemberResponse, int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
 	if !s.HasGroupControlAccess(traceCtx, groupId) {
-		return nil, handlerutil.ErrForbidden
+		return nil, 0, handlerutil.ErrForbidden
 	}
 
-	// get base group member list from LDAP
+	membersMap := make(map[int64]MemberResponse)
+
+	// 1. Get all DB members of the group (Search DB first)
+	dbGroupMembers, err := s.queries.GetAll(traceCtx, GetAllParams{
+		GroupID: groupId,
+		Search:  search,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id", groupId.String(), logger, "get all group members")
+		logger.Error("get all group members failed", zap.Error(err))
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	for _, m := range dbGroupMembers {
+		if !m.UidNumber.Valid {
+			continue
+		}
+		membersMap[m.UidNumber.Int64] = MemberResponse{
+			ID:         m.UserID,
+			FullName:   m.FullName.String,
+			Email:      m.Email,
+			StudentID:  m.StudentID.String,
+			OnlyInLDAP: false,
+			UIDNumber:  m.UidNumber.Int64,
+			Role: grouprole.RoleResponse{
+				ID:          m.RoleID.String(),
+				RoleName:    m.RoleName,
+				AccessLevel: m.AccessLevel,
+			},
+		}
+	}
+
+	// 2. Get LDAP members matching the search query (Search LDAP second)
 	ldapBaseGroupCN, err := s.groupStore.GetLDAPBaseGroupCNByGroupID(traceCtx, groupId)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP base group CN by group ID")
 		logger.Error("get ldap base group cn failed", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return nil, 0, err
 	}
 
-	baseEntries, err := s.getLDAPMember(ldapBaseGroupCN)
+	baseEntries, err := s.getLDAPMember(ldapBaseGroupCN, search)
 	if err != nil {
 		logger.Error("get ldap base group info failed", zap.String("group_cn", ldapBaseGroupCN), zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return nil, 0, err
 	}
 
-	// get admin group member list from LDAP
 	ldapAdminGroupCN, err := s.groupStore.GetLDAPAdminGroupCNByGroupID(traceCtx, groupId)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_group", "group_id", groupId.String(), logger, "get LDAP admin group CN by group ID")
 		logger.Error("get ldap admin group cn failed", zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return nil, 0, err
 	}
 
-	adminEntries, err := s.getLDAPMember(ldapAdminGroupCN)
+	adminEntries, err := s.getLDAPMember(ldapAdminGroupCN, search)
 	if err != nil {
 		logger.Error("get ldap admin group info failed", zap.String("group_cn", ldapAdminGroupCN), zap.Error(err))
 		span.RecordError(err)
-		return nil, err
+		return nil, 0, err
 	}
-
-	ldapEntryMap := make(map[int64]*ldap.Entry)
-	allUIDNumbers := make([]int64, 0)
 
 	processEntries := func(entries []*ldap.Entry) {
 		for _, entry := range entries {
 			var uidNum int64
 			if _, err := fmt.Sscanf(entry.GetAttributeValue("uidNumber"), "%d", &uidNum); err == nil {
-				if _, exists := ldapEntryMap[uidNum]; !exists {
-					ldapEntryMap[uidNum] = entry
-					allUIDNumbers = append(allUIDNumbers, uidNum)
+				// If not in DB membersMap, add as LDAP only
+				if _, exists := membersMap[uidNum]; !exists {
+					membersMap[uidNum] = MemberResponse{
+						UIDNumber:  uidNum,
+						UID:        entry.GetAttributeValue("uid"),
+						FullName:   entry.GetAttributeValue("cn"),
+						OnlyInLDAP: true,
+						Role: grouprole.RoleResponse{
+							ID:          uuid.Nil.String(),
+							RoleName:    grouprole.RoleUnknown.String(),
+							AccessLevel: grouprole.AccessLevelUnknown.String(),
+						},
+					}
+				} else {
+					// Enrich DB record with LDAP UID
+					member := membersMap[uidNum]
+					member.UID = entry.GetAttributeValue("uid")
+					membersMap[uidNum] = member
 				}
 			}
 		}
@@ -146,86 +191,35 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	processEntries(baseEntries)
 	processEntries(adminEntries)
 
-	dbUserMap, err := s.settingStore.GetAllUserByUIDNumbers(traceCtx, allUIDNumbers)
-	if err != nil {
-		logger.Warn("failed to fetch user IDs from DB, proceeding with LDAP data only", zap.Error(err))
+	allMembers := make([]MemberResponse, 0, len(membersMap))
+	for _, m := range membersMap {
+		allMembers = append(allMembers, m)
 	}
 
-	dbGroupMember, err := s.queries.GetAll(traceCtx, groupId)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id", groupId.String(), logger, "get all group members")
-		logger.Error("get all group members failed", zap.Error(err))
-		span.RecordError(err)
-		return nil, err
-	}
-
-	allMembers := make([]MemberResponse, 0)
-	// Add members that are only in LDAP but not in DB, and also add members that are in both LDAP and DB
-	for uidNum, entry := range ldapEntryMap {
-		res := MemberResponse{
-			UIDNumber: uidNum,
-			UID:       entry.GetAttributeValue("uid"),
-		}
-
-		if userInfo, exist := dbUserMap[uidNum]; exist {
-			res.ID = userInfo.ID
-			res.FullName = userInfo.FullName.String
-			res.Email = userInfo.Email
-			res.StudentID = userInfo.StudentID.String
-			res.OnlyInLDAP = false
-			member, err := s.GetByUser(traceCtx, userInfo.ID, groupId)
-			if err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					res.Role = grouprole.RoleResponse{
-						ID:          uuid.Nil.String(),
-						RoleName:    grouprole.RoleUnknown.String(),
-						AccessLevel: grouprole.AccessLevelUnknown.String(),
-					}
-				}
-			}
-			res.Role = grouprole.RoleResponse{
-				ID:          member.ID.String(),
-				RoleName:    member.RoleName,
-				AccessLevel: member.AccessLevel,
-			}
-		} else {
-			res.OnlyInLDAP = true
-			res.FullName = entry.GetAttributeValue("cn")
-			res.Role = grouprole.RoleResponse{
-				ID:          uuid.Nil.String(),
-				RoleName:    grouprole.RoleUnknown.String(),
-				AccessLevel: grouprole.AccessLevelUnknown.String(),
-			}
-		}
-		allMembers = append(allMembers, res)
-	}
-
-	// Add members that are only in DB but not in LDAP
-	for _, member := range dbGroupMember {
-		if !member.UidNumber.Valid {
-			continue
-		}
-		if _, exist := ldapEntryMap[member.UidNumber.Int64]; !exist {
-			allMembers = append(allMembers, MemberResponse{
-				ID:         member.UserID,
-				FullName:   member.FullName.String,
-				Email:      member.Email,
-				StudentID:  member.StudentID.String,
-				OnlyInLDAP: false,
-				Role: grouprole.RoleResponse{
-					ID:          member.RoleID.String(),
-					RoleName:    member.RoleName,
-					AccessLevel: member.AccessLevel,
-				},
-			})
-		}
-	}
-
+	// 3. Implement Sorting based on sortBy and sortDir
 	sort.Slice(allMembers, func(i, j int) bool {
-		if sortDir == "desc" {
-			return allMembers[i].UIDNumber > allMembers[j].UIDNumber
+		var less bool
+		switch sortBy {
+		case "fullName":
+			less = allMembers[i].FullName < allMembers[j].FullName
+		case "email":
+			less = allMembers[i].Email < allMembers[j].Email
+		case "studentId":
+			less = allMembers[i].StudentID < allMembers[j].StudentID
+		case "uid":
+			less = allMembers[i].UID < allMembers[j].UID
+		case "uidNumber":
+			less = allMembers[i].UIDNumber < allMembers[j].UIDNumber
+		case "id":
+			less = allMembers[i].ID.String() < allMembers[j].ID.String()
+		default:
+			less = allMembers[i].UIDNumber < allMembers[j].UIDNumber
 		}
-		return allMembers[i].UIDNumber < allMembers[j].UIDNumber
+
+		if sortDir == "desc" {
+			return !less
+		}
+		return less
 	})
 
 	totalCount := len(allMembers)
@@ -233,7 +227,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 	endIndex := startIndex + size
 
 	if startIndex >= totalCount {
-		return []MemberResponse{}, nil
+		return []MemberResponse{}, totalCount, nil
 	}
 	if endIndex > totalCount {
 		endIndex = totalCount
@@ -241,7 +235,7 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 
 	pagedMembers := allMembers[startIndex:endIndex]
 
-	return pagedMembers, nil
+	return pagedMembers, totalCount, nil
 }
 
 func (s *Service) GetByUser(ctx context.Context, userId uuid.UUID, groupId uuid.UUID) (grouprole.GroupRole, error) {
@@ -1090,7 +1084,7 @@ func (s *Service) isGroupOwner(role grouprole.GroupRole) bool {
 	return role.AccessLevel == string(grouprole.AccessLevelOwner)
 }
 
-func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error) {
+func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, page int, size int, sort string, sortBy string, search string) ([]PendingMemberResponse, int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListPendingWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -1098,22 +1092,22 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 	// check if the user has access to the group (group owner or group admin)
 	if !s.HasGroupControlAccess(traceCtx, groupId) {
 		logger.Warn("The user's access is not allowed to control this group")
-		return nil, handlerutil.ErrForbidden
+		return nil, 0, handlerutil.ErrForbidden
 	}
 
 	var pendingMembers []PendingMemberResponse
 	if sort == "desc" {
 		params := ListPendingMembersDescPagedParams{
 			GroupID: groupId,
-			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
-			Size: int32(size),
-			Skip: int32(page) * int32(size),
+			Size:    int32(size),
+			Skip:    int32(page) * int32(size),
+			Search:  search,
 		}
 		res, err := s.queries.ListPendingMembersDescPaged(traceCtx, params)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "failed to list pending group members")
 			span.RecordError(err)
-			return nil, err
+			return nil, 0, err
 		}
 		pendingMembers = make([]PendingMemberResponse, len(res))
 		for i, member := range res {
@@ -1131,15 +1125,15 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 	} else {
 		params := ListPendingMembersAscPagedParams{
 			GroupID: groupId,
-			//Sortby:  sortBy,	//TODO: Implement various query with corresponding sortBy
-			Size: int32(size),
-			Skip: int32(page) * int32(size),
+			Size:    int32(size),
+			Skip:    int32(page) * int32(size),
+			Search:  search,
 		}
 		res, err := s.queries.ListPendingMembersAscPaged(traceCtx, params)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "failed to list pending group members")
 			span.RecordError(err)
-			return nil, err
+			return nil, 0, err
 		}
 		pendingMembers = make([]PendingMemberResponse, len(res))
 		for i, member := range res {
@@ -1156,7 +1150,17 @@ func (s *Service) ListPendingWithPaged(ctx context.Context, groupId uuid.UUID, p
 		}
 	}
 
-	return pendingMembers, nil
+	totalCount, err := s.queries.CountPendingMembersWithSearch(traceCtx, CountPendingMembersWithSearchParams{
+		GroupID: groupId,
+		Search:  search,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to count pending group members")
+		span.RecordError(err)
+		return nil, 0, err
+	}
+
+	return pendingMembers, int(totalCount), nil
 }
 
 func (s *Service) UpdatePending(ctx context.Context, groupId uuid.UUID, pendingId uuid.UUID, role uuid.UUID) (PendingMemberResponse, error) {
@@ -1341,11 +1345,14 @@ func (s *Service) ProcessPendingMemberships(ctx context.Context, userID uuid.UUI
 	return nil
 }
 
-func (s *Service) getLDAPMember(groupCN string) ([]*ldap.Entry, error) {
+func (s *Service) getLDAPMember(groupCN string, search string) ([]*ldap.Entry, error) {
 	entry, err := s.ldapClient.GetGroupInfo(groupCN)
 	if err != nil || entry == nil {
 		return nil, err
 	}
 	uids := entry.GetAttributeValues("memberUid")
+	if search != "" {
+		return s.ldapClient.SearchUserByUIDList(uids, search)
+	}
 	return s.ldapClient.GetAllUserByUIDList(uids)
 }
