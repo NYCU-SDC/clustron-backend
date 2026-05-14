@@ -34,17 +34,18 @@ type settingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
-type CreateUserAssociationResponse struct {
-	AddedUsers     []string
-	DefaultAccount string
-	Associations   []Association
-}
-
-type createAccountAssociationResponse struct {
-	AddedAccounts []string
-	Description   string
-	Organization  string
-}
+// TODO: parse response from endpoints /users_association and /accounts_association
+//type CreateUserAssociationResponse struct {
+//	AddedUsers     []string
+//	DefaultAccount string
+//	Associations   []Association
+//}
+//
+//type createAccountAssociationResponse struct {
+//	AddedAccounts []string
+//	Description   string
+//	Organization  string
+//}
 
 type Service struct {
 	logger               *zap.Logger
