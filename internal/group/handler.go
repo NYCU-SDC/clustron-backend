@@ -31,8 +31,8 @@ type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, title, description, ldapGroupName string) (Group, error)
-	UpdateTitle(ctx context.Context, groupID uuid.UUID, title string) (Group, error)
-	UpdateDescription(ctx context.Context, groupID uuid.UUID, description string) (Group, error)
+	UpdateTitle(ctx context.Context, groupID uuid.UUID, title string) (grouprole.GroupWithLdap, error)
+	UpdateDescription(ctx context.Context, groupID uuid.UUID, description string) (grouprole.GroupWithLdap, error)
 	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
@@ -348,6 +348,7 @@ func (h *Handler) UpdateTitleHandler(w http.ResponseWriter, r *http.Request) {
 	groupID, err := handlerutil.ParseUUID(groupIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	var request UpdateTitleRequest
@@ -360,15 +361,17 @@ func (h *Handler) UpdateTitleHandler(w http.ResponseWriter, r *http.Request) {
 	group, err := h.store.UpdateTitle(traceCtx, groupID, request.Title)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	groupResponse := Response{
-		ID:          group.ID.String(),
-		Title:       group.Title,
-		Description: group.Description.String,
-		IsArchived:  group.IsArchived.Bool,
-		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		ID:            group.ID.String(),
+		Title:         group.Title,
+		Description:   group.Description.String,
+		LDAPGroupName: group.LdapCn.String,
+		IsArchived:    group.IsArchived.Bool,
+		CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	groupRole, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
@@ -403,6 +406,7 @@ func (h *Handler) UpdateDescriptionHandler(w http.ResponseWriter, r *http.Reques
 	groupID, err := handlerutil.ParseUUID(groupIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	var request UpdateDescriptionRequest
@@ -415,15 +419,17 @@ func (h *Handler) UpdateDescriptionHandler(w http.ResponseWriter, r *http.Reques
 	group, err := h.store.UpdateDescription(traceCtx, groupID, request.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	groupResponse := Response{
-		ID:          group.ID.String(),
-		Title:       group.Title,
-		Description: group.Description.String,
-		IsArchived:  group.IsArchived.Bool,
-		CreatedAt:   group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		ID:            group.ID.String(),
+		Title:         group.Title,
+		Description:   group.Description.String,
+		LDAPGroupName: group.LdapCn.String,
+		IsArchived:    group.IsArchived.Bool,
+		CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	groupRole, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)

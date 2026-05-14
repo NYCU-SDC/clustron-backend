@@ -593,7 +593,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 	return newGroup, nil
 }
 
-func (s *Service) UpdateTitle(ctx context.Context, groupID uuid.UUID, title string) (Group, error) {
+func (s *Service) UpdateTitle(ctx context.Context, groupID uuid.UUID, title string) (grouprole.GroupWithLdap, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupTitle")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -603,7 +603,7 @@ func (s *Service) UpdateTitle(ctx context.Context, groupID uuid.UUID, title stri
 		err := handlerutil.ErrForbidden
 		logger.Warn("user does not have permission to update group title", zap.String("group_id", groupID.String()))
 		span.RecordError(err)
-		return Group{}, err
+		return grouprole.GroupWithLdap{}, err
 	}
 
 	updatedGroup, err := s.queries.UpdateTitle(ctx, UpdateTitleParams{
@@ -612,18 +612,18 @@ func (s *Service) UpdateTitle(ctx context.Context, groupID uuid.UUID, title stri
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Group{}, internal.ErrGroupNotFound
+			return grouprole.GroupWithLdap{}, internal.ErrGroupNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to update group title")
 		logger.Error("failed to update group title", zap.Error(err))
 		span.RecordError(err)
-		return Group{}, err
+		return grouprole.GroupWithLdap{}, err
 	}
 
-	return updatedGroup, nil
+	return grouprole.GroupWithLdap(updatedGroup), nil
 }
 
-func (s *Service) UpdateDescription(ctx context.Context, groupID uuid.UUID, description string) (Group, error) {
+func (s *Service) UpdateDescription(ctx context.Context, groupID uuid.UUID, description string) (grouprole.GroupWithLdap, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateGroupDescription")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -633,7 +633,7 @@ func (s *Service) UpdateDescription(ctx context.Context, groupID uuid.UUID, desc
 		err := handlerutil.ErrForbidden
 		logger.Warn("user does not have permission to update group description", zap.String("group_id", groupID.String()))
 		span.RecordError(err)
-		return Group{}, err
+		return grouprole.GroupWithLdap{}, err
 	}
 
 	updatedGroup, err := s.queries.UpdateDescription(ctx, UpdateDescriptionParams{
@@ -642,15 +642,15 @@ func (s *Service) UpdateDescription(ctx context.Context, groupID uuid.UUID, desc
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Group{}, internal.ErrGroupNotFound
+			return grouprole.GroupWithLdap{}, internal.ErrGroupNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "groups", "group_id", groupID.String(), logger, "failed to update group description")
 		logger.Error("failed to update group description", zap.Error(err))
 		span.RecordError(err)
-		return Group{}, err
+		return grouprole.GroupWithLdap{}, err
 	}
 
-	return updatedGroup, nil
+	return grouprole.GroupWithLdap(updatedGroup), nil
 }
 
 func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
