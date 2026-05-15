@@ -74,7 +74,7 @@ func NewHandler(
 		tracer:                   otel.Tracer("member/handler"),
 		store:                    store,
 		userService:              userService,
-		paginationFactory:        pagination.NewFactory[MemberResponse](200, []string{"id"}),
+		paginationFactory:        pagination.NewFactory[MemberResponse](200, []string{"id", "fullName", "studentId"}),
 		pendingPaginationFactory: pagination.NewFactory[PendingMemberResponse](200, []string{"id"}),
 	}
 }

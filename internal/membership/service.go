@@ -202,18 +202,12 @@ func (s *Service) ListWithPaged(ctx context.Context, groupId uuid.UUID, page int
 		switch sortBy {
 		case "fullName":
 			less = allMembers[i].FullName < allMembers[j].FullName
-		case "email":
-			less = allMembers[i].Email < allMembers[j].Email
 		case "studentId":
 			less = allMembers[i].StudentID < allMembers[j].StudentID
-		case "uid":
-			less = allMembers[i].UID < allMembers[j].UID
-		case "uidNumber":
-			less = allMembers[i].UIDNumber < allMembers[j].UIDNumber
 		case "id":
 			less = allMembers[i].ID.String() < allMembers[j].ID.String()
 		default:
-			less = allMembers[i].UIDNumber < allMembers[j].UIDNumber
+			less = allMembers[i].FullName < allMembers[j].FullName
 		}
 
 		if sortDir == "desc" {
