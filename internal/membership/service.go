@@ -87,13 +87,13 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 	}
 }
 
-func (s *Service) ListWithPaged(ctx context.Context, userID, groupID uuid.UUID, page int, size int, sortDir string, sortBy string, search string) ([]MemberResponse, int, error) {
+func (s *Service) ListWithPaged(ctx context.Context, userID, groupID uuid.UUID, globalRole string, page int, size int, sortDir string, sortBy string, search string) ([]MemberResponse, int, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListWithPaged")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// check if the user has access to the group (group owner or group admin)
-  if globalRole != role.Admin.String() {
+	if globalRole != role.Admin.String() {
 		exists, err := s.Exists(traceCtx, groupID, userID)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "memberships", "group_id/user_id", fmt.Sprintf("%s/%s", groupID.String(), userID.String()), logger, "check if user has access to the group")

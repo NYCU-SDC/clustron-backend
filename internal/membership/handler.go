@@ -22,7 +22,7 @@ type Store interface {
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
-	ListWithPaged(ctx context.Context, userID uuid.UUID, groupID uuid.UUID, page int, size int, sort string, sortBy string, search string) ([]MemberResponse, int, error)
+	ListWithPaged(ctx context.Context, userID uuid.UUID, groupID uuid.UUID, globalRole string, page int, size int, sort string, sortBy string, search string) ([]MemberResponse, int, error)
 	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string, search string) ([]PendingMemberResponse, int, error)
 	UpdatePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID, role uuid.UUID) (PendingMemberResponse, error)
 	RemovePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID) error
