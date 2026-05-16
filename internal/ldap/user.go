@@ -101,6 +101,44 @@ func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
 	return result.Entries, nil
 }
 
+func (c *Client) SearchUserByUIDList(uids []string, query string) ([]*ldap.Entry, error) {
+	if len(uids) == 0 {
+		return []*ldap.Entry{}, nil
+	}
+
+	base := "ou=People," + c.Config.LDAPBaseDN
+	var filter strings.Builder
+	filter.WriteString("(&(|")
+	for _, uid := range uids {
+		_, err := fmt.Fprintf(&filter, "(uid=%s)", ldap.EscapeFilter(uid))
+		if err != nil {
+			return nil, err
+		}
+	}
+	filter.WriteString(")")
+
+	if query != "" {
+		escapedQuery := ldap.EscapeFilter(query)
+		_, err := fmt.Fprintf(&filter, "(|(uid=*%s*)(cn=*%s*))", escapedQuery, escapedQuery)
+		if err != nil {
+			return nil, err
+		}
+	}
+	filter.WriteString(")")
+
+	attributes := []string{
+		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
+	}
+
+	result, err := c.SearchByFilter(base, filter.String(), attributes)
+	if err != nil {
+		c.Logger.Error("failed to search users by query", zap.Error(err), zap.String("query", query))
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+
+	return result.Entries, nil
+}
+
 func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 	base := "ou=People," + c.Config.LDAPBaseDN
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))

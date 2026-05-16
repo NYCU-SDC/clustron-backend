@@ -22,8 +22,8 @@ type Store interface {
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
-	ListWithPaged(ctx context.Context, userID uuid.UUID, groupID uuid.UUID, globalRole string, page int, size int, sort string, sortBy string) ([]MemberResponse, error)
-	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error)
+	ListWithPaged(ctx context.Context, userID uuid.UUID, groupID uuid.UUID, globalRole string, page int, size int, sort string, sortBy string, search string) ([]MemberResponse, int, error)
+	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string, search string) ([]PendingMemberResponse, int, error)
 	UpdatePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID, role uuid.UUID) (PendingMemberResponse, error)
 	RemovePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID) error
 	CountPendingByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
@@ -74,7 +74,7 @@ func NewHandler(
 		tracer:                   otel.Tracer("member/handler"),
 		store:                    store,
 		userService:              userService,
-		paginationFactory:        pagination.NewFactory[MemberResponse](200, []string{"id"}),
+		paginationFactory:        pagination.NewFactory[MemberResponse](200, []string{"id", "fullName", "studentId"}),
 		pendingPaginationFactory: pagination.NewFactory[PendingMemberResponse](200, []string{"id"}),
 	}
 }
@@ -222,7 +222,9 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	members, err := h.store.ListWithPaged(
+	search := r.URL.Query().Get("search")
+
+	members, totalCount, err := h.store.ListWithPaged(
 		traceCtx,
 		jwtUser.ID,
 		groupUUID,
@@ -231,19 +233,14 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		pageRequest.Size,
 		pageRequest.Sort,
 		pageRequest.SortBy,
+		search,
 	)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	totalCount, err := h.store.CountByGroupID(traceCtx, groupUUID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	pageResponse := h.paginationFactory.NewResponse(members, int(totalCount), pageRequest.Page, pageRequest.Size)
+	pageResponse := h.paginationFactory.NewResponse(members, totalCount, pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
 }
 
@@ -265,26 +262,23 @@ func (h *Handler) ListPendingMembersPagedHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	pendingMembers, err := h.store.ListPendingWithPaged(
+	search := r.URL.Query().Get("search")
+
+	pendingMembers, totalCount, err := h.store.ListPendingWithPaged(
 		traceCtx,
 		groupUUID,
 		pageRequest.Page,
 		pageRequest.Size,
 		pageRequest.Sort,
 		pageRequest.SortBy,
+		search,
 	)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	totalCount, err := h.store.CountPendingByGroupID(traceCtx, groupUUID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	pageResponse := h.pendingPaginationFactory.NewResponse(pendingMembers, int(totalCount), pageRequest.Page, pageRequest.Size)
+	pageResponse := h.pendingPaginationFactory.NewResponse(pendingMembers, totalCount, pageRequest.Page, pageRequest.Size)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, pageResponse)
 }
 

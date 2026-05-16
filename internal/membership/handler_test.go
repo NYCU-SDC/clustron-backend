@@ -274,12 +274,11 @@ func TestHandler_ListGroupMembersPagedHandler(t *testing.T) {
 		{
 			name: "Valid request lists group members",
 			setupMock: func(store *mocks.Store, user *jwt.User, groupID uuid.UUID) {
-				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.MemberResponse{
+				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.MemberResponse{
 					{
 						ID: uuid.New(),
 					},
-				}, nil).Once()
-				store.On("CountByGroupID", mock.Anything, groupID).Return(int64(1), nil).Once()
+				}, 1, nil).Once()
 			},
 			resourceID:     uuid.New().String(),
 			user:           &jwt.User{ID: uuid.New(), Role: role.Admin.String()},
@@ -295,7 +294,7 @@ func TestHandler_ListGroupMembersPagedHandler(t *testing.T) {
 		{
 			name: "Does not exists member returns forbidden",
 			setupMock: func(store *mocks.Store, user *jwt.User, groupID uuid.UUID) {
-				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, handlerutil.ErrForbidden)
+				store.On("ListWithPaged", mock.Anything, user.ID, groupID, user.Role, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, 0, handlerutil.ErrForbidden)
 			},
 			resourceID:     uuid.New().String(),
 			user:           &jwt.User{ID: uuid.New(), Role: role.User.String()},
@@ -347,12 +346,11 @@ func TestHandler_ListPendingMembersPagedHandler(t *testing.T) {
 		{
 			name: "Valid request lists pending group members",
 			setupMock: func(store *mocks.Store, groupID uuid.UUID) {
-				store.On("ListPendingWithPaged", mock.Anything, groupID, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.PendingMemberResponse{
+				store.On("ListPendingWithPaged", mock.Anything, groupID, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]membership.PendingMemberResponse{
 					{
 						ID: uuid.New(),
 					},
-				}, nil).Once()
-				store.On("CountPendingByGroupID", mock.Anything, groupID).Return(int64(1), nil).Once()
+				}, 1, nil).Once()
 			},
 			resourceID:     uuid.New().String(),
 			user:           &jwt.User{ID: uuid.New(), Role: role.Admin.String()},
