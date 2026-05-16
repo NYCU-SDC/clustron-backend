@@ -194,6 +194,13 @@ RETURNING *;
 DELETE FROM memberships
 WHERE group_id = $1 AND user_id = $2;
 
+-- name: Exists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM memberships
+    WHERE group_id = $1 AND user_id = $2
+) AS exists;
+
 -- name: UpdateRole :one
 UPDATE memberships
 SET role_id = $1

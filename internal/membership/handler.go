@@ -22,7 +22,7 @@ type Store interface {
 	Remove(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	Update(ctx context.Context, groupID uuid.UUID, userID uuid.UUID, role uuid.UUID) (MemberResponse, error)
 	CountByGroupID(ctx context.Context, groupID uuid.UUID) (int64, error)
-	ListWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]MemberResponse, error)
+	ListWithPaged(ctx context.Context, userID uuid.UUID, groupID uuid.UUID, globalRole string, page int, size int, sort string, sortBy string) ([]MemberResponse, error)
 	ListPendingWithPaged(ctx context.Context, groupID uuid.UUID, page int, size int, sort string, sortBy string) ([]PendingMemberResponse, error)
 	UpdatePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID, role uuid.UUID) (PendingMemberResponse, error)
 	RemovePending(ctx context.Context, groupID uuid.UUID, pendingID uuid.UUID) error
@@ -210,6 +210,12 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	jwtUser, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	pageRequest, err := h.paginationFactory.GetRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -218,7 +224,9 @@ func (h *Handler) ListGroupMembersPagedHandler(w http.ResponseWriter, r *http.Re
 
 	members, err := h.store.ListWithPaged(
 		traceCtx,
+		jwtUser.ID,
 		groupUUID,
+		jwtUser.Role,
 		pageRequest.Page,
 		pageRequest.Size,
 		pageRequest.Sort,
