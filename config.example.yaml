@@ -3,6 +3,7 @@ base_url: "BASE_URL"
 slurm_token_helper_url: "TOKEN_HELPER_URL"
 slurm_restful_base_url: "RESTFUL_NODE_URL"
 slurm_restful_version: "v0.0.43"
+slurm_root_token: "YOUR_ROOT_TOKEN"
 debug:
 oauth_proxy_base_url:
 oauth_proxy_secret:

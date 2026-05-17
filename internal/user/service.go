@@ -1,7 +1,6 @@
 package user
 
 import (
-	"clustron-backend/internal/config"
 	"clustron-backend/internal/user/role"
 	"context"
 	"errors"
@@ -24,12 +23,12 @@ type LDAPClient interface {
 type Service struct {
 	queries    *Queries
 	logger     *zap.Logger
-	presetMap  map[string]config.PresetUserInfo
+	presetMap  map[string]PresetUserInfo
 	tracer     trace.Tracer
 	ldapClient LDAPClient
 }
 
-func NewService(logger *zap.Logger, presetMap map[string]config.PresetUserInfo, db DBTX, ldapClient LDAPClient) *Service {
+func NewService(logger *zap.Logger, presetMap map[string]PresetUserInfo, db DBTX, ldapClient LDAPClient) *Service {
 	return &Service{
 		queries:    New(db),
 		logger:     logger,
