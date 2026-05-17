@@ -1,0 +1,57 @@
+- name: Install SSSD and required dependencies
+  become: yes
+  apt:
+    name:
+      - sssd
+      - sssd-ldap
+      - sssd-tools
+      - libnss-sss
+      - libsss-sudo
+      - ca-certificates
+      - libpam-sss
+      - oddjob-mkhomedir
+    state: present
+
+- name: Append sss to database lines in nsswitch.conf if missing
+  replace:
+    path: /etc/nsswitch.conf
+    regexp: '^((passwd|group|shadow|netgroup|services):.*(?<!\ssss))$'
+    replace: '\1 sss'
+    backup: yes
+
+- name: Create SSSD config file from template
+  become: yes
+  template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart SSSD
+
+- name: Enable automatic home directory creation via pam-auth-update
+  become: yes
+  command: pam-auth-update --enable mkhomedir
+  register: pam_result
+  changed_when: false
+
+- name: Configure SSH for SSSD (Atomic Update)
+  become: yes
+  blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED SSSD BLOCK"
+    validate: "/usr/sbin/sshd -t -f %s"
+    block: |
+      UsePAM yes
+      PubkeyAuthentication yes
+      AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys
+      AuthorizedKeysCommandUser root
+  notify: Restart SSH
+
+- name: Ensure SSSD is running and enabled on boot
+  become: true
+  service:
+    name: sssd
+    state: started
+    enabled: yes
+    

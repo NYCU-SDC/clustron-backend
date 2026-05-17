@@ -1,0 +1,41 @@
+- name: Install chrony
+  become: true
+  apt:
+    name: chrony
+    state: present
+
+- name: Allow compute nodes to sync time
+  become: true
+  lineinfile:
+    path: /etc/chrony/chrony.conf
+    line: "allow all"
+    state: present
+  notify: Restart Chrony
+
+- name: Ensure chrony service is enabled and started
+  become: yes
+  service:
+    name: chrony
+    state: started
+    enabled: yes
+
+- name: Add iptables rule for compute nodes (UDP 123)
+  become: yes
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: udp
+    source: "{{ hostvars[item].ansible_default_ipv4.address }}"
+    destination_port: "123"
+    jump: ACCEPT
+    action: insert
+  loop: "{{ groups['compute_nodes'] }}"
+
+- name: Install iptables-persistent
+  become: yes
+  apt:
+    name: iptables-persistent
+    state: present
+
+- name: Save iptables rules
+  become: true
+  shell: netfilter-persistent save

@@ -1,0 +1,75 @@
+- name: set shared environment variable
+  set_fact:
+    # example: Ubuntu_22.04_x86_64
+    env_dir: "{{ ansible_distribution }}_{{ ansible_distribution_version }}_{{ ansible_architecture }}"
+
+- name: check if the file exists
+  find:
+    paths: "/opt/clustron_share/{{ env_dir }}"
+    patterns: "slurm-smd_*.deb"
+  register: existing_debs
+
+- name: Set rebuild flag
+  set_fact:
+    needs_build: "{{ existing_debs.matched == 0 }}"
+
+- name: Install Debian packaging tools
+  become: true
+  apt:
+    name: [lbzip2, build-essential, fakeroot, devscripts, equivs]
+    state: present
+  when: needs_build
+
+- name: Clean & Recreate build workspace
+  become: true
+  file:
+    path: "/opt/slurm_build"
+    state: "{{ item }}"
+    mode: '1777'
+  loop: [absent, directory]
+  when: needs_build
+
+- name: Create specific src directory
+  file:
+    path: /opt/slurm_build/src
+    state: directory
+  when: needs_build
+
+- name: Download and Unpack Slurm source
+  become: yes
+  unarchive:
+    src: "https://download.schedmd.com/slurm/slurm-25.11.4.tar.bz2"
+    dest: /opt/slurm_build/src
+    remote_src: yes
+    extra_opts: ['--strip-components=1']
+  when: needs_build
+
+- name: Install dependencies (mk-build-deps)
+  become: true
+  shell: |
+    mk-build-deps -i debian/control -t "apt-get -y -o Debug::pkgProblemResolver=yes --no-install-recommends"
+  args:
+    chdir: /opt/slurm_build/src
+  when: needs_build
+
+- name: Build Slurm packages (this could take a while ...)
+  shell: debuild -b -uc -us
+  args:
+    chdir: /opt/slurm_build/src
+  register: build_output
+  async: 3600
+  poll: 30
+  when: needs_build
+
+- name: create clustron share folder
+  become: true
+  file:
+    path: "/opt/clustron_share/{{ env_dir }}"
+    state: "directory"
+    mode: '0755'
+  when: needs_build
+
+- name: Move generated deb files to shared folder
+  shell: mv /opt/slurm_build/*.deb /opt/clustron_share/{{ env_dir }}/
+  become: true
+  when: needs_build

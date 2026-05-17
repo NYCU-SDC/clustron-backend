@@ -1,0 +1,28 @@
+- name: Install NFS Server
+  become: yes
+  apt:
+    name: nfs-kernel-server
+    state: present
+
+- name: Ensure exported directories exist
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - /home
+    - /opt
+    - /etc/slurm
+
+- name: Configure NFS exports
+  become: true
+  template:
+    src: exports.j2
+    dest: /etc/exports
+    owner: root
+    group: root
+    mode: '0644'
+  
+- name: Reload NFS
+  become: yes
+  command: exportfs -ra
