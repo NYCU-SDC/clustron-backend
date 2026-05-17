@@ -9,7 +9,7 @@ We aim to create a service to visualize the LDAP access managing, Slurm operatio
 # Table of Content
 
 - [Deploy](#deploy)
-- [Developer Guide](#get-started)
+- [Developer Guide](#local-development)
 
 # Deploy
 
