@@ -57,6 +57,32 @@ INSERT INTO groups (id, title, description) VALUES ($1, $2, $3) RETURNING *;
 -- name: Update :one
 UPDATE groups SET title = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
 
+-- name: UpdateTitle :one
+WITH updated_group_title AS (
+    UPDATE groups
+    SET title = $2,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+    RETURNING *
+)
+SELECT g.*, lg.ldap_cn
+FROM groups AS g
+         LEFT JOIN ldap_groups AS lg ON lg.group_id = g.id AND lg.type = 'BASE'
+WHERE g.id = $1;
+
+-- name: UpdateDescription :one
+WITH updated_group_description AS (
+    UPDATE groups
+    SET description = $2,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+    RETURNING *
+)
+SELECT g.*, lg.ldap_cn
+FROM groups AS g
+         LEFT JOIN ldap_groups AS lg ON lg.group_id = g.id AND lg.type = 'BASE'
+WHERE g.id = $1;
+
 -- name: Delete :exec
 DELETE FROM groups WHERE id = $1;
 
