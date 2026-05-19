@@ -1,6 +1,5 @@
 - name: Restart Slurmd
   become: true
-  service:
+  ansible.builtin.service:
     name: slurmd
     state: restarted
-    

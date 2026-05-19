@@ -1,14 +1,18 @@
 package ansible
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -18,14 +22,11 @@ import (
 	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
-// =====================================================================
-// 常數與結構定義
-// =====================================================================
 const (
-	AnsibleDir    = "./ansible"
+	AnsibleDir    = "internal/ansible/ansible"
 	InventoryFile = "hosts.yaml"
 	MainPlaybook  = "playbooks/nodes.yaml"
-	LogFilePath   = "ansible-deploy.log" // Ansible 詳細日誌存放路徑
+	LogFilePath   = "ansible-deploy.log"
 )
 
 type Service struct {
@@ -34,7 +35,6 @@ type Service struct {
 	tracer  trace.Tracer
 }
 
-// 介面定義 (視你的架構需求保留)
 type ServiceInterface interface {
 	SetupAllNodes(ctx context.Context) error
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
@@ -48,15 +48,50 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-// =====================================================================
-// 1. 新增節點 (非同步架構：寫入 DB -> 更新 Inventory -> 背景跑 Ansible)
-// =====================================================================
+func (s *Service) ListAll(ctx context.Context) ([]Server, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListAll")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	servers, err := s.queries.ListAll(traceCtx)
+	if err != nil {
+		return nil, databaseutil.WrapDBError(err, logger, "list all servers")
+	}
+	return servers, nil
+}
+
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Server, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	server, err := s.queries.GetByID(traceCtx, id)
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "get server by id")
+	}
+	return server, nil
+}
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "Delete")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	rows, err := s.queries.Delete(traceCtx, id)
+	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "delete server")
+	}
+	if rows == 0 {
+		return databaseutil.WrapDBError(err, logger, "server not found")
+	}
+	return nil
+}
+
 func (s *Service) AddNode(ctx context.Context, params CreateParams) (Server, error) {
 	traceCtx, span := s.tracer.Start(ctx, "AddNode")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// 1. 強制設定初始狀態為 provisioning，寫入資料庫
 	params.Status = "provisioning"
 	server, err := s.queries.Create(traceCtx, params)
 	if err != nil {
@@ -64,42 +99,121 @@ func (s *Service) AddNode(ctx context.Context, params CreateParams) (Server, err
 		span.RecordError(err)
 		return Server{}, err
 	}
-	logger.Info("節點已寫入資料庫，狀態為 provisioning", zap.String("node_name", server.AnsibleName))
 
-	// 2. 重新產生包含新節點的 hosts.yaml
 	err = s.generateInventory(traceCtx)
 	if err != nil {
-		// 如果產生失敗，立刻把 DB 狀態標記為 failed
-		_, err := s.queries.UpdateStatus(traceCtx, UpdateStatusParams{
+		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{
 			server.ID,
 			"failed",
 		})
-		return server, fmt.Errorf("產生 inventory 失敗: %w", err)
+		return server, fmt.Errorf("fail to generate inventory: %w", err)
 	}
 
-	// 3. 開啟 Goroutine 在背景執行 Ansible
-	// ⚠️ 關鍵：必須使用 context.Background()，避免 HTTP 回應後 ctx 被取消導致 Ansible 終止
 	bgCtx := context.Background()
-	
-	// (進階) 傳遞 Trace ID 給背景任務，方便日誌追蹤
 	bgCtx = trace.ContextWithSpanContext(bgCtx, span.SpanContext())
 
 	go s.runAnsibleInBackground(bgCtx, server)
 
-	// 4. 立刻回傳成功，不等待 Ansible 跑完
 	return server, nil
 }
 
-// =====================================================================
-// 2. 背景工作任務 (執行 Ansible 並更新 DB 狀態)
-// =====================================================================
+type stageTrackingWriter struct {
+	lineBuffer strings.Builder
+	AllOutput  bytes.Buffer
+	delegate   io.Writer
+	onTaskLine func(taskName string)
+}
+
+func (w *stageTrackingWriter) Write(p []byte) (n int, err error) {
+	n, err = w.delegate.Write(p)
+	if err != nil {
+		return
+	}
+	w.AllOutput.Write(p[:n])
+	for _, b := range p[:n] {
+		if b == '\n' {
+			line := w.lineBuffer.String()
+			w.lineBuffer.Reset()
+			if strings.HasPrefix(line, "TASK [") {
+				w.onTaskLine(extractTaskName(line))
+			}
+		} else {
+			w.lineBuffer.WriteByte(b)
+		}
+	}
+	return
+}
+
+func extractTaskName(line string) string {
+	start := strings.Index(line, "[")
+	end := strings.LastIndex(line, "]")
+	if start == -1 || end == -1 || start >= end {
+		return line
+	}
+	return line[start+1 : end]
+}
+
+func parseAnsibleError(output string) string {
+	lines := strings.Split(output, "\n")
+
+	var currentTask, failedTask string
+	var errorLines, recapLines []string
+	inRecap := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "TASK [") {
+			currentTask = extractTaskName(line)
+		}
+		if strings.HasPrefix(line, "PLAY RECAP") {
+			inRecap = true
+			continue
+		}
+		if inRecap && strings.TrimSpace(line) != "" {
+			recapLines = append(recapLines, line)
+		}
+		if strings.Contains(line, "fatal:") || strings.Contains(line, "FAILED!") {
+			if failedTask == "" {
+				failedTask = currentTask
+			}
+			errorLines = append(errorLines, strings.TrimSpace(line))
+		}
+	}
+
+	var sb strings.Builder
+	if failedTask != "" {
+		sb.WriteString("Stage: ")
+		sb.WriteString(failedTask)
+		sb.WriteString("\n\n")
+	}
+	if len(errorLines) > 0 {
+		sb.WriteString("Error:\n")
+		for i, l := range errorLines {
+			if i >= 5 {
+				break
+			}
+			sb.WriteString("  ")
+			sb.WriteString(l)
+			sb.WriteByte('\n')
+		}
+		sb.WriteByte('\n')
+	}
+	if len(recapLines) > 0 {
+		sb.WriteString("PLAY RECAP:\n")
+		for _, l := range recapLines {
+			sb.WriteString("  ")
+			sb.WriteString(l)
+			sb.WriteByte('\n')
+		}
+	}
+	return sb.String()
+}
+
 func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
 	logger := logutil.WithContext(ctx, s.logger)
-	logger.Info("背景任務啟動：開始佈署節點", zap.String("node", server.AnsibleName))
+	logger.Info("[background] start setup node", zap.String("node", server.AnsibleName))
 
-	// 設定只對這台新機器跑 Ansible
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions {
-		Inventory: filepath.Join(AnsibleDir, InventoryFile),
+	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
+		Inventory: InventoryFile,
 		Limit:     server.AnsibleName,
 	}
 
@@ -108,53 +222,119 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
 		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
 	)
 
-	// 開啟日誌檔案 (Append 模式)
-	logFile, err := os.OpenFile(filepath.Join(AnsibleDir, LogFilePath), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		logger.Error("無法開啟 Ansible log 檔案，改為僅輸出至終端機", zap.Error(err))
-	} else {
-		defer logFile.Close()
-	}
-
-	// 設定輸出導向：同時寫入螢幕 (os.Stdout) 與檔案 (logFile)
-	var writer io.Writer = os.Stdout
-	if logFile != nil {
-		writer = io.MultiWriter(os.Stdout, logFile)
+	tracker := &stageTrackingWriter{
+		delegate: os.Stderr,
+		onTaskLine: func(taskName string) {
+			_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
+				ID:              server.ID,
+				ProvisionDetail: pgtype.Text{String: taskName, Valid: true},
+			})
+		},
 	}
 
 	exec := execute.NewDefaultExecute(
 		execute.WithCmd(playbookCmd),
-		execute.WithWrite(writer),
-		execute.WithWriteError(writer),
+		execute.WithWrite(tracker),
+		execute.WithWriteError(tracker),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 		execute.WithCmdRunDir(AnsibleDir),
 		execute.WithEnvVars(map[string]string{
-			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks", // 開啟計時外掛
+			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
 	)
 
-	// 執行 Ansible
-	err = exec.Execute(ctx)
+	err := exec.Execute(ctx)
 	if err != nil {
-		logger.Error("背景佈署失敗", zap.Error(err), zap.String("node", server.AnsibleName))
+		logger.Error("fail to deploy node", zap.Error(err), zap.String("node", server.AnsibleName))
+		errSummary := parseAnsibleError(tracker.AllOutput.String())
+		_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
+			ID:              server.ID,
+			ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
+		})
 		_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-			server.ID,
-			"failed",
+			ID:     server.ID,
+			Status: "failed",
 		})
 		return
 	}
 
-	// 佈署成功：更新狀態為 active
-	logger.Info("背景佈署成功！", zap.String("node", server.AnsibleName))
-			_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-			server.ID,
-			"active",
-		})
+	logger.Info("deploy successfully!", zap.String("node", server.AnsibleName))
+	_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
+		ID:              server.ID,
+		ProvisionDetail: pgtype.Text{Valid: false},
+	})
+	_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
+		ID:     server.ID,
+		Status: "active",
+	})
 }
 
-// =====================================================================
-// 3. 手動觸發全叢集佈署 (通常用於初期建置)
-// =====================================================================
+func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateRole")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	server, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{ID: id, AnsibleRole: role})
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "update server role")
+	}
+
+	updated, err := s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "set server status to provisioning")
+	}
+	if err = s.queries.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
+		ID:              id,
+		ProvisionDetail: pgtype.Text{Valid: false},
+	}); err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "clear provision detail")
+	}
+	updated.ProvisionDetail = pgtype.Text{Valid: false}
+
+	if err = s.generateInventory(traceCtx); err != nil {
+		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
+		return Server{}, fmt.Errorf("fail to generate inventory: %w", err)
+	}
+
+	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
+	go s.runAnsibleInBackground(bgCtx, server)
+
+	return updated, nil
+}
+
+func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ResetNode")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	server, err := s.queries.GetByID(traceCtx, id)
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "get server by id")
+	}
+
+	updated, err := s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "reset server status")
+	}
+	if err = s.queries.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
+		ID:              id,
+		ProvisionDetail: pgtype.Text{Valid: false},
+	}); err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "clear provision detail")
+	}
+	updated.ProvisionDetail = pgtype.Text{Valid: false}
+
+	if err = s.generateInventory(traceCtx); err != nil {
+		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
+		return Server{}, fmt.Errorf("產生 inventory 失敗: %w", err)
+	}
+
+	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
+	go s.runAnsibleInBackground(bgCtx, server)
+
+	return updated, nil
+}
+
 func (s *Service) SetupAllNodes(ctx context.Context) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetupAllNodes")
 	defer span.End()
@@ -166,7 +346,7 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 	}
 
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: filepath.Join(AnsibleDir, InventoryFile),
+		Inventory: InventoryFile,
 	}
 
 	playbookCmd := playbook.NewAnsiblePlaybookCmd(
@@ -184,20 +364,17 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 		}),
 	)
 
-	logger.Info("開始執行全叢集 Ansible Playbook...")
+	logger.Info("deploying all nodes...")
 	if err := exec.Execute(traceCtx); err != nil {
 		logger.Error("全叢集 Ansible 執行失敗", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
 
-	logger.Info("全叢集設定完成！")
+	logger.Info("all cluster deploy successfully")
 	return nil
 }
 
-// =====================================================================
-// 4. 核心工具：從 DB 動態產生 hosts.yaml
-// =====================================================================
 type AnsibleInventory struct {
 	All AnsibleGroup `yaml:"all"`
 }
@@ -209,7 +386,7 @@ type AnsibleChild struct {
 	Hosts map[string]HostVars `yaml:"hosts,omitempty"`
 }
 type HostVars struct {
-	AnsibleHost       string `yaml:"ansible_host"`
+	AnsibleHost       string `yaml:"ansible_host,omitempty"`
 	AnsibleUser       string `yaml:"ansible_user"`
 	AnsibleSSHPrivate string `yaml:"ansible_ssh_private_key_file,omitempty"`
 	CPUCores          int32  `yaml:"cpu_cores,omitempty"`
@@ -232,15 +409,17 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		},
 	}
 
-	// 抓取 Head Node IP
 	for _, srv := range servers {
 		if srv.AnsibleRole == "head_nodes" {
-			inventory.All.Vars["head_node_ip"] = srv.IpAddress
+			if srv.IpAddress.Valid {
+				inventory.All.Vars["head_node_ip"] = srv.IpAddress.String
+			} else if srv.SshConfigHost.Valid {
+				inventory.All.Vars["head_node_ip"] = srv.SshConfigHost.String
+			}
 			break
 		}
 	}
 
-	// 分群寫入
 	for _, srv := range servers {
 		roleGroup := srv.AnsibleRole
 
@@ -251,15 +430,20 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 
 		hostVars := HostVars{
-			AnsibleHost: srv.IpAddress,
 			AnsibleUser: srv.SshUser,
 			CPUCores:    srv.CpuCores.Int32,
 			MemoryMB:    srv.MemoryMb.Int32,
 		}
 
-		if srv.SshKeyName != "" {
-			hostVars.AnsibleSSHPrivate = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName)
+		if srv.IpAddress.Valid {
+			hostVars.AnsibleHost = srv.IpAddress.String
+			if srv.SshKeyName.Valid && srv.SshKeyName.String != "" {
+				hostVars.AnsibleSSHPrivate = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
+			}
+		} else if srv.SshConfigHost.Valid {
+			hostVars.AnsibleHost = srv.SshConfigHost.String
 		}
+
 		if srv.SlurmPartition.Valid {
 			hostVars.SlurmPartition = srv.SlurmPartition.String
 		}
@@ -269,13 +453,13 @@ func (s *Service) generateInventory(ctx context.Context) error {
 
 	yamlData, err := yaml.Marshal(&inventory)
 	if err != nil {
-		return fmt.Errorf("轉換 YAML 失敗: %w", err)
+		return fmt.Errorf("YAML marshal failed: %w", err)
 	}
 
 	filePath := filepath.Join(AnsibleDir, InventoryFile)
 	err = os.WriteFile(filePath, yamlData, 0644)
 	if err != nil {
-		return fmt.Errorf("寫入 hosts.yaml 失敗: %w", err)
+		return fmt.Errorf("failed to write hosts.yaml: %w", err)
 	}
 
 	return nil

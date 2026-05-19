@@ -1,22 +1,22 @@
 - name: Create slurm group
   become: true
-  group:
+  ansible.builtin.group:
     name: slurm
     gid: 1002
 
 - name: Create slurm user
   become: true
-  user:
+  ansible.builtin.user:
     name: slurm
     uid: 1002
     group: slurm
     home: /var/lib/slurm
-    create_home: yes
+    create_home: true
     shell: /bin/bash
 
 - name: Create local Slurm directories
   become: true
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: slurm
@@ -29,16 +29,28 @@
 
 - name: Install Compute packages
   become: true
-  apt:
-    deb: "/opt/clustron_share/{{ env_dir }}/{{ item }}"
+  ansible.builtin.apt:
+    deb: "/opt/clustron_share/{{ slurm_builder_env_dir }}/{{ item }}"
   loop:
     - "slurm-smd_{{ slurm_version }}_amd64.deb"
     - "slurm-smd-client_{{ slurm_version }}_amd64.deb"
     - "slurm-smd-slurmd_{{ slurm_version }}_amd64.deb"
 
+- name: Check if NVIDIA GPU is present
+  become: true
+  ansible.builtin.command: lspci
+  register: slurm_compute_lspci_output
+  changed_when: false
+
+- name: Install NVIDIA drivers if GPU detected
+  become: true
+  ansible.builtin.command: ubuntu-drivers autoinstall
+  when: "'NVIDIA' in slurm_compute_lspci_output.stdout or 'nvidia' in slurm_compute_lspci_output.stdout"
+  changed_when: true
+
 - name: Ensure slurmd is running and enabled
   become: true
-  service:
+  ansible.builtin.service:
     name: slurmd
     state: started
-    enabled: yes
+    enabled: true

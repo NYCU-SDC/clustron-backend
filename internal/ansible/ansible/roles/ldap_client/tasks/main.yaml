@@ -1,6 +1,6 @@
 - name: Install SSSD and required dependencies
-  become: yes
-  apt:
+  become: true
+  ansible.builtin.apt:
     name:
       - sssd
       - sssd-ldap
@@ -13,15 +13,16 @@
     state: present
 
 - name: Append sss to database lines in nsswitch.conf if missing
-  replace:
+  become: true
+  ansible.builtin.replace:
     path: /etc/nsswitch.conf
     regexp: '^((passwd|group|shadow|netgroup|services):.*(?<!\ssss))$'
     replace: '\1 sss'
-    backup: yes
+    backup: true
 
 - name: Create SSSD config file from template
-  become: yes
-  template:
+  become: true
+  ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
     owner: root
@@ -30,14 +31,14 @@
   notify: Restart SSSD
 
 - name: Enable automatic home directory creation via pam-auth-update
-  become: yes
-  command: pam-auth-update --enable mkhomedir
-  register: pam_result
+  become: true
+  ansible.builtin.command: pam-auth-update --enable mkhomedir
+  register: ldap_client_pam_result
   changed_when: false
 
 - name: Configure SSH for SSSD (Atomic Update)
-  become: yes
-  blockinfile:
+  become: true
+  ansible.builtin.blockinfile:
     path: /etc/ssh/sshd_config
     marker: "# {mark} ANSIBLE MANAGED SSSD BLOCK"
     validate: "/usr/sbin/sshd -t -f %s"
@@ -50,8 +51,7 @@
 
 - name: Ensure SSSD is running and enabled on boot
   become: true
-  service:
+  ansible.builtin.service:
     name: sssd
     state: started
-    enabled: yes
-    
+    enabled: true

@@ -1,0 +1,7 @@
+p, admin, /api/servers, GET
+p, admin, /api/servers, POST
+p, admin, /api/servers/setup, POST
+p, admin, /api/servers/:server_id, GET
+p, admin, /api/servers/:server_id, DELETE
+p, admin, /api/servers/:server_id/reset, POST
+p, admin, /api/servers/:server_id/role, PATCH

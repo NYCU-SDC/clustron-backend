@@ -1,18 +1,18 @@
 - name: Restart Slurmdbd
   become: true
-  service:
+  ansible.builtin.service:
     name: slurmdbd
     state: restarted
 
 - name: Restart Slurmctld
   become: true
-  service:
+  ansible.builtin.service:
     name: slurmctld
     state: restarted
 
 - name: Reconfigure Slurm
-  become: yes
-  systemd:
+  become: true
+  ansible.builtin.systemd:
     name: slurmctld
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true

@@ -2,7 +2,7 @@
   hosts: all
   gather_facts: true
 
-- name: setup Header Node
+- name: Setup Header Node
   hosts: head_nodes
   roles:
     - common
@@ -11,8 +11,8 @@
     - ldap_server
     - slurm_builder
     - slurm_controller
-  
-- name: set up Compute Nodes
+
+- name: Set Up Compute Nodes
   hosts: compute_nodes
   roles:
     - common

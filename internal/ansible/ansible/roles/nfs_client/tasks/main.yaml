@@ -1,22 +1,23 @@
 - name: Install NFS Client
-  become: yes
-  apt:
+  become: true
+  ansible.builtin.apt:
     name: nfs-common
     state: present
 
 - name: Ensure mount points exist on compute nodes
-  become: yes
-  file:
+  become: true
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
+    mode: '0755'
   loop:
     - /home
     - /opt
     - /etc/slurm
 
 - name: Mount NFS Shares and update /etc/fstab
-  become: yes
-  mount:
+  become: true
+  ansible.posix.mount:
     path: "{{ item }}"
     src: "{{ head_node_ip }}:{{ item }}"
     fstype: nfs
@@ -26,4 +27,3 @@
     - /home
     - /opt
     - /etc/slurm
-    

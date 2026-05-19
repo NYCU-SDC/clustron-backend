@@ -1,14 +1,15 @@
 - name: Install NFS Server
-  become: yes
-  apt:
+  become: true
+  ansible.builtin.apt:
     name: nfs-kernel-server
     state: present
 
 - name: Ensure exported directories exist
   become: true
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
+    mode: '0755'
   loop:
     - /home
     - /opt
@@ -16,13 +17,14 @@
 
 - name: Configure NFS exports
   become: true
-  template:
+  ansible.builtin.template:
     src: exports.j2
     dest: /etc/exports
     owner: root
     group: root
     mode: '0644'
-  
+
 - name: Reload NFS
-  become: yes
-  command: exportfs -ra
+  become: true
+  ansible.builtin.command: exportfs -ra
+  changed_when: true
