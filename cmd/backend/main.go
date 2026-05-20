@@ -162,7 +162,7 @@ func main() {
 	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
-	ansibleService := ansible.NewService(logger, dbPool)
+	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"clustron-backend/internal/ldap"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -30,9 +32,10 @@ const (
 )
 
 type Service struct {
-	queries *Queries
-	logger  *zap.Logger
-	tracer  trace.Tracer
+	queries    *Queries
+	logger     *zap.Logger
+	tracer     trace.Tracer
+	ldapConfig ldap.Config
 }
 
 type ServiceInterface interface {
@@ -40,11 +43,12 @@ type ServiceInterface interface {
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, ldapConfig ldap.Config) *Service {
 	return &Service{
-		queries: New(db),
-		logger:  logger,
-		tracer:  otel.Tracer("ansible/service"),
+		queries:    New(db),
+		logger:     logger,
+		tracer:     otel.Tracer("ansible/service"),
+		ldapConfig: ldapConfig,
 	}
 }
 
@@ -404,6 +408,9 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		All: AnsibleGroup{
 			Vars: map[string]interface{}{
 				"slurm_version": "25.11.4-1",
+				"ldap_base_dn":  s.ldapConfig.LDAPBaseDN,
+				"ldap_bind_dn":  s.ldapConfig.LDAPBindDN,
+				"ldap_bind_pwd": s.ldapConfig.LDAPBindPwd,
 			},
 			Children: make(map[string]AnsibleChild),
 		},
