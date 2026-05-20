@@ -110,6 +110,32 @@ type Response struct {
 	Warnings []SlurmWarning `json:"warnings"`
 }
 
+type CreateUserAssociationResponse struct {
+	AddedUsers string         `json:"added_users"`
+	Errors     []SlurmError   `json:"errors"`
+	Warnings   []SlurmWarning `json:"warnings"`
+}
+
+type CreateAccountAssociationResponse struct {
+	AddedAccounts string         `json:"added_accounts"`
+	Errors        []SlurmError   `json:"errors"`
+	Warnings      []SlurmWarning `json:"warnings"`
+}
+
+type ParsedUserAssociationResponse struct {
+	AddedUsers     []string
+	DefaultAccount string
+	AdminLevel     string
+	Associations   []Association
+}
+
+type ParsedAccountAssociationResponse struct {
+	AddedAccounts []string
+	Description   string
+	Organization  string
+	Associations  []Association
+}
+
 type DeleteUserResponse struct {
 	RemovedUsers []string       `json:"removed_users"`
 	Errors       []SlurmError   `json:"errors"`
