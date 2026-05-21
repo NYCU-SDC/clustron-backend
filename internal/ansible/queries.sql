@@ -6,9 +6,9 @@ SELECT * FROM servers WHERE ansible_name = $1;
 
 -- name: Create :one
 INSERT INTO servers (
-    ansible_name, ip_address, ssh_config_host, ssh_user, ssh_key_name, ansible_role, slurm_partition, memory_mb, cpu_cores, status
+    ansible_name, ip_address, ssh_config_host, private_ip, ssh_user, ssh_key_name, ansible_role, slurm_partition, memory_mb, cpu_cores, status
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING *;
 
 -- name: Delete :execrows
@@ -16,6 +16,9 @@ DELETE FROM servers WHERE id = $1;
 
 -- name: UpdateIP :one
 UPDATE servers SET ip_address = $2, updated_at = now() WHERE id = $1 RETURNING *;
+
+-- name: UpdatePrivateIP :one
+UPDATE servers SET private_ip = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
 -- name: UpdateRole :one
 UPDATE servers SET ansible_role = $2, updated_at = now() WHERE id = $1 RETURNING *;

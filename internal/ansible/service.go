@@ -393,6 +393,7 @@ type HostVars struct {
 	AnsibleHost       string `yaml:"ansible_host,omitempty"`
 	AnsibleUser       string `yaml:"ansible_user"`
 	AnsibleSSHPrivate string `yaml:"ansible_ssh_private_key_file,omitempty"`
+	PrivateIP         string `yaml:"private_ip,omitempty"`
 	CPUCores          int32  `yaml:"cpu_cores,omitempty"`
 	MemoryMB          int32  `yaml:"memory_mb,omitempty"`
 	SlurmPartition    string `yaml:"slurm_partition,omitempty"`
@@ -418,7 +419,9 @@ func (s *Service) generateInventory(ctx context.Context) error {
 
 	for _, srv := range servers {
 		if srv.AnsibleRole == "head_nodes" {
-			if srv.IpAddress.Valid {
+			if srv.PrivateIp.Valid {
+				inventory.All.Vars["head_node_ip"] = srv.PrivateIp.String
+			} else if srv.IpAddress.Valid {
 				inventory.All.Vars["head_node_ip"] = srv.IpAddress.String
 			} else if srv.SshConfigHost.Valid {
 				inventory.All.Vars["head_node_ip"] = srv.SshConfigHost.String
@@ -449,6 +452,10 @@ func (s *Service) generateInventory(ctx context.Context) error {
 			}
 		} else if srv.SshConfigHost.Valid {
 			hostVars.AnsibleHost = srv.SshConfigHost.String
+		}
+
+		if srv.PrivateIp.Valid {
+			hostVars.PrivateIP = srv.PrivateIp.String
 		}
 
 		if srv.SlurmPartition.Valid {

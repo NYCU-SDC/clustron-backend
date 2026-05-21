@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS servers
     ip_address      VARCHAR(50),
     ssh_config_host VARCHAR(255),
 
+    -- cluster-internal IP for NFS/NTP traffic (when SSH goes through a different interface)
+    private_ip      VARCHAR(50),
+
     -- SSH authentication
     ssh_user        VARCHAR(255) NOT NULL,
     ssh_key_name    VARCHAR(255),
@@ -32,3 +35,4 @@ CREATE TABLE IF NOT EXISTS servers
 
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ip_address_key ON servers(ip_address) WHERE ip_address IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ssh_config_host_key ON servers(ssh_config_host) WHERE ssh_config_host IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS servers_private_ip_key ON servers(private_ip) WHERE private_ip IS NOT NULL;

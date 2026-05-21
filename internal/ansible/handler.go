@@ -19,6 +19,7 @@ type AddNodeRequest struct {
 	AnsibleName    string `json:"ansible_name"     validate:"required"`
 	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost"`
 	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress"`
+	PrivateIp      string `json:"private_ip"`
 	SshUser        string `json:"ssh_user"         validate:"required"`
 	SshKeyName     string `json:"ssh_key_name"`
 	AnsibleRole    string `json:"ansible_role"     validate:"required"`
@@ -32,6 +33,7 @@ type ServerResponse struct {
 	AnsibleName     string  `json:"ansible_name"`
 	IpAddress       string  `json:"ip_address,omitempty"`
 	SshConfigHost   string  `json:"ssh_config_host,omitempty"`
+	PrivateIp       string  `json:"private_ip,omitempty"`
 	SshUser         string  `json:"ssh_user"`
 	SshKeyName      string  `json:"ssh_key_name,omitempty"`
 	AnsibleRole     string  `json:"ansible_role"`
@@ -107,6 +109,7 @@ func (h *Handler) AddNode(w http.ResponseWriter, r *http.Request) {
 		AnsibleName:   req.AnsibleName,
 		IpAddress:     pgtype.Text{String: req.IpAddress, Valid: req.IpAddress != ""},
 		SshConfigHost: pgtype.Text{String: req.SshConfigHost, Valid: req.SshConfigHost != ""},
+		PrivateIp:     pgtype.Text{String: req.PrivateIp, Valid: req.PrivateIp != ""},
 		SshUser:       req.SshUser,
 		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
 		AnsibleRole:   req.AnsibleRole,
@@ -240,6 +243,9 @@ func toResponse(s Server) ServerResponse {
 	}
 	if s.SshConfigHost.Valid {
 		resp.SshConfigHost = s.SshConfigHost.String
+	}
+	if s.PrivateIp.Valid {
+		resp.PrivateIp = s.PrivateIp.String
 	}
 	if s.SshKeyName.Valid {
 		resp.SshKeyName = s.SshKeyName.String
