@@ -26,3 +26,12 @@ enable_internal_login: false # Set to true if you are in the testing phase.
 linux_username_blacklist:
   - blacklist1
   - blacklist2
+ldap:
+  ldap_debug: true
+  ldap_host: "LDAP_HOST"
+  ldap_port: 389
+  ldap_base_dn: "DC=example,DC=com"
+  ldap_user_ou_name: "people"
+  ldap_group_dn: "groups"
+  ldap_bind_dn: "CN=admin,DC=example,DC=com"
+  ldap_bind_password: "YOUR_LDAP_PASSWORD"
