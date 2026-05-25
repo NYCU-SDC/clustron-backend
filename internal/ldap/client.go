@@ -8,9 +8,11 @@ import (
 )
 
 type Client struct {
-	Conn   *ldap.Conn
-	Config *Config
-	Logger *zap.Logger
+	Conn        *ldap.Conn
+	Config      *Config
+	Logger      *zap.Logger
+	LDAPUserDN  string
+	LDAPGroupDN string
 }
 
 func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
@@ -25,7 +27,13 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to bind LDAP: %w", err)
 	}
 
-	client := &Client{Conn: conn, Config: cfg, Logger: logger}
+	client := &Client{
+		Conn:        conn,
+		Config:      cfg,
+		Logger:      logger,
+		LDAPUserDN:  fmt.Sprintf("ou=%s,%s", cfg.LDAPUserOUName, cfg.LDAPBaseDN),
+		LDAPGroupDN: fmt.Sprintf("ou=%s,%s", cfg.LDAPGroupOUName, cfg.LDAPBaseDN),
+	}
 
 	logger.Info("LDAP connection established and bound successfully")
 	return client, nil
