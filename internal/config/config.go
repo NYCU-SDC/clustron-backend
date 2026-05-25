@@ -235,14 +235,14 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		LDAP: ldap.Config{
-			Debug:       os.Getenv("LDAP_DEBUG") == "true",
-			LDAPHost:    os.Getenv("LDAP_HOST"),
-			LDAPPort:    os.Getenv("LDAP_PORT"),
-			LDAPBaseDN:  os.Getenv("LDAP_BASE_DN"),
-			LDAPUserDN:  os.Getenv("LDAP_USER_DN"),
-			LDAPGroupDN: os.Getenv("LDAP_GROUP_DN"),
-			LDAPBindDN:  os.Getenv("LDAP_BIND_DN"),
-			LDAPBindPwd: os.Getenv("LDAP_BIND_PWD"),
+			Debug:           os.Getenv("LDAP_DEBUG") == "true",
+			LDAPHost:        os.Getenv("LDAP_HOST"),
+			LDAPPort:        os.Getenv("LDAP_PORT"),
+			LDAPBaseDN:      os.Getenv("LDAP_BASE_DN"),
+			LDAPUserOUName:  os.Getenv("LDAP_USER_OU_NAME"),
+			LDAPGroupOUName: os.Getenv("LDAP_GROUP_OU_NAME"),
+			LDAPBindDN:      os.Getenv("LDAP_BIND_DN"),
+			LDAPBindPwd:     os.Getenv("LDAP_BIND_PWD"),
 		},
 		EnableInternalLogin: os.Getenv("ENABLE_INTERNAL_LOGIN") == "true",
 	}
@@ -280,8 +280,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.LDAP.LDAPHost, "ldap_host", "", "LDAP host")
 	flag.StringVar(&flagConfig.LDAP.LDAPPort, "ldap_port", "", "LDAP port")
 	flag.StringVar(&flagConfig.LDAP.LDAPBaseDN, "ldap_base_dn", "", "LDAP base DN")
-	flag.StringVar(&flagConfig.LDAP.LDAPUserDN, "ldap_user_dn", "", "LDAP user DN")
-	flag.StringVar(&flagConfig.LDAP.LDAPGroupDN, "ldap_group_dn", "", "LDAP group DN")
+	flag.StringVar(&flagConfig.LDAP.LDAPUserOUName, "ldap_user_ou_name", "", "LDAP user DN")
+	flag.StringVar(&flagConfig.LDAP.LDAPGroupOUName, "ldap_group_ou_name", "", "LDAP group DN")
 	flag.StringVar(&flagConfig.LDAP.LDAPBindDN, "ldap_bind_dn", "", "LDAP bind DN")
 	flag.StringVar(&flagConfig.LDAP.LDAPBindPwd, "ldap_bind_pwd", "", "LDAP bind password")
 	flag.BoolVar(&flagConfig.EnableInternalLogin, "enable_internal_login", false, "enable internal login")
