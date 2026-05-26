@@ -31,6 +31,8 @@ type Store interface {
 	ListWithUserScope(ctx context.Context, user jwt.User, page int, size int, sort string, sortBy string) ([]grouprole.UserScope, int /* totalCount */, error)
 	ListByIDWithLinks(ctx context.Context, user jwt.User, groupID uuid.UUID) (ResponseWithLinks, error)
 	Create(ctx context.Context, userID uuid.UUID, title, description, ldapGroupName string) (Group, error)
+	UpdateTitle(ctx context.Context, groupID uuid.UUID, title string) (grouprole.GroupWithLdap, error)
+	UpdateDescription(ctx context.Context, groupID uuid.UUID, description string) (grouprole.GroupWithLdap, error)
 	Delete(ctx context.Context, groupID uuid.UUID) error
 	Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 	Unarchive(ctx context.Context, groupID uuid.UUID) (Group, error)
@@ -84,6 +86,14 @@ type CreateRequest struct {
 	LDAPGroupName string                        `json:"ldapGroupName" validate:"required,regexp=^[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?$"`
 	Members       []membership.AddMemberRequest `json:"members"`
 	Links         []CreateLinkRequest
+}
+
+type UpdateTitleRequest struct {
+	Title string `json:"title" validate:"required"`
+}
+
+type UpdateDescriptionRequest struct {
+	Description string `json:"description" validate:"required"`
 }
 
 type TransferOwnerRequest struct {
@@ -320,6 +330,122 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, groupResponse)
+}
+
+func (h *Handler) UpdateTitleHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateTitleHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateTitleHandler"))
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupIDStr := r.PathValue("group_id")
+	groupID, err := handlerutil.ParseUUID(groupIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request UpdateTitleRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	group, err := h.store.UpdateTitle(traceCtx, groupID, request.Title)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		ID:            group.ID.String(),
+		Title:         group.Title,
+		Description:   group.Description.String,
+		LDAPGroupName: group.LdapCn.String,
+		IsArchived:    group.IsArchived.Bool,
+		CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	groupRole, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse.Me.Type = roleType
+	groupResponse.Me.Role = grouprole.RoleResponse{
+		ID:          groupRole.ID.String(),
+		RoleName:    groupRole.RoleName,
+		AccessLevel: groupRole.AccessLevel,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
+}
+
+func (h *Handler) UpdateDescriptionHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateDescriptionHandler")
+	defer span.End()
+	logger := h.logger.With(zap.String("handler", "UpdateDescriptionHandler"))
+
+	user, err := jwt.GetUserFromContext(r.Context())
+	if err != nil {
+		logger.DPanic("Can't find user in context, this should never happen")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupIDStr := r.PathValue("group_id")
+	groupID, err := handlerutil.ParseUUID(groupIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var request UpdateDescriptionRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	group, err := h.store.UpdateDescription(traceCtx, groupID, request.Description)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse := Response{
+		ID:            group.ID.String(),
+		Title:         group.Title,
+		Description:   group.Description.String,
+		LDAPGroupName: group.LdapCn.String,
+		IsArchived:    group.IsArchived.Bool,
+		CreatedAt:     group.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     group.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	groupRole, roleType, err := h.store.GetTypeByUser(traceCtx, user.Role, user.ID, groupID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupResponse.Me.Type = roleType
+	groupResponse.Me.Role = grouprole.RoleResponse{
+		ID:          groupRole.ID.String(),
+		RoleName:    groupRole.RoleName,
+		AccessLevel: groupRole.AccessLevel,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, groupResponse)
 }
 
 func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
