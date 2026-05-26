@@ -8,6 +8,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NYCU-SDC/summer v1.0.0-test h1:ezpNgVKD62dFXLZ8dL/o+Ii4Qh0KM/EZNeivknGV/V4=
 github.com/NYCU-SDC/summer v1.0.0-test/go.mod h1:v4hv+B6ePNcEItb8oaVQRyN6hvlpj9cgwGoCgD1izyc=
+github.com/NYCU-SDC/summer v1.0.2-0.20260526144851-62f3264b3024 h1:jePAJLOX+O+SRLZqwK1hFHs7/Fo26rs7E8ILDZtKams=
+github.com/NYCU-SDC/summer v1.0.2-0.20260526144851-62f3264b3024/go.mod h1:Slmamfui/3+xsMfOwcuLJ0AxgP00w32XiR9v7KEZFDw=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa/go.mod h1:cEWa1LVoE5KvSD9ONXsZrj0z6KqySlCCNKHlLzbqAt4=
 github.com/bmatcuk/doublestar/v4 v4.6.1 h1:FH9SifrbvJhnlQpztAx++wlkk70QBf0iBWDwNy7PA4I=
