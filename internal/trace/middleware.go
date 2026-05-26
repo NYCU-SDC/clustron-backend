@@ -1,9 +1,10 @@
 package trace
 
 import (
+	"net/http"
+
 	traceutil "github.com/NYCU-SDC/summer/pkg/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type Middleware struct {
@@ -19,7 +20,7 @@ func NewMiddleware(logger *zap.Logger, debug bool) *Middleware {
 }
 
 func (m Middleware) TraceMiddleWare(next http.HandlerFunc) http.HandlerFunc {
-	return traceutil.TraceMiddleware(next, m.logger)
+	return traceutil.TraceMiddleware(next, m.logger, false)
 }
 
 func (m Middleware) RecoverMiddleware(next http.HandlerFunc) http.HandlerFunc {
