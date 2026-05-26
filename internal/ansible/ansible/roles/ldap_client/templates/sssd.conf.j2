@@ -1,0 +1,21 @@
+[sssd]
+services = nss, pam, ssh
+domains = default
+
+[domain/default]
+id_provider = ldap
+auth_provider = ldap
+
+ldap_uri = ldap://{{ head_node_ip }}
+
+ldap_search_base = {{ ldap_base_dn }}
+
+ldap_user_ssh_public_key = sshPublicKey
+
+ldap_default_bind_dn = {{ ldap_bind_dn }}
+ldap_default_authtok = {{ ldap_bind_pwd }}
+
+ldap_id_use_start_tls = false
+ldap_tls_reqcert = allow
+enumerate = false
+cache_credentials = false

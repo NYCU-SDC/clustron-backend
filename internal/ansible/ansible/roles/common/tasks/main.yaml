@@ -1,0 +1,24 @@
+- name: Update apt cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Set timezone to Asia/Taipei
+  community.general.timezone:
+    name: Asia/Taipei
+
+- name: Set system hostname
+  become: true
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Generate /etc/hosts for all nodes
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: ".* {{ item }}$"
+    line: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] }} {{ item }}"
+    state: present
+  loop: "{{ groups['all'] }}"
+  when: hostvars[item]['ansible_facts'] is defined and hostvars[item]['ansible_facts']['default_ipv4'] is defined

@@ -1,0 +1,152 @@
+- name: Create slurm group
+  become: true
+  ansible.builtin.group:
+    name: slurm
+    gid: 1002
+
+- name: Create slurm user
+  become: true
+  ansible.builtin.user:
+    name: slurm
+    uid: 1002
+    group: slurm
+    home: /var/lib/slurm
+    create_home: true
+    shell: /bin/bash
+
+- name: Check if Slurm directories exist
+  ansible.builtin.stat:
+    path: /var/spool/slurm/d
+  register: slurm_controller_dirs_stat
+
+- name: Create Slurm directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: slurm
+    group: slurm
+    mode: '0755'
+  loop:
+    - /etc/slurm
+    - /var/spool/slurm/ctld
+    - /var/spool/slurm/d
+    - /var/log/slurm
+    - /var/run/slurmdbd
+  when: not slurm_controller_dirs_stat.stat.exists
+
+- name: Ensure Slurm Native Auth Key exists
+  ansible.builtin.stat:
+    path: /etc/slurm/slurm.key
+  register: slurm_controller_key_stat
+
+- name: Generate Slurm Native Auth Key
+  become: true
+  ansible.builtin.command: dd if=/dev/urandom of=/etc/slurm/slurm.key bs=1024 count=1
+  when: not slurm_controller_key_stat.stat.exists
+  changed_when: true
+
+- name: Setup Slurm Native Auth Key permission
+  become: true
+  ansible.builtin.file:
+    path: /etc/slurm/slurm.key
+    owner: slurm
+    group: slurm
+    mode: '0600'
+
+- name: Ensure JWT RSA Key exists
+  ansible.builtin.stat:
+    path: /etc/slurm/jwt.key
+  register: slurm_controller_jwt_key_stat
+
+- name: Generate JWT RSA Key
+  become: true
+  ansible.builtin.command: openssl genrsa -out /etc/slurm/jwt.key 2048
+  when: not slurm_controller_jwt_key_stat.stat.exists
+  changed_when: true
+
+- name: Setup JWT Key permission
+  become: true
+  ansible.builtin.file:
+    path: /etc/slurm/jwt.key
+    owner: slurm
+    group: slurm
+    mode: '0600'
+
+- name: Install MariaDB Server and Client
+  become: true
+  ansible.builtin.apt:
+    name:
+      - mariadb-server
+      - mariadb-client
+    state: present
+
+- name: Ensure MariaDB is running
+  become: true
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Initialize Slurm Accounting Database
+  become: true
+  ansible.builtin.shell: |
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS slurm_acct_db;"
+    mysql -u root -e "CREATE USER IF NOT EXISTS 'slurm'@'localhost' IDENTIFIED BY 'password';"
+    mysql -u root -e "GRANT ALL PRIVILEGES ON slurm_acct_db.* TO 'slurm'@'localhost';"
+    mysql -u root -e "FLUSH PRIVILEGES;"
+  changed_when: false
+
+- name: Install Controller packages
+  become: true
+  ansible.builtin.apt:
+    deb: "/opt/clustron_share/{{ slurm_builder_env_dir }}/{{ item }}"
+  loop:
+    - "slurm-smd_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-client_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-slurmctld_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-slurmdbd_{{ slurm_version }}_amd64.deb"
+
+- name: Deploy slurmdbd.conf
+  become: true
+  ansible.builtin.template:
+    src: slurmdbd.conf.j2
+    dest: /etc/slurm/slurmdbd.conf
+    owner: slurm
+    group: slurm
+    mode: '0600'
+  notify: Restart Slurmdbd
+
+- name: Deploy slurm.conf
+  become: true
+  ansible.builtin.template:
+    src: slurm.conf.j2
+    dest: /etc/slurm/slurm.conf
+    owner: slurm
+    group: slurm
+    mode: '0644'
+  notify: Reconfigure Slurm
+
+- name: Deploy gres.conf
+  become: true
+  ansible.builtin.template:
+    src: gres.conf.j2
+    dest: /etc/slurm/gres.conf
+    owner: slurm
+    group: slurm
+    mode: '0644'
+  notify: Reconfigure Slurm
+
+- name: Ensure slurmdbd is running and enabled
+  become: true
+  ansible.builtin.service:
+    name: slurmdbd
+    state: started
+    enabled: true
+
+- name: Ensure slurmctld is running and enabled
+  become: true
+  ansible.builtin.service:
+    name: slurmctld
+    state: started
+    enabled: true

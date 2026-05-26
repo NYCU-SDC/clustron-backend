@@ -1,0 +1,17 @@
+# Ansible managed NFS exports for Compute Nodes
+{% if 'compute_nodes' in groups %}
+{% for host in groups['compute_nodes'] %}
+{% if hostvars[host]['private_ip'] is defined and hostvars[host]['private_ip'] %}
+{% set real_ip = hostvars[host]['private_ip'] %}
+{% elif hostvars[host]['ansible_default_ipv4'] is defined and hostvars[host]['ansible_default_ipv4']['address'] is defined %}
+{% set real_ip = hostvars[host]['ansible_default_ipv4']['address'] %}
+{% else %}
+{% set real_ip = '' %}
+{% endif %}
+{% if real_ip %}
+/home       {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+/opt        {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+/etc/slurm  {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+{% endif %}
+{% endfor %}
+{% endif %}

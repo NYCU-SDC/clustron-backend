@@ -2,6 +2,7 @@ package main
 
 import (
 	"clustron-backend/internal"
+	"clustron-backend/internal/ansible"
 	"clustron-backend/internal/auth"
 	"clustron-backend/internal/casbin"
 	"clustron-backend/internal/config"
@@ -161,6 +162,7 @@ func main() {
 	slurmService := slurm.NewService(logger, cfg.Slurm.SlurmTokenHelperURL, cfg.Slurm.SlurmRestfulBaseURL, cfg.Slurm.SlurmRestfulVersion, cfg.Slurm.SlurmRootToken, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
+	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -175,6 +177,7 @@ func main() {
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
 	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
 	moduleHandler := module.NewHandler(moduleService, validator, logger, problemWriter)
+	ansibleHandler := ansible.NewHandler(ansibleService, validator, logger, problemWriter)
 	systemStatusHandler := system.NewHandler(logger, userService, problemWriter)
 
 	// Components
@@ -257,6 +260,15 @@ func main() {
 	mux.HandleFunc("GET /api/users/me", authMiddleware.HandlerFunc(userHandler.GetMeHandler))
 	mux.HandleFunc("GET /api/users", authMiddleware.HandlerFunc(userHandler.ListUserHandler))
 	mux.HandleFunc("PUT /api/users/{user_id}/globalRole", authMiddleware.HandlerFunc(userHandler.UpdateUserRoleHandler))
+
+	// Servers (Ansible)
+	mux.HandleFunc("GET /api/servers", authMiddleware.HandlerFunc(ansibleHandler.List))
+	mux.HandleFunc("POST /api/servers", authMiddleware.HandlerFunc(ansibleHandler.AddNode))
+	mux.HandleFunc("POST /api/servers/setup", authMiddleware.HandlerFunc(ansibleHandler.SetupAll))
+	mux.HandleFunc("GET /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.GetByID))
+	mux.HandleFunc("DELETE /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.Delete))
+	mux.HandleFunc("POST /api/servers/{server_id}/reset", authMiddleware.HandlerFunc(ansibleHandler.ResetNode))
+	mux.HandleFunc("PATCH /api/servers/{server_id}/role", authMiddleware.HandlerFunc(ansibleHandler.UpdateRole))
 
 	// Modules
 	mux.HandleFunc("GET /api/modules", authMiddleware.HandlerFunc(moduleHandler.List))

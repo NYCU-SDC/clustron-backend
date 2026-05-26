@@ -1,0 +1,55 @@
+ClusterName=head
+SlurmctldHost={{ ansible_facts['nodename'] }}
+SlurmUser=slurm
+SlurmdUser=root
+
+AuthType=auth/slurm
+CredType=cred/slurm
+
+StateSaveLocation=/var/spool/slurm/ctld
+SlurmdSpoolDir=/var/spool/slurm/d
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+
+# dbd
+AccountingStorageType=accounting_storage/slurmdbd
+AccountingStorageHost={{ ansible_facts['nodename'] }}
+AccountingStoragePort=6819
+
+# restd
+AuthAltTypes=auth/jwt
+AuthAltParameters=jwt_key=/etc/slurm/jwt.key
+
+MailProg=/usr/bin/true
+
+# --- resource distribution ---
+SelectType=select/cons_tres
+SelectTypeParameters=CR_Core_Memory
+GresTypes=gpu
+ProctrackType=proctrack/cgroup
+TaskPlugin=task/cgroup,task/affinity
+ReturnToService=1
+
+# --- COMPUTE NODES ---
+{% if 'compute_nodes' in groups %}
+{% for host in groups['compute_nodes'] %}
+{% if hostvars[host]['ansible_default_ipv4'] is defined and hostvars[host]['ansible_default_ipv4']['address'] is defined %}
+NodeName={{ host }} NodeAddr={{ hostvars[host]['ansible_default_ipv4']['address'] }} CPUs={{ hostvars[host].cpu_cores | default(1) }} RealMemory={{ hostvars[host].memory_mb | default(1024) }} State=UNKNOWN
+{% endif %}
+{% endfor %}
+
+# --- PARTITIONS ---
+{% set partitions = {} %}
+{% for host in groups['compute_nodes'] %}
+    {% set p_name = hostvars[host].slurm_partition | default('normal') %}
+    {% if p_name in partitions %}
+        {% set _ = partitions.update({p_name: partitions[p_name] ~ ',' ~ host}) %}
+    {% else %}
+        {% set _ = partitions.update({p_name: host}) %}
+    {% endif %}
+{% endfor %}
+
+{% for p_name, nodes in partitions.items() %}
+PartitionName={{ p_name }} Nodes={{ nodes }} Default={% if loop.first %}YES{% else %}NO{% endif %} MaxTime=INFINITE State=UP
+{% endfor %}
+{% endif %}

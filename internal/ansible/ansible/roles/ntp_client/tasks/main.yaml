@@ -1,0 +1,33 @@
+- name: Install chrony
+  become: true
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+- name: Configure chrony to use Header Node as server
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: "^(server|pool|sourcedir) .*"
+    state: absent
+  notify: Restart Chrony Client
+
+- name: Add Header Node as the only NTP server
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    line: "server {{ head_node_ip }} iburst"
+    state: present
+  notify: Restart Chrony Client
+
+- name: Ensure chrony service is enabled and started
+  become: true
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Check which NTP server chrony is mounted on
+  ansible.builtin.command: chronyc sources
+  register: ntp_client_chronyc_sources
+  changed_when: false
