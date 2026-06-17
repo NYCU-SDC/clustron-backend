@@ -1,7 +1,6 @@
 package slurm
 
 import (
-	"bufio"
 	"bytes"
 	"clustron-backend/internal/setting"
 	"context"
@@ -10,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -1109,48 +1109,64 @@ func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	return nil
 }
 
-// TODO: parse response from endpoints /users_association and /accounts_association
+// The association endpoints return a sacctmgr-style text body laid out in
+// indented sections: a section header is indented by a single space (e.g.
+// "Adding User(s)", "Settings", "Associations"), and the lines belonging to it
+// are indented by two or more spaces (e.g. "Default Account = base" or
+// "C = head  A = base  U = user1"). These regexes drive the parsing instead of
+// ad-hoc string slicing.
+var (
+	// associationSectionHeaderRe matches a section header: exactly one leading
+	// space followed by the header text, with an optional trailing "=". Content
+	// lines are indented further, so the leading "\S" guards against matching
+	// them.
+	associationSectionHeaderRe = regexp.MustCompile(`^ (\S.*?)\s*=?\s*$`)
+	// associationSettingRe matches a "key = value" line, capturing the key and
+	// the value with surrounding whitespace stripped.
+	associationSettingRe = regexp.MustCompile(`^\s*(.+?)\s*=\s*(.*?)\s*$`)
+	// associationFieldRe matches the "C = head", "A = base", "U = user" tokens
+	// of an association line.
+	associationFieldRe = regexp.MustCompile(`([A-Za-z])\s*=\s*(\S+)`)
+)
+
 func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
 	input = strings.ReplaceAll(input, `\n`, "\n")
 
 	var result ParsedUserAssociationResponse
-
-	scanner := bufio.NewScanner(strings.NewReader(input))
 	var section string
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" {
+	for _, line := range strings.Split(input, "\n") {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		// Detect section headers (single leading space, no leading double space)
-		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
-			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
-			section = strings.ToLower(header)
+		// A single-leading-space line starts a new section.
+		if m := associationSectionHeaderRe.FindStringSubmatch(line); m != nil {
+			section = strings.ToLower(m[1])
 			continue
 		}
-		// Parse content lines (double leading space = content under a section)
+
+		// Skip root-level freeform messages (no leading indentation).
+		if !strings.HasPrefix(line, " ") {
+			continue
+		}
+
 		switch section {
 		case "adding user(s)":
-			result.AddedUsers = append(result.AddedUsers, trimmed)
+			result.AddedUsers = append(result.AddedUsers, strings.TrimSpace(line))
 
 		case "settings":
-			key, value, found := strings.Cut(trimmed, "=")
-			if !found {
-				continue
-			}
-			switch strings.TrimSpace(strings.ToLower(key)) {
-			case "default account":
-				result.DefaultAccount = strings.TrimSpace(value)
-			case "admin level":
-				result.AdminLevel = strings.TrimSpace(value)
+			if key, value, ok := parseAssociationSetting(line); ok {
+				switch key {
+				case "default account":
+					result.DefaultAccount = value
+				case "admin level":
+					result.AdminLevel = value
+				}
 			}
 
 		case "associations":
-			if assoc, ok := ParseAssociation(trimmed); ok {
+			if assoc, ok := ParseAssociation(line); ok {
 				result.Associations = append(result.Associations, assoc)
 			}
 		}
@@ -1163,76 +1179,71 @@ func ParseAccountAssociationResponse(input string) ParsedAccountAssociationRespo
 	input = strings.ReplaceAll(input, `\n`, "\n")
 
 	var result ParsedAccountAssociationResponse
-
-	scanner := bufio.NewScanner(strings.NewReader(input))
 	var section string
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+	for _, line := range strings.Split(input, "\n") {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		// Root-level line (no leading space): freeform messages
+		if m := associationSectionHeaderRe.FindStringSubmatch(line); m != nil {
+			section = strings.ToLower(m[1])
+			continue
+		}
+
+		// Skip root-level freeform messages (no leading indentation).
 		if !strings.HasPrefix(line, " ") {
 			continue
 		}
 
-		// Section header: exactly 1 leading space
-		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
-			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
-			section = strings.ToLower(strings.TrimSpace(header))
-			continue
-		}
-		// Content line: 2+ leading spaces
 		switch section {
 		case "adding account(s)":
-			result.AddedAccounts = append(result.AddedAccounts, trimmed)
+			result.AddedAccounts = append(result.AddedAccounts, strings.TrimSpace(line))
 
 		case "settings":
-			key, value, found := strings.Cut(trimmed, "=")
-			if !found {
-				continue
+			if key, value, ok := parseAssociationSetting(line); ok {
+				switch key {
+				case "description":
+					result.Description = value
+				case "organization":
+					result.Organization = strings.ReplaceAll(value, `\`, "")
+				}
 			}
-			key = strings.TrimSpace(key)
-			value = strings.TrimSpace(value)
-			switch strings.ToLower(key) {
-			case "description":
-				result.Description = value
-			case "organization":
-				result.Organization = strings.ReplaceAll(value, `\`, "")
-			}
+
 		case "associations":
-			if assoc, ok := ParseAssociation(trimmed); ok {
+			if assoc, ok := ParseAssociation(line); ok {
 				result.Associations = append(result.Associations, assoc)
 			}
-		default:
-			continue
 		}
 	}
 
 	return result
 }
 
-// parseAssociation parses "C = head       A = base" into an Association.
+// parseAssociationSetting extracts a lower-cased key and its value from a
+// "key = value" settings line, reporting whether a "=" was present.
+func parseAssociationSetting(line string) (key, value string, ok bool) {
+	m := associationSettingRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", false
+	}
+	return strings.ToLower(m[1]), m[2], true
+}
+
+// ParseAssociation extracts the cluster (C), account (A) and user (U) tokens
+// from an association line such as "C = head       A = base       U = user".
 func ParseAssociation(line string) (Association, bool) {
 	var assoc Association
 
-	fields := strings.Fields(line) // ["C", "=", "head", "A", "=", "base"]
-	for i := 0; i+2 < len(fields); i++ {
-		if fields[i+1] != "=" {
-			continue
-		}
-		switch strings.ToUpper(fields[i]) {
+	for _, m := range associationFieldRe.FindAllStringSubmatch(line, -1) {
+		switch strings.ToUpper(m[1]) {
 		case "C":
-			assoc.Cluster = fields[i+2]
+			assoc.Cluster = m[2]
 		case "A":
-			assoc.Account = fields[i+2]
+			assoc.Account = m[2]
 		case "U":
-			assoc.User = fields[i+2]
+			assoc.User = m[2]
 		}
-		i += 2
 	}
 
 	if assoc.Cluster == "" && assoc.Account == "" {
