@@ -1109,24 +1109,27 @@ func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	return nil
 }
 
-// The association endpoints return a sacctmgr-style text body laid out in
-// indented sections: a section header is indented by a single space (e.g.
-// "Adding User(s)", "Settings", "Associations"), and the lines belonging to it
-// are indented by two or more spaces (e.g. "Default Account = base" or
-// "C = head  A = base  U = user1"). These regexes drive the parsing instead of
-// ad-hoc string slicing.
+// The association endpoints return a sacctmgr-style text body whose structure
+// is purely positional: a line indented by exactly one space is a section
+// header ("Adding User(s)", "Settings", "Associations"); a line indented by two
+// or more spaces is content belonging to the current section; a line with no
+// indentation is a freeform message to be ignored. The regexes below own that
+// grammar so the parsing logic never has to slice or prefix-test strings by
+// hand.
 var (
-	// associationSectionHeaderRe matches a section header: exactly one leading
-	// space followed by the header text, with an optional trailing "=". Content
-	// lines are indented further, so the leading "\S" guards against matching
-	// them.
-	associationSectionHeaderRe = regexp.MustCompile(`^ (\S.*?)\s*=?\s*$`)
-	// associationSettingRe matches a "key = value" line, capturing the key and
-	// the value with surrounding whitespace stripped.
-	associationSettingRe = regexp.MustCompile(`^\s*(.+?)\s*=\s*(.*?)\s*$`)
+	// associationLineRe classifies one line. Exactly one of the named "header"
+	// or "content" groups is populated (both already stripped of surrounding
+	// whitespace and any trailing "="); a blank or non-indented freeform line
+	// does not match at all.
+	associationLineRe = regexp.MustCompile(`^(?: (?P<header>\S.*?)| {2,}(?P<content>\S.*?))\s*=?\s*$`)
+	// associationSettingRe splits a "key = value" content line.
+	associationSettingRe = regexp.MustCompile(`^(.+?)\s*=\s*(.*?)\s*$`)
 	// associationFieldRe matches the "C = head", "A = base", "U = user" tokens
-	// of an association line.
+	// of an association content line.
 	associationFieldRe = regexp.MustCompile(`([A-Za-z])\s*=\s*(\S+)`)
+
+	associationHeaderIdx  = associationLineRe.SubexpIndex("header")
+	associationContentIdx = associationLineRe.SubexpIndex("content")
 )
 
 func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
@@ -1136,27 +1139,22 @@ func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
 	var section string
 
 	for _, line := range strings.Split(input, "\n") {
-		if strings.TrimSpace(line) == "" {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
 			continue
 		}
-
-		// A single-leading-space line starts a new section.
-		if m := associationSectionHeaderRe.FindStringSubmatch(line); m != nil {
-			section = strings.ToLower(m[1])
-			continue
-		}
-
-		// Skip root-level freeform messages (no leading indentation).
-		if !strings.HasPrefix(line, " ") {
-			continue
-		}
+		content := m[associationContentIdx]
 
 		switch section {
 		case "adding user(s)":
-			result.AddedUsers = append(result.AddedUsers, strings.TrimSpace(line))
+			result.AddedUsers = append(result.AddedUsers, content)
 
 		case "settings":
-			if key, value, ok := parseAssociationSetting(line); ok {
+			if key, value, ok := parseAssociationSetting(content); ok {
 				switch key {
 				case "default account":
 					result.DefaultAccount = value
@@ -1166,7 +1164,7 @@ func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
 			}
 
 		case "associations":
-			if assoc, ok := ParseAssociation(line); ok {
+			if assoc, ok := ParseAssociation(content); ok {
 				result.Associations = append(result.Associations, assoc)
 			}
 		}
@@ -1182,26 +1180,22 @@ func ParseAccountAssociationResponse(input string) ParsedAccountAssociationRespo
 	var section string
 
 	for _, line := range strings.Split(input, "\n") {
-		if strings.TrimSpace(line) == "" {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
 			continue
 		}
-
-		if m := associationSectionHeaderRe.FindStringSubmatch(line); m != nil {
-			section = strings.ToLower(m[1])
-			continue
-		}
-
-		// Skip root-level freeform messages (no leading indentation).
-		if !strings.HasPrefix(line, " ") {
-			continue
-		}
+		content := m[associationContentIdx]
 
 		switch section {
 		case "adding account(s)":
-			result.AddedAccounts = append(result.AddedAccounts, strings.TrimSpace(line))
+			result.AddedAccounts = append(result.AddedAccounts, content)
 
 		case "settings":
-			if key, value, ok := parseAssociationSetting(line); ok {
+			if key, value, ok := parseAssociationSetting(content); ok {
 				switch key {
 				case "description":
 					result.Description = value
@@ -1211,7 +1205,7 @@ func ParseAccountAssociationResponse(input string) ParsedAccountAssociationRespo
 			}
 
 		case "associations":
-			if assoc, ok := ParseAssociation(line); ok {
+			if assoc, ok := ParseAssociation(content); ok {
 				result.Associations = append(result.Associations, assoc)
 			}
 		}
