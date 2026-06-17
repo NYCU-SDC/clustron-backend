@@ -282,20 +282,19 @@ func (s *Service) GetTypeByUser(ctx context.Context, userRole string, userID uui
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	roleType := "membership"
-	if userRole == role.Admin.String() {
-		roleType = "adminOverride"
-		return GroupRole{}, roleType, nil
-	}
-
 	groupRole, err := s.GetByUser(traceCtx, userID, groupID)
 	if err != nil {
+		// A system admin who isn't a member of the group falls back to admin override.
+		// Group membership takes precedence, so this is only reached when no membership exists.
 		if errors.As(err, &handlerutil.NotFoundError{}) {
+			if userRole == role.Admin.String() {
+				return GroupRole{}, "adminOverride", nil
+			}
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "group_role", fmt.Sprintf("(%s, %s)", "group_id", "user_id"), fmt.Sprintf("(%s, %s)", groupID.String(), userID.String()), logger, "get group role by user id and group id")
 		}
 		span.RecordError(err)
 		return GroupRole{}, "", err
 	}
 
-	return groupRole, roleType, nil
+	return groupRole, "membership", nil
 }
