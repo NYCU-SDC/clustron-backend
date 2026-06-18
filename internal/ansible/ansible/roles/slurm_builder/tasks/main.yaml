@@ -42,10 +42,10 @@
     path: /opt/slurm_build/src
     state: directory
     mode: '0755'
+    owner: "{{ ansible_facts['user_id'] }}"
   when: slurm_builder_needs_build and slurm_builder_is_representative
 
 - name: Download and Unpack Slurm source
-  become: true
   ansible.builtin.unarchive:
     src: "https://download.schedmd.com/slurm/slurm-25.11.4.tar.bz2"
     dest: /opt/slurm_build/src
