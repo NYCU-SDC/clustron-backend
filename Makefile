@@ -5,7 +5,7 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
-.PHONY: all prepare run build test gen
+.PHONY: all prepare run build test gen slurm-up slurm-down slurm-token
 
 all: build
 
@@ -69,3 +69,15 @@ flow-chart:
 		go-callvis -ignore "$(IGNORE_PKGS)" $(EXTRA_FLAGS) $(TARGET) || (echo -e "  -> $(RED)Execution failed$(NC)" && exit 1); \
 	fi
 	@echo -e "==> $(BLUE)Call graph generation finished$(NC)"
+
+# ---- Local Dockerized Slurm cluster (.deploy/local/slurm) ----
+SLURM_USER ?= root
+
+slurm-up:
+	@./.deploy/local/slurm/deploy.sh
+
+slurm-down:
+	@./.deploy/local/slurm/cleanup.sh
+
+slurm-token:
+	@./.deploy/local/slurm/mint-token.sh $(SLURM_USER)
