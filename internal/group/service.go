@@ -67,6 +67,16 @@ type LDAPClient interface {
 	GetGroupInfo(groupName string) (*ldap.Entry, error)
 }
 
+// SlurmStore manages the Slurm accounting "account" that mirrors a Clustron
+// group. CreateAccountAssociation is the `sacctmgr add account` equivalent: it
+// creates the account AND its cluster association, so the account is usable for
+// jobs (the bare /accounts endpoint leaves it with no association). Members are
+// later added as Slurm users via the users_association endpoint.
+type SlurmStore interface {
+	CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) error
+	DeleteAccount(ctx context.Context, accountName string) error
+}
+
 type Service struct {
 	logger         *zap.Logger
 	tracer         trace.Tracer
@@ -78,9 +88,10 @@ type Service struct {
 	memberStore    MembershipStore
 	ldapGroupStore LDAPGroupStore
 	ldapClient     LDAPClient
+	slurmStore     SlurmStore
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, settingStore SettingStore, roleStore RoleStore, membershipStore MembershipStore, ldapGroupStore LDAPGroupStore, ldapClient LDAPClient, slurmStore SlurmStore) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("group/service"),
@@ -92,6 +103,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, setti
 		memberStore:    membershipStore,
 		ldapGroupStore: ldapGroupStore,
 		ldapClient:     ldapClient,
+		slurmStore:     slurmStore,
 	}
 }
 
@@ -573,6 +585,30 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 			err := s.ldapClient.DeleteGroup(adminCN)
 			if err != nil {
 				logger.Error("failed to delete group in LDAP", zap.Error(err))
+			}
+			return err
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateSlurmAccount",
+		Action: func(ctx context.Context) error {
+			// A Clustron group maps to a Slurm accounting account. Use the
+			// accounts_association endpoint (== `sacctmgr add account`) so the
+			// account is created *with* its cluster association and is usable;
+			// nil clusterNames associates it to slurmdbd's cluster(s).
+			err := s.slurmStore.CreateAccountAssociation(ctx, []string{baseCN}, nil)
+			if err != nil {
+				logger.Error("failed to create account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAccount(ctx, baseCN)
+			if err != nil {
+				logger.Error("failed to delete account in Slurm", zap.Error(err))
 			}
 			return err
 		},
