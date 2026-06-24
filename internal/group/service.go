@@ -561,7 +561,8 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 			return nil
 		},
 		Compensate: func(ctx context.Context) error {
-			err := s.ldapClient.DeleteGroup(title)
+			// Delete the group we actually created (baseCN), not the title.
+			err := s.ldapClient.DeleteGroup(baseCN)
 			if err != nil {
 				logger.Error("failed to delete group in LDAP", zap.Error(err))
 			}
