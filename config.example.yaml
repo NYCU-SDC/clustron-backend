@@ -32,6 +32,6 @@ ldap:
   ldap_port: 389
   ldap_base_dn: "DC=example,DC=com"
   ldap_user_ou_name: "people"
-  ldap_group_dn: "groups"
+  ldap_group_ou_name: "groups"
   ldap_bind_dn: "CN=admin,DC=example,DC=com"
   ldap_bind_password: "YOUR_LDAP_PASSWORD"
