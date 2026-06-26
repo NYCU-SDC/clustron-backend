@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -33,19 +34,6 @@ type redisClient interface {
 type settingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
-
-// TODO: parse response from endpoints /users_association and /accounts_association
-//type CreateUserAssociationResponse struct {
-//	AddedUsers     []string
-//	DefaultAccount string
-//	Associations   []Association
-//}
-//
-//type createAccountAssociationResponse struct {
-//	AddedAccounts []string
-//	Description   string
-//	Organization  string
-//}
 
 type Service struct {
 	logger               *zap.Logger
@@ -704,7 +692,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associations []Associat
 	return nil
 }
 
-func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountNames, clusterNames []string) error {
+func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountNames, clusterNames []string) (ParsedUserAssociationResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateUserAssociation")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -724,14 +712,14 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 	if err != nil {
 		logger.Error("failed to marshal user associations request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedUserAssociationResponse{}, err
 	}
 
 	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedUserAssociationResponse{}, err
 	}
 
 	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
@@ -741,7 +729,7 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 	if err != nil {
 		logger.Error("failed to perform http request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedUserAssociationResponse{}, err
 	}
 	defer func() {
 		if cerr := response.Body.Close(); cerr != nil {
@@ -754,15 +742,15 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
 		logger.Error("failed to create Slurm user association", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedUserAssociationResponse{}, err
 	}
 
-	var associationsResponse Response
+	var associationsResponse CreateUserAssociationResponse
 	err = ParseResponse(traceCtx, response, &associationsResponse)
 	if err != nil {
 		logger.Error("failed to parse response", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedUserAssociationResponse{}, err
 	}
 
 	// Slurm returns HTTP 200 even for logical failures.
@@ -784,15 +772,17 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 			apiErr := fmt.Errorf("slurm API rejected user association creation: %s", strings.Join(errorMsgs, "; "))
 			logger.Error("slurm api returned errors", zap.Error(apiErr))
 			span.RecordError(apiErr)
-			return apiErr
+			return ParsedUserAssociationResponse{}, apiErr
 		}
 	}
 
+	parsedResponse := ParseUserAssociationResponse(associationsResponse.AddedUsers)
+
 	logger.Info("successfully created user associations in slurm")
-	return nil
+	return parsedResponse, nil
 }
 
-func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) error {
+func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) (ParsedAccountAssociationResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateAccountAssociation")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -811,14 +801,14 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	if err != nil {
 		logger.Error("failed to marshal account associations request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedAccountAssociationResponse{}, err
 	}
 
 	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedAccountAssociationResponse{}, err
 	}
 
 	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
@@ -828,7 +818,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	if err != nil {
 		logger.Error("failed to perform http request", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedAccountAssociationResponse{}, err
 	}
 	defer func() {
 		if cerr := response.Body.Close(); cerr != nil {
@@ -841,15 +831,15 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
 		logger.Error("failed to create Slurm user association", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedAccountAssociationResponse{}, err
 	}
 
-	var associationsResponse Response
+	var associationsResponse CreateAccountAssociationResponse
 	err = ParseResponse(traceCtx, response, &associationsResponse)
 	if err != nil {
 		logger.Error("failed to parse response", zap.Error(err))
 		span.RecordError(err)
-		return err
+		return ParsedAccountAssociationResponse{}, err
 	}
 
 	// Slurm returns HTTP 200 even for logical failures.
@@ -871,12 +861,14 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 			apiErr := fmt.Errorf("slurm API rejected account association creation: %s", strings.Join(errorMsgs, "; "))
 			logger.Error("slurm api returned errors", zap.Error(apiErr))
 			span.RecordError(apiErr)
-			return apiErr
+			return ParsedAccountAssociationResponse{}, apiErr
 		}
 	}
 
+	parsedResponse := ParseAccountAssociationResponse(associationsResponse.AddedAccounts)
+
 	logger.Info("successfully created account associations in slurm")
-	return nil
+	return parsedResponse, nil
 }
 
 func (s *Service) DeleteUser(ctx context.Context, userName string) error {
@@ -1117,128 +1109,139 @@ func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	return nil
 }
 
-// TODO: parse response from endpoints /users_association and /accounts_association
-//func ParseUserAssociationResponse(input string) CreateUserAssociationResponse {
-//	var result CreateUserAssociationResponse
-//
-//	scanner := bufio.NewScanner(strings.NewReader(input))
-//	var section string
-//
-//	for scanner.Scan() {
-//		line := scanner.Text()
-//		trimmed := strings.TrimSpace(line)
-//
-//		if trimmed == "" {
-//			continue
-//		}
-//
-//		// Detect section headers (single leading space, no leading double space)
-//		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
-//			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
-//			section = strings.ToLower(header)
-//			continue
-//		}
-//
-//		// Parse content lines (double leading space = content under a section)
-//		switch section {
-//			case "adding user(s)":
-//				result.AddedUsers = append(result.AddedUsers, trimmed)
-//
-//			case "settings":
-//				key, value, found := strings.Cut(trimmed, "=")
-//				if !found {
-//					continue
-//				}
-//				key = strings.TrimSpace(key)
-//				value = strings.TrimSpace(value)
-//				if strings.EqualFold(key, "Default Account") {
-//					result.DefaultAccount = value
-//				}
-//
-//			case "associations":
-//			if assoc, ok := ParseAssociation(trimmed); ok {
-//				result.Associations = append(result.Associations, assoc)
-//			}
-//		}
-//	}
-//
-//	return result
-//}
-//
-//func parseAccounts(input string) createAccountAssociationResponse {
-//	var result createAccountAssociationResponse
-//
-//	scanner := bufio.NewScanner(strings.NewReader(input))
-//	var section string
-//
-//	for scanner.Scan() {
-//		line := scanner.Text()
-//		trimmed := strings.TrimSpace(line)
-//
-//		if trimmed == "" {
-//			continue
-//		}
-//
-//		// Root-level line (no leading space): freeform messages
-//		if !strings.HasPrefix(line, " ") {
-//			continue
-//		}
-//
-//		// Section header: exactly 1 leading space
-//		if strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "  ") {
-//			header := strings.TrimSpace(strings.TrimSuffix(trimmed, "="))
-//			section = strings.ToLower(strings.TrimSpace(header))
-//			continue
-//		}
-//
-//		// Content line: 2+ leading spaces
-//		switch section {
-//			case "adding account(s)":
-//				result.AddedAccounts = append(result.AddedAccounts, trimmed)
-//
-//			case "settings":
-//				key, value, found := strings.Cut(trimmed, "=")
-//				if !found {
-//					continue
-//				}
-//				key = strings.TrimSpace(key)
-//				value = strings.TrimSpace(value)
-//				switch strings.ToLower(key) {
-//					case "description":
-//						result.Description = value
-//					case "organization":
-//						result.Organization = value
-//				}
-//
-//
-//		}
-//	}
-//
-//	return result
-//}
-//
-//// parseAssociation parses "C = head       A = base" into an Association.
-//func ParseAssociation(line string) (Association, bool) {
-//	var assoc Association
-//
-//	fields := strings.Fields(line) // ["C", "=", "head", "A", "=", "base"]
-//	for i := 0; i+2 < len(fields); i++ {
-//		if fields[i+1] != "=" {
-//			continue
-//		}
-//		switch strings.ToUpper(fields[i]) {
-//			case "C":
-//				assoc.Cluster = fields[i+2]
-//			case "A":
-//				assoc.Account = fields[i+2]
-//			case "U":
-//				assoc.User = fields[i+2]
-//		}
-//		i += 2
-//	}
-//
-//	if assoc.Cluster == "" && assoc.Account == "" {
-//		return assoc, false
-//	}
-//	return assoc, true
-//}
+// The association endpoints return a sacctmgr-style text body whose structure
+// is purely positional: a line indented by exactly one space is a section
+// header ("Adding User(s)", "Settings", "Associations"); a line indented by two
+// or more spaces is content belonging to the current section; a line with no
+// indentation is a freeform message to be ignored. The regexes below own that
+// grammar so the parsing logic never has to slice or prefix-test strings by
+// hand.
+var (
+	// associationLineRe classifies one line. Exactly one of the named "header"
+	// or "content" groups is populated (both already stripped of surrounding
+	// whitespace and any trailing "="); a blank or non-indented freeform line
+	// does not match at all.
+	associationLineRe = regexp.MustCompile(`^(?: (?P<header>\S.*?)| {2,}(?P<content>\S.*?))\s*=?\s*$`)
+	// associationSettingRe splits a "key = value" content line.
+	associationSettingRe = regexp.MustCompile(`^(.+?)\s*=\s*(.*?)\s*$`)
+	// associationFieldRe matches the "C = head", "A = base", "U = user" tokens
+	// of an association content line.
+	associationFieldRe = regexp.MustCompile(`([A-Za-z])\s*=\s*(\S+)`)
+
+	associationHeaderIdx  = associationLineRe.SubexpIndex("header")
+	associationContentIdx = associationLineRe.SubexpIndex("content")
+)
+
+func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
+	input = strings.ReplaceAll(input, `\n`, "\n")
+
+	var result ParsedUserAssociationResponse
+	var section string
+
+	for _, line := range strings.Split(input, "\n") {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
+			continue
+		}
+		content := m[associationContentIdx]
+
+		switch section {
+		case "adding user(s)":
+			result.AddedUsers = append(result.AddedUsers, content)
+
+		case "settings":
+			if key, value, ok := parseAssociationSetting(content); ok {
+				switch key {
+				case "default account":
+					result.DefaultAccount = value
+				case "admin level":
+					result.AdminLevel = value
+				}
+			}
+
+		case "associations":
+			if assoc, ok := ParseAssociation(content); ok {
+				result.Associations = append(result.Associations, assoc)
+			}
+		}
+	}
+
+	return result
+}
+
+func ParseAccountAssociationResponse(input string) ParsedAccountAssociationResponse {
+	input = strings.ReplaceAll(input, `\n`, "\n")
+
+	var result ParsedAccountAssociationResponse
+	var section string
+
+	for _, line := range strings.Split(input, "\n") {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
+			continue
+		}
+		content := m[associationContentIdx]
+
+		switch section {
+		case "adding account(s)":
+			result.AddedAccounts = append(result.AddedAccounts, content)
+
+		case "settings":
+			if key, value, ok := parseAssociationSetting(content); ok {
+				switch key {
+				case "description":
+					result.Description = value
+				case "organization":
+					result.Organization = strings.ReplaceAll(value, `\`, "")
+				}
+			}
+
+		case "associations":
+			if assoc, ok := ParseAssociation(content); ok {
+				result.Associations = append(result.Associations, assoc)
+			}
+		}
+	}
+
+	return result
+}
+
+// parseAssociationSetting extracts a lower-cased key and its value from a
+// "key = value" settings line, reporting whether a "=" was present.
+func parseAssociationSetting(line string) (key, value string, ok bool) {
+	m := associationSettingRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", false
+	}
+	return strings.ToLower(m[1]), m[2], true
+}
+
+// ParseAssociation extracts the cluster (C), account (A) and user (U) tokens
+// from an association line such as "C = head       A = base       U = user".
+func ParseAssociation(line string) (Association, bool) {
+	var assoc Association
+
+	for _, m := range associationFieldRe.FindAllStringSubmatch(line, -1) {
+		switch strings.ToUpper(m[1]) {
+		case "C":
+			assoc.Cluster = m[2]
+		case "A":
+			assoc.Account = m[2]
+		case "U":
+			assoc.User = m[2]
+		}
+	}
+
+	if assoc.Cluster == "" && assoc.Account == "" {
+		return assoc, false
+	}
+	return assoc, true
+}
