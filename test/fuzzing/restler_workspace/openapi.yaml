@@ -1,0 +1,1820 @@
+openapi: 3.0.0
+info:
+  title: Clustron API
+  version: 1.0.0
+tags:
+  - name: Group
+  - name: User
+  - name: Auth
+  - name: Admin
+  - name: Job
+  - name: Search
+  - name: Module
+paths:
+  /api/bind/oauth/{provider}:
+    post:
+      operationId: Auth_bindOAuth
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          description: The OAuth2 provider to bind.
+          schema:
+            $ref: '#/components/schemas/Auth.OAuthProviders'
+        - name: c
+          in: query
+          required: true
+          description: The callback URL of the OAuth2 login. [See details](https://clustron.atlassian.net/wiki/spaces/cd/pages/18219016/Backend+OAuth+JWT+Manual)
+          schema:
+            type: string
+          explode: false
+        - name: r
+          in: query
+          required: false
+          description: The redirect URL for login callback.
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Auth.BindLoginInfoResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Auth
+  /api/groups:
+    get:
+      operationId: Groups_getGroups
+      description: Get all groups of the user.
+      parameters:
+        - $ref: '#/components/parameters/PaginatedParams.page'
+        - $ref: '#/components/parameters/PaginatedParams.size'
+        - $ref: '#/components/parameters/PaginatedParams.sort'
+        - $ref: '#/components/parameters/PaginatedParams.sortBy'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - totalPages
+                  - totalItems
+                  - currentPage
+                  - pageSize
+                  - hasNextPage
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Groups.GroupResponse'
+                  totalPages:
+                    type: integer
+                    format: int32
+                    example: 10
+                  totalItems:
+                    type: integer
+                    format: int32
+                    example: 100
+                  currentPage:
+                    type: integer
+                    format: int32
+                    example: 1
+                  pageSize:
+                    type: integer
+                    format: int32
+                    example: 10
+                  hasNextPage:
+                    type: boolean
+                    example: true
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+    post:
+      operationId: Groups_createGroup
+      description: Create a new group. Only admin level can reach this endpoint.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.CreateGroupResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.CreateGroupRequest'
+  /api/groups/{id}:
+    get:
+      operationId: Groups_getGroupById
+      description: Get a group by id.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.GroupResponseWithLinks'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/groups/{id}/archive:
+    post:
+      operationId: Groups_archiveGroup
+      description: Archive a group. Will reject the request from access level 'user', 'group-admin'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/groups/{id}/link:
+    post:
+      operationId: Groups_createGroupLink
+      description: Create a link for a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.LinkResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.CreateLinkRequest'
+  /api/groups/{id}/link/{linkId}:
+    put:
+      operationId: Groups_updateGroupLink
+      description: Update a link for a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.LinkResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.UpdateLinkRequest'
+    delete:
+      operationId: Groups_deleteGroupLink
+      description: Delete a link for a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/groups/{id}/members:
+    get:
+      operationId: Groups_getMembers
+      description: Get all members of a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PaginatedParams.page'
+        - $ref: '#/components/parameters/PaginatedParams.size'
+        - $ref: '#/components/parameters/PaginatedParams.sort'
+        - $ref: '#/components/parameters/PaginatedParams.sortBy'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - totalPages
+                  - totalItems
+                  - currentPage
+                  - pageSize
+                  - hasNextPage
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Groups.MemberResponse'
+                  totalPages:
+                    type: integer
+                    format: int32
+                    example: 10
+                  totalItems:
+                    type: integer
+                    format: int32
+                    example: 100
+                  currentPage:
+                    type: integer
+                    format: int32
+                    example: 1
+                  pageSize:
+                    type: integer
+                    format: int32
+                    example: 10
+                  hasNextPage:
+                    type: boolean
+                    example: true
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+    post:
+      operationId: Groups_addMember
+      description: Add a member to a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.MemberResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.AddMembersRequest'
+  /api/groups/{id}/members/{memberId}:
+    delete:
+      operationId: Groups_removeMember
+      description: Remove a member from a group. Will reject the request from access level 'user'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+    put:
+      operationId: Groups_updateMember
+      description: Update a member's access level.  Will reject the request from access level 'user'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.MemberResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.UpdateMemberRequest'
+  /api/groups/{id}/pendingMembers:
+    get:
+      operationId: Groups_getPendingMembers
+      description: Get all pending members of a group. Will reject the request from access level 'user'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PaginatedParams.page'
+        - $ref: '#/components/parameters/PaginatedParams.size'
+        - $ref: '#/components/parameters/PaginatedParams.sort'
+        - $ref: '#/components/parameters/PaginatedParams.sortBy'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - totalPages
+                  - totalItems
+                  - currentPage
+                  - pageSize
+                  - hasNextPage
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Groups.PendingMemberResponse'
+                  totalPages:
+                    type: integer
+                    format: int32
+                    example: 10
+                  totalItems:
+                    type: integer
+                    format: int32
+                    example: 100
+                  currentPage:
+                    type: integer
+                    format: int32
+                    example: 1
+                  pageSize:
+                    type: integer
+                    format: int32
+                    example: 10
+                  hasNextPage:
+                    type: boolean
+                    example: true
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/groups/{id}/pendingMembers/{pendingId}:
+    put:
+      operationId: Groups_updatePendingMember
+      description: Update a pending member's access level.  Will reject the request from access level 'user'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pendingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.PendingMemberResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.UpdateMemberRequest'
+    delete:
+      operationId: Groups_removePendingMember
+      description: Remove a pending member from a group. Will reject the request from access level 'user'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pendingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/groups/{id}/transfer:
+    post:
+      operationId: Groups_transferGroupOwnership
+      description: Transfer group ownership to another member. Will reject the request from access level 'user'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups.GroupResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Groups.TransferGroupOwnershipRequest'
+  /api/groups/{id}/unarchive:
+    post:
+      operationId: Groups_unarchiveGroup
+      description: Unarchive a group. Will reject the request from access level 'user', 'group-admin'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Group
+  /api/jobs:
+    post:
+      operationId: Job_submitJob
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job.JobResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+      tags:
+        - Job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Job.JobRequest'
+    get:
+      operationId: Job_listJobs
+      parameters:
+        - $ref: '#/components/parameters/PaginatedParams.page'
+        - $ref: '#/components/parameters/PaginatedParams.size'
+        - $ref: '#/components/parameters/PaginatedParams.sort'
+        - $ref: '#/components/parameters/PaginatedParams.sortBy'
+        - $ref: '#/components/parameters/Job.FilterParams.filterBy'
+        - $ref: '#/components/parameters/Job.FilterParams.filterValue'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - totalPages
+                  - totalItems
+                  - currentPage
+                  - pageSize
+                  - hasNextPage
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job.JobResponse'
+                  totalPages:
+                    type: integer
+                    format: int32
+                    example: 10
+                  totalItems:
+                    type: integer
+                    format: int32
+                    example: 100
+                  currentPage:
+                    type: integer
+                    format: int32
+                    example: 1
+                  pageSize:
+                    type: integer
+                    format: int32
+                    example: 10
+                  hasNextPage:
+                    type: boolean
+                    example: true
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Job
+  /api/jobs/counts:
+    get:
+      operationId: Job_countJobs
+      description: Count jobs by status.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: The status of jobs to count. If not provided, counts all statuses.
+          schema:
+            type: string
+            enum:
+              - RUNNING
+              - PENDING
+              - COMPLETED
+              - FAILED
+              - TIMEOUT
+              - CANCELLED
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  running:
+                    type: number
+                  pending:
+                    type: number
+                  completed:
+                    type: number
+                  failed:
+                    type: number
+                  timeout:
+                    type: number
+                  cancelled:
+                    type: number
+                required:
+                  - running
+                  - pending
+                  - completed
+                  - failed
+                  - timeout
+                  - cancelled
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+      tags:
+        - Job
+  /api/login/oauth/{provider}:
+    get:
+      operationId: Auth_loginGoogle
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          description: The OAuth2 provider to use for login.
+          schema:
+            $ref: '#/components/schemas/Auth.OAuthProviders'
+        - name: c
+          in: query
+          required: true
+          description: The callback URL of the OAuth2 login. [See details](https://clustron.atlassian.net/wiki/spaces/cd/pages/18219016/Backend+OAuth+JWT+Manual)
+          schema:
+            type: string
+          explode: false
+        - name: r
+          in: query
+          required: false
+          description: The redirect URL for login callback.
+          schema:
+            type: string
+          explode: false
+      responses:
+        '302':
+          description: Redirection
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Auth
+  /api/logout:
+    post:
+      operationId: Auth_logout
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Auth
+  /api/modules:
+    get:
+      operationId: Module_listModules
+      description: list the user's module
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Module.ModuleResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Module
+    post:
+      operationId: Module_createModule
+      description: create module
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module.ModuleResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+      tags:
+        - Module
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Module.CreateModuleRequest'
+  /api/modules/{id}:
+    get:
+      operationId: Module_getModule
+      description: get a module by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module.ModuleResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Module
+    put:
+      operationId: Module_updateModule
+      description: update module by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module.ModuleResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Module
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Module.CreateModuleRequest'
+    delete:
+      operationId: Module_deleteModule
+      description: delete module by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Module
+  /api/onboarding:
+    post:
+      operationId: User_onboardUser
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User.OnboardingRequest'
+  /api/partitions:
+    get:
+      operationId: Job_getPartitions
+      description: Get available partitions.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  partitions:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - partitions
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Job
+  /api/publickey:
+    get:
+      operationId: User_getPublicKey
+      parameters:
+        - name: short
+          in: query
+          required: false
+          description: Get 10 head characters of publickey as short public key in 'publickey' field.
+          schema:
+            type: boolean
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User.PublicKey'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - User
+    post:
+      operationId: User_addPublicKey
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User.PublicKey'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User.AddPublicKeyRequest'
+    delete:
+      operationId: User_deletePublicKey
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User.DeletePublicKeyRequest'
+  /api/refreshToken/{refreshToken}:
+    get:
+      operationId: Auth_refreshToken
+      parameters:
+        - name: refreshToken
+          in: path
+          required: true
+          description: The refresh token to use for refreshing the access token.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Auth.RefreshToken'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - Auth
+  /api/roles:
+    get:
+      operationId: Admin_getRoleAccessLevelMapping
+      description: get all mapping between group wise role and group wise access level
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Groups.Role'
+        '403':
+          description: Access is forbidden.
+      tags:
+        - Admin
+    post:
+      operationId: Admin_postRoleAccessLevelMapping
+      description: post new mapping between group wise role and group wise access level
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Groups.Role'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+        '403':
+          description: Access is forbidden.
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Admin.CreateRoleRequest'
+  /api/roles/{id}:
+    delete:
+      operationId: Admin_deleteRoleAccessLevelMapping
+      description: delete mapping between group wise role and group wise access level
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/uuid'
+      responses:
+        '200':
+          description: The request has succeeded.
+        '403':
+          description: Access is forbidden.
+      tags:
+        - Admin
+    put:
+      operationId: Admin_putRoleAccessLevelMapping
+      description: update mapping between group wise role and group wise access level
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/uuid'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Groups.Role'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+        '403':
+          description: Access is forbidden.
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Admin.CreateRoleRequest'
+  /api/searchUser:
+    get:
+      operationId: Search_searchUser
+      description: Search for users by a query string with prefix search.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: The search query string used to match facts and references.
+          schema:
+            type: string
+          explode: false
+        - $ref: '#/components/parameters/PaginatedParams.page'
+        - $ref: '#/components/parameters/PaginatedParams.size'
+        - $ref: '#/components/parameters/PaginatedParams.sort'
+        - $ref: '#/components/parameters/PaginatedParams.sortBy'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - totalPages
+                  - totalItems
+                  - currentPage
+                  - pageSize
+                  - hasNextPage
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Search.SearchUserResponse'
+                  totalPages:
+                    type: integer
+                    format: int32
+                    example: 10
+                  totalItems:
+                    type: integer
+                    format: int32
+                    example: 100
+                  currentPage:
+                    type: integer
+                    format: int32
+                    example: 1
+                  pageSize:
+                    type: integer
+                    format: int32
+                    example: 10
+                  hasNextPage:
+                    type: boolean
+                    example: true
+      tags:
+        - Search
+  /api/settings:
+    get:
+      operationId: User_getUserSettings
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User.SettingsResponse'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - User
+    put:
+      operationId: User_updateSettings
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User.Settings'
+        '404':
+          description: The server cannot find the requested resource.
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User.Settings'
+components:
+  parameters:
+    Job.FilterParams.filterBy:
+      name: filterBy
+      in: query
+      required: false
+      description: The column to filter by.
+      schema:
+        type: string
+      explode: false
+    Job.FilterParams.filterValue:
+      name: filterValue
+      in: query
+      required: false
+      description: The value to filter by.
+      schema:
+        type: string
+      explode: false
+    PaginatedParams.page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+      explode: false
+    PaginatedParams.size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+      explode: false
+    PaginatedParams.sort:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+      explode: false
+    PaginatedParams.sortBy:
+      name: sortBy
+      in: query
+      required: false
+      schema:
+        type: string
+      explode: false
+  schemas:
+    Admin.CreateRoleRequest:
+      type: object
+      required:
+        - role
+        - accessLevel
+      properties:
+        role:
+          type: string
+          description: The name of the role.
+          example: project-member
+        accessLevel:
+          allOf:
+            - $ref: '#/components/schemas/Groups.AccessLevel'
+          description: The access level of the role.
+          example: USER
+    Auth.BindLoginInfoResponse:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: OAuth url
+          example: /api/bind/oauth/google?http://localhost:8080/callback/bind
+    Auth.OAuthProviders:
+      type: string
+      enum:
+        - google
+        - nycu
+    Auth.RefreshToken:
+      type: object
+      required:
+        - accessToken
+        - expirationTime
+        - refreshToken
+      properties:
+        accessToken:
+          type: string
+          description: The new JWT
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        expirationTime:
+          type: integer
+          description: The expiration date of the refresh token.
+          example: 1700000000
+        refreshToken:
+          type: string
+          description: The new refresh token.
+          example: rftk_1234567890abcdef
+    Groups.AccessLevel:
+      type: string
+      enum:
+        - GROUP_OWNER
+        - GROUP_ADMIN
+        - USER
+    Groups.AddMemberError:
+      type: object
+      required:
+        - member
+        - role
+        - message
+      properties:
+        member:
+          type: string
+          example: bob@university.edu
+        role:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          example: 123e4567-e89b-12d3-a456-426614174000
+        message:
+          type: string
+          example: User not found
+    Groups.AddMemberRequest:
+      type: object
+      required:
+        - member
+        - roleId
+      properties:
+        member:
+          anyOf:
+            - $ref: '#/components/schemas/email'
+            - type: string
+          description: The email or student id of the user.
+          example: bob@university.edu
+        roleId:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          description: The role id of the member.
+          example: 123e4567-e89b-12d3-a456-426614174000
+    Groups.AddMembersRequest:
+      type: object
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Groups.AddMemberRequest'
+    Groups.AddMembersResult:
+      type: object
+      required:
+        - addedSuccessNumber
+        - addedFailureNumber
+        - errors
+      properties:
+        addedSuccessNumber:
+          type: integer
+          format: int32
+          example: 3
+        addedFailureNumber:
+          type: integer
+          format: int32
+          example: 1
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Groups.AddMemberError'
+          example:
+            - member: bob@university.edu
+              role: 123e4567-e89b-12d3-a456-426614174000
+              message: User not found
+    Groups.CreateGroupRequest:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          example: Distributed Systems Project
+        description:
+          type: string
+          example: Group for the distributed systems course project.
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Groups.AddMemberRequest'
+          example:
+            - member: alice@university.edu
+              roleId: 123e4567-e89b-12d3-a456-426614174000
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Groups.CreateLinkRequest'
+          example:
+            - title: Lab Resources
+              url: https://example.com
+    Groups.CreateGroupResponse:
+      type: object
+      required:
+        - addedResult
+      properties:
+        addedResult:
+          $ref: '#/components/schemas/Groups.AddMembersResult'
+      allOf:
+        - $ref: '#/components/schemas/Groups.GroupResponse'
+    Groups.CreateLinkRequest:
+      type: object
+      required:
+        - title
+        - url
+      properties:
+        title:
+          type: string
+          description: The title of the link.
+          example: Lab Resources
+        url:
+          type: string
+          description: The URL of the link.
+          example: https://example.com
+    Groups.GroupResponse:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - isArchived
+        - createdAt
+        - updatedAt
+        - me
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          example: 123e4567-e89b-12d3-a456-426614174100
+        title:
+          type: string
+          example: GPU Research Group
+        description:
+          type: string
+          example: Group for GPU research and experiments.
+        isArchived:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          example: '2024-01-01T12:00:00Z'
+        updatedAt:
+          type: string
+          example: '2024-10-01T12:00:00Z'
+        me:
+          anyOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - membership
+                  description: The user is a member of the group.
+                role:
+                  $ref: '#/components/schemas/Groups.Role'
+              required:
+                - type
+                - role
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - adminOverride
+                  description: The admin user is not a member of the group.
+              required:
+                - type
+    Groups.GroupResponseWithLinks:
+      type: object
+      required:
+        - links
+      properties:
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Groups.LinkResponse'
+          example:
+            - id: 123e4567-e89b-12d3-a456-426614174010
+              title: Lab Resources
+              url: https://wiki.university.edu/lab-resources
+      allOf:
+        - $ref: '#/components/schemas/Groups.GroupResponse'
+    Groups.LinkResponse:
+      type: object
+      required:
+        - id
+        - title
+        - url
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          description: The ID of the link.
+          example: 123e4567-e89b-12d3-a456-426614174010
+        title:
+          type: string
+          description: The title of the link.
+          example: Lab Resources
+        url:
+          type: string
+          description: The URL of the link.
+          example: https://wiki.university.edu/lab-resources
+    Groups.MemberResponse:
+      type: object
+      required:
+        - id
+        - fullName
+        - email
+        - studentId
+        - role
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          example: 123e4567-e89b-12d3-a456-426614174001
+        fullName:
+          type: string
+          example: Alice Chen
+        email:
+          allOf:
+            - $ref: '#/components/schemas/email'
+          example: alice@university.edu
+        studentId:
+          type: string
+          example: R12345678
+        role:
+          allOf:
+            - $ref: '#/components/schemas/Groups.Role'
+          example:
+            id: 123e4567-e89b-12d3-a456-426614174000
+            roleName: Member
+            accessLevel: USER
+    Groups.PendingMemberResponse:
+      type: object
+      required:
+        - id
+        - userIdentifier
+        - role
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          example: 123e4567-e89b-12d3-a456-426614174002
+        userIdentifier:
+          type: string
+          example: applicant@example.edu
+        role:
+          allOf:
+            - $ref: '#/components/schemas/Groups.Role'
+          example:
+            id: 123e4567-e89b-12d3-a456-426614174000
+            roleName: Member
+            accessLevel: USER
+    Groups.Role:
+      type: object
+      required:
+        - id
+        - roleName
+        - accessLevel
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          example: 123e4567-e89b-12d3-a456-426614174000
+        roleName:
+          type: string
+          example: Member
+        accessLevel:
+          allOf:
+            - $ref: '#/components/schemas/Groups.AccessLevel'
+          example: USER
+    Groups.TransferGroupOwnershipRequest:
+      type: object
+      required:
+        - identifier
+      properties:
+        identifier:
+          type: string
+          description: The new owner id in UUID format.
+          example: 123e4567-e89b-12d3-a456-426614174200
+    Groups.UpdateLinkRequest:
+      type: object
+      required:
+        - title
+        - url
+      properties:
+        title:
+          type: string
+          description: The title of the link.
+          example: Updated Lab Resources
+        url:
+          type: string
+          description: The URL of the link.
+          example: https://example.com
+    Groups.UpdateMemberRequest:
+      type: object
+      required:
+        - roleId
+      properties:
+        roleId:
+          allOf:
+            - $ref: '#/components/schemas/uuid'
+          description: The role id of the member.
+          example: 123e4567-e89b-12d3-a456-426614174000
+    Job.JobRequest:
+      type: object
+      required:
+        - name
+        - current_working_directory
+        - script
+        - environment
+        - tasks
+        - cpus_per_task
+        - memory_per_cpu
+        - memory_per_node
+        - partition
+        - time_limit
+      properties:
+        name:
+          type: string
+          example: test-job
+        comment:
+          type: string
+          example: My test job for experiments
+        current_working_directory:
+          type: string
+          example: /home/<user>
+        script:
+          type: string
+          example: |
+            #!/bin/bash
+            hostname
+            echo a
+        environment:
+          type: array
+          items:
+            type: string
+          example:
+            - HOME=/home/<user>
+            - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+            - SHELL=/bin/bash
+        nodes:
+          type: string
+          example: node[1-2]
+        minimum_nodes:
+          type: number
+          example: 1
+        maximum_nodes:
+          type: number
+          example: 2
+        tasks:
+          type: number
+          example: 4
+        cpus_per_task:
+          type: number
+          example: 2
+        memory_per_cpu:
+          type: number
+          example: 4096
+        memory_per_node:
+          type: number
+          example: 8192
+        partition:
+          type: string
+          example: debug
+        time_limit:
+          type: number
+          example: 3600
+        standard_input:
+          type: string
+          example: /dev/null
+        standard_output:
+          type: string
+          example: job.out
+        standard_error:
+          type: string
+          example: job.err
+      description: View [detail design document](https://clustron.atlassian.net/wiki/spaces/cd/pages/60358660/Slurm+Job+API+design) for more information.
+    Job.JobResponse:
+      type: object
+      required:
+        - id
+        - name
+        - comment
+        - status
+        - user
+        - partition
+        - resources
+      properties:
+        id:
+          type: number
+          description: The ID of the job.
+          example: 12345
+        name:
+          type: string
+          description: The name of the job.
+          example: test-job
+        comment:
+          type: string
+          description: The description of the job.
+          example: My test job for experiments
+        status:
+          type: string
+          description: The status of the job.
+          example: RUNNING
+        user:
+          type: string
+          description: The computer user who created the job.
+          example: alice
+        partition:
+          type: string
+          description: The partition the job belongs to.
+          example: short
+        resources:
+          type: object
+          properties:
+            cpu:
+              type: number
+              example: 8
+            memory:
+              type: number
+              example: 32768
+            gpu:
+              type: number
+              example: 0
+          required:
+            - cpu
+            - memory
+            - gpu
+          description: The resources allocated for the job.
+    Module.CreateModuleRequest:
+      type: object
+      required:
+        - title
+        - environment
+      properties:
+        title:
+          type: string
+          example: CUDA 11.8
+        environment:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              value:
+                type: string
+            required:
+              - key
+              - value
+          description: the environment variables for the module
+          example:
+            - key: PATH
+              value: /usr/local/cuda/bin
+    Module.ModuleResponse:
+      type: object
+      required:
+        - id
+        - title
+        - environment
+      properties:
+        id:
+          type: string
+          example: mod-123456
+        title:
+          type: string
+          example: CUDA 11.8
+        environment:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              value:
+                type: string
+            required:
+              - key
+              - value
+          description: the environment variables for the module
+          example:
+            - key: PATH
+              value: /usr/local/cuda/bin
+    Search.SearchUserResponse:
+      type: object
+      required:
+        - identifier
+      properties:
+        identifier:
+          type: string
+          description: student ID or email address
+          example: R12345678
+    User.AddPublicKeyRequest:
+      type: object
+      required:
+        - title
+        - publicKey
+      properties:
+        title:
+          type: string
+          description: The public key title set by the user.
+          example: workstation-key
+        publicKey:
+          type: string
+          description: The public key of the user.
+          example: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3...
+    User.DeletePublicKeyRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: The public key id in UUID format.
+          example: 123e4567-e89b-12d3-a456-426614174300
+    User.LoginMethod:
+      type: object
+      required:
+        - provider
+        - email
+      properties:
+        provider:
+          type: string
+          enum:
+            - GOOGLE
+            - NYCU
+          description: The oauth provider of this login method.
+          example: GOOGLE
+        email:
+          type: string
+          description: The email of this oauth login method.
+          example: alice@university.edu
+    User.OnboardingRequest:
+      type: object
+      required:
+        - fullName
+        - linuxUsername
+      properties:
+        fullName:
+          type: string
+          description: The real name of the user.
+          example: Alice Chen
+        linuxUsername:
+          type: string
+          description: The computer account name of the user.
+          example: alice
+    User.PublicKey:
+      type: object
+      required:
+        - id
+        - title
+        - publicKey
+      properties:
+        id:
+          type: string
+          description: The public key id in UUID format.
+          example: 123e4567-e89b-12d3-a456-426614174300
+        title:
+          type: string
+          description: The public key title set by the user.
+          example: workstation-key
+        publicKey:
+          type: string
+          description: The public key of the user.
+          example: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3...
+    User.Settings:
+      type: object
+      required:
+        - fullName
+        - linuxUsername
+      properties:
+        fullName:
+          type: string
+          description: The real name of the user.
+          example: Alice Chen
+        linuxUsername:
+          type: string
+          description: The computer account name of the user.
+          example: alice
+    User.SettingsResponse:
+      type: object
+      required:
+        - fullName
+        - linuxUsername
+        - boundLoginMethods
+      properties:
+        fullName:
+          type: string
+          description: The real name of the user.
+          example: Alice Chen
+        linuxUsername:
+          type: string
+          description: The computer account name of the user.
+          example: alice
+        boundLoginMethods:
+          type: array
+          items:
+            $ref: '#/components/schemas/User.LoginMethod'
+          description: The login methods of the user.
+          example:
+            - provider: GOOGLE
+              email: alice@university.edu
+    Versions:
+      type: string
+      enum:
+        - 1.0.0
+    email:
+      type: string
+      format: email
+    uuid:
+      type: string
+      format: uuid
+servers:
+  - url: https://example.com
+    description: Single server endpoint
+    variables: {}
