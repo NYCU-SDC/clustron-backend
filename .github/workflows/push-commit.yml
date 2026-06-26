@@ -36,15 +36,15 @@ jobs:
     runs-on:  ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
             go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
-        uses: sqlc-dev/setup-sqlc@v4
+        uses: sqlc-dev/setup-sqlc@v5
         with:
           sqlc-version: ${{ env.SQLC_VERSION }}
 
@@ -69,15 +69,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
-        uses: sqlc-dev/setup-sqlc@v4
+        uses: sqlc-dev/setup-sqlc@v5
         with:
           sqlc-version: ${{ env.SQLC_VERSION }}
 
@@ -95,15 +95,15 @@ jobs:
     runs-on:  ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
             go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Sqlc
-        uses: sqlc-dev/setup-sqlc@v4
+        uses: sqlc-dev/setup-sqlc@v5
         with:
           sqlc-version: ${{ env.SQLC_VERSION }}
 
