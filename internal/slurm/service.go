@@ -36,28 +36,30 @@ type settingStore interface {
 }
 
 type Service struct {
-	logger               *zap.Logger
-	tracer               trace.Tracer
-	slurmRestfulBaseURL  string
-	slurmDatabaseBaseURL string
-	slurmTokenHelperURL  string
-	slurmRootToken       string
-	httpClient           *http.Client
-	redisClient          redisClient
+	logger                 *zap.Logger
+	tracer                 trace.Tracer
+	slurmRestfulBaseURL    string
+	slurmDatabaseBaseURL   string
+	slurmTokenHelperURL    string
+	slurmRootToken         string
+	slurmTokenHelperAPIKey string
+	httpClient             *http.Client
+	redisClient            redisClient
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, settingStore settingStore, redisClient redisClient) *Service {
+func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, slurmTokenHelperAPIKey string, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
-		logger:               logger,
-		tracer:               otel.Tracer("slurm/service"),
-		slurmRestfulBaseURL:  fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmDatabaseBaseURL: fmt.Sprintf("%s/slurmdb/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmTokenHelperURL:  slurmTokenHelperURL,
-		slurmRootToken:       slurmRootToken,
-		httpClient:           &http.Client{},
-		redisClient:          redisClient,
+		logger:                 logger,
+		tracer:                 otel.Tracer("slurm/service"),
+		slurmRestfulBaseURL:    fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmDatabaseBaseURL:   fmt.Sprintf("%s/slurmdb/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmTokenHelperAPIKey: slurmTokenHelperAPIKey,
+		slurmTokenHelperURL:    slurmTokenHelperURL,
+		slurmRootToken:         slurmRootToken,
+		httpClient:             &http.Client{},
+		redisClient:            redisClient,
 
 		settingStore: settingStore,
 	}
@@ -409,6 +411,8 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 		span.RecordError(err)
 		return "", err
 	}
+
+	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.slurmTokenHelperAPIKey))
 
 	response, err := s.httpClient.Do(httpReq)
 	if err != nil {

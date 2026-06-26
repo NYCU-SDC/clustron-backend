@@ -158,7 +158,7 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, ldapGroupService, ldapClient, dbPool)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapGroupService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient)
-	slurmService := slurm.NewService(logger, cfg.Slurm.SlurmTokenHelperURL, cfg.Slurm.SlurmRestfulBaseURL, cfg.Slurm.SlurmRestfulVersion, cfg.Slurm.SlurmRootToken, settingService, redisService)
+	slurmService := slurm.NewService(logger, cfg.Slurm.SlurmTokenHelperURL, cfg.Slurm.SlurmRestfulBaseURL, cfg.Slurm.SlurmRestfulVersion, cfg.Slurm.SlurmRootToken, cfg.Slurm.SlurmTokenHelperAPIKey, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
 
