@@ -34,4 +34,4 @@ ldap:
   ldap_user_ou_name: "people"
   ldap_group_ou_name: "groups"
   ldap_bind_dn: "CN=admin,DC=example,DC=com"
-  ldap_bind_password: "YOUR_LDAP_PASSWORD"
+  ldap_bind_pwd: "YOUR_LDAP_PASSWORD"
