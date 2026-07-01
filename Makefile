@@ -26,6 +26,8 @@ run:
 	@cd ./.deploy/local \
 		&& ./start.sh \
 		|| (echo -e "  -> $(RED)Depending services start failed. Make sure you run 'make prepare' previously.$(NC)" && exit 1)
+	@(exec 3<>/dev/tcp/localhost/6820) 2>/dev/null \
+		|| echo -e "  -> $(RED)Warning:$(NC) local Slurm cluster not reachable on :6820. Group creation and job endpoints will fail. Run 'make slurm-up' first if you need them."
 	@make gen
 	@echo -e "-> starting backend..."
 	@go build -o bin/backend cmd/backend/main.go && \
