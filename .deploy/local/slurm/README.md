@@ -86,7 +86,7 @@ earlier steps (LDAP groups deleted) and the DB transaction rolls back.
 Verify the REST path the backend uses, without the backend, with:
 
 ```bash
-./smoke-test.sh                       # creates account "clustron-smoke" + its assoc
+./smoke-test.sh                       # create + delete "clustron-smoke", asserting both
 # override the API version if needed:
 SLURM_RESTFUL_VERSION=v0.0.44 ./smoke-test.sh myaccount
 ```
@@ -145,7 +145,7 @@ This removes the MariaDB and Slurm state volumes, resetting all accounts.
 | `compose.yaml` | the cluster definition (prebuilt image, no build) |
 | `deploy.sh` / `cleanup.sh` | bring up (with version probe) / tear down |
 | `mint-token.sh` | mint a root or per-user JWT via `scontrol token` |
-| `smoke-test.sh` | create+read an account via the backend's REST path |
+| `smoke-test.sh` | create, read, and delete an account via the backend's REST paths (asserts deletion) |
 | `config.slurm-local.yaml` | the `slurm_*` block to paste into `config.yaml` |
 
 ## Troubleshooting

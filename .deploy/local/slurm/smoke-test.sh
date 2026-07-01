@@ -2,8 +2,10 @@
 # Prove the backend's Slurm account path works end-to-end against slurmrestd:
 # mints a root token and creates an account via the SAME REST call the backend's
 # slurm.CreateAccountAssociation uses (POST /slurmdb/<ver>/accounts_association,
-# the `sacctmgr add account` equivalent), then confirms the account AND its
-# cluster association exist.
+# the `sacctmgr add account` equivalent), confirms the account AND its cluster
+# association exist, then deletes it via the SAME call slurm.DeleteAccount uses
+# (DELETE /slurmdb/<ver>/account/<name>) — the group saga's compensation path —
+# and confirms it's gone.
 #   ./smoke-test.sh [account-name]
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -29,3 +31,22 @@ echo ":: association (proves the account is usable, not just a bare record):"
 docker compose exec -T slurmctld sacctmgr -i -n show assoc account="${ACCT}" \
   format=Account%-20,Cluster%-12,User%-12 2>/dev/null | sed "/^$/d"
 echo ":: OK if the account shows an association on a cluster above."
+echo
+
+echo ":: DELETE ${BASE}/account/${ACCT}  (== slurm.DeleteAccount, the saga's compensation)"
+curl -fsS -X DELETE "${BASE}/account/${ACCT}" -H "X-SLURM-USER-TOKEN: ${TOKEN}"
+echo
+
+echo ":: GET ${BASE}/account/${ACCT}  (expect empty accounts list)"
+GET_AFTER_DELETE="$(curl -fsS "${BASE}/account/${ACCT}" -H "X-SLURM-USER-TOKEN: ${TOKEN}")"
+echo "${GET_AFTER_DELETE}" | head -c 500
+echo
+echo ":: sacctmgr view after delete (expect no rows):"
+docker compose exec -T slurmctld sacctmgr -i -n show assoc account="${ACCT}" \
+  format=Account%-20,Cluster%-12,User%-12 2>/dev/null | sed "/^$/d"
+
+if echo "${GET_AFTER_DELETE}" | grep -q "\"name\": \"${ACCT}\""; then
+  echo ":: FAIL — account still present after delete." >&2
+  exit 1
+fi
+echo ":: OK — account deleted successfully."
