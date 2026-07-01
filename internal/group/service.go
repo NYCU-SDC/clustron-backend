@@ -798,7 +798,33 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 		},
 	})
 
-	// 3. Execute the Saga
+	// Step 3: Delete the Slurm Account
+	saga.AddStep(internal.SagaStep{
+		Name: "Delete Slurm Account",
+		Action: func(c context.Context) error {
+			err = s.slurmStore.DeleteAccount(c, baseCN)
+			if err != nil {
+				s.logger.Error("failed to delete account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(c context.Context) error {
+			// Compensation: recreate the account (with its association) if a
+			// later step fails.
+			s.logger.Info("Compensating: Recreating Slurm Account", zap.String("account", baseCN))
+			err = s.slurmStore.CreateAccountAssociation(c, []string{baseCN}, nil)
+			if err != nil {
+				s.logger.Error("failed to compensate for creating account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+	})
+
+	// 4. Execute the Saga
 	if err := saga.Execute(traceCtx); err != nil { //
 		s.logger.Error("Failed to delete LDAP groups, saga aborted/compensated", zap.Error(err))
 		span.RecordError(err)
