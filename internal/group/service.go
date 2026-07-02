@@ -5,6 +5,7 @@ import (
 	"clustron-backend/internal/grouprole"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/setting"
+	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
@@ -73,7 +74,7 @@ type LDAPClient interface {
 // jobs (the bare /accounts endpoint leaves it with no association). Members are
 // later added as Slurm users via the users_association endpoint.
 type SlurmStore interface {
-	CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) error
+	CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) (slurm.ParsedAccountAssociationResponse, error)
 	DeleteAccount(ctx context.Context, accountName string) error
 }
 
@@ -598,7 +599,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 			// accounts_association endpoint (== `sacctmgr add account`) so the
 			// account is created *with* its cluster association and is usable;
 			// nil clusterNames associates it to slurmdbd's cluster(s).
-			err := s.slurmStore.CreateAccountAssociation(ctx, []string{baseCN}, nil)
+			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{baseCN}, nil)
 			if err != nil {
 				logger.Error("failed to create account in Slurm", zap.Error(err))
 				span.RecordError(err)
@@ -814,7 +815,7 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 			// Compensation: recreate the account (with its association) if a
 			// later step fails.
 			s.logger.Info("Compensating: Recreating Slurm Account", zap.String("account", baseCN))
-			err = s.slurmStore.CreateAccountAssociation(c, []string{baseCN}, nil)
+			_, err = s.slurmStore.CreateAccountAssociation(c, []string{baseCN}, nil)
 			if err != nil {
 				s.logger.Error("failed to compensate for creating account in Slurm", zap.Error(err))
 				span.RecordError(err)
