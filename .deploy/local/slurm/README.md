@@ -64,11 +64,7 @@ slurm:                                       # MUST be nested under `slurm:`
   slurm_root_token:       "eyJhbGciOi..."    # from `make slurm-token`
 ```
 
-> **Gotcha:** these keys only load when nested under a top-level `slurm:` key.
-> Placed flat, they are silently ignored and you get
-> `Post "/slurmdb//accounts": unsupported protocol scheme ""` (empty base URL +
-> version). Also don't mix YAML and `SLURM_*` env vars — setting one env var
-> replaces the whole slurm struct, blanking the rest.
+Use `make slurm-token username=root lifespan=infinite` to get an unexpired root token.
 
 Now `make run` the backend. Creating a group will create a matching Slurm
 account (see below).
