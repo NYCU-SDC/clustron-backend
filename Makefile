@@ -82,4 +82,4 @@ slurm-down:
 	@./.deploy/local/slurm/cleanup.sh
 
 slurm-token:
-	@./.deploy/local/slurm/mint-token.sh $(SLURM_USER)
+	@./.deploy/local/slurm/mint-token.sh $(or $(SLURM_USER),root) $(or $(SLURM_LIFESPAN),3600)

@@ -64,7 +64,16 @@ slurm:                                       # MUST be nested under `slurm:`
   slurm_root_token:       "eyJhbGciOi..."    # from `make slurm-token`
 ```
 
-Use `make slurm-token username=root lifespan=infinite` to get an unexpired root token.
+By default `make slurm-token` mints a 1-hour (3600s) root token. For an
+effectively unexpired token, pass a long lifespan via `SLURM_LIFESPAN`:
+
+```bash
+make slurm-token SLURM_LIFESPAN=infinite   # exp ~year 2094 — paste once, forget
+```
+
+`SLURM_USER` and `SLURM_LIFESPAN` are forwarded to `mint-token.sh` (defaults
+`root` / `3600`), so `./.deploy/local/slurm/mint-token.sh root infinite` is the
+equivalent direct call.
 
 Now `make run` the backend. Creating a group will create a matching Slurm
 account (see below).
