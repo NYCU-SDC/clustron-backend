@@ -704,6 +704,53 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 		})
 	}
 
+	// Delete the Slurm associations mirroring this membership. Admin first,
+	// then base — one saga step per association because Saga.Execute only
+	// compensates fully completed steps.
+	if grouprole.AccessLevel(roleInfo.AccessLevel) == grouprole.AccessLevelOwner || grouprole.AccessLevel(roleInfo.AccessLevel) == grouprole.AccessLevelAdmin {
+		adminAccount := slurm.AdminAccountName(baseCN)
+		saga.AddStep(internal.SagaStep{
+			Name: "DeleteSlurmAdminAssociation",
+			Action: func(ctx context.Context) error {
+				err := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, adminAccount)
+				if err != nil {
+					logger.Warn("delete slurm admin association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", adminAccount), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, []string{adminAccount}, nil)
+				if err != nil {
+					logger.Warn("compensate: recreate slurm admin association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", adminAccount), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+	}
+
+	baseAccount := slurm.BaseAccountName(baseCN)
+	saga.AddStep(internal.SagaStep{
+		Name: "DeleteSlurmBaseAssociation",
+		Action: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, baseAccount)
+			if err != nil {
+				logger.Warn("delete slurm base association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", baseAccount), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, []string{baseAccount}, nil)
+			if err != nil {
+				logger.Warn("compensate: recreate slurm base association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", baseAccount), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+	})
+
 	saga.AddStep(internal.SagaStep{
 		Name: "DeleteMembership",
 		Action: func(ctx context.Context) error {
