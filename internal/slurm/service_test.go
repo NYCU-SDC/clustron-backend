@@ -13,7 +13,7 @@ import (
 )
 
 func TestParseUserAssociationResponse(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected ParsedUserAssociationResponse
@@ -49,16 +49,16 @@ func TestParseUserAssociationResponse(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ParseUserAssociationResponse(tt.input)
-			assert.Equal(t, tt.expected, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseUserAssociationResponse(tc.input)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
 
 func TestParseAccountAssociationResponse(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected ParsedAccountAssociationResponse
@@ -92,26 +92,40 @@ func TestParseAccountAssociationResponse(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ParseAccountAssociationResponse(tt.input)
-			assert.Equal(t, tt.expected, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseAccountAssociationResponse(tc.input)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
 
 func TestCreateAccountAssociationParent(t *testing.T) {
-	tests := []struct {
-		name       string
-		parent     string
-		wantParent string // "" means the field must be absent from the request
+	testCases := []struct {
+		name             string
+		accounts         []string
+		parent           string
+		expectedAccounts []any
+		expectedParent   any // value of association_condition.association.parent; nil means the field must be omitted
 	}{
-		{name: "with parent", parent: "proj101", wantParent: "proj101"},
-		{name: "without parent keeps account under root", parent: "", wantParent: ""},
+		{
+			name:             "with parent nests the accounts under it",
+			accounts:         []string{"proj101-base", "proj101-admin"},
+			parent:           "proj101",
+			expectedAccounts: []any{"proj101-base", "proj101-admin"},
+			expectedParent:   "proj101",
+		},
+		{
+			name:             "without parent keeps the account under root",
+			accounts:         []string{"proj101"},
+			parent:           "",
+			expectedAccounts: []any{"proj101"},
+			expectedParent:   nil,
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			var gotBody map[string]any
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				require.Equal(t, http.MethodPost, r.Method)
@@ -124,21 +138,17 @@ func TestCreateAccountAssociationParent(t *testing.T) {
 
 			svc := NewService(zap.NewNop(), "", server.URL, "v0.0.44", "root-token", nil, nil)
 
-			resp, err := svc.CreateAccountAssociation(context.Background(), []string{"proj101-base"}, nil, tt.parent)
+			resp, err := svc.CreateAccountAssociation(context.Background(), tc.accounts, nil, tc.parent)
 			require.NoError(t, err)
 			assert.Equal(t, []string{"proj101-base"}, resp.AddedAccounts)
 
 			cond, ok := gotBody["association_condition"].(map[string]any)
 			require.True(t, ok, "request must contain association_condition")
-			assert.Equal(t, []any{"proj101-base"}, cond["accounts"])
+			assert.Equal(t, tc.expectedAccounts, cond["accounts"])
 
-			assoc, _ := cond["association"].(map[string]any)
-			if tt.wantParent == "" {
-				_, present := assoc["parent"]
-				assert.False(t, present, "parent must be omitted when empty")
-			} else {
-				assert.Equal(t, tt.wantParent, assoc["parent"])
-			}
+			assoc, ok := cond["association"].(map[string]any)
+			require.True(t, ok, "request must contain association_condition.association")
+			assert.Equal(t, tc.expectedParent, assoc["parent"])
 		})
 	}
 }
