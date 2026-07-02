@@ -33,13 +33,16 @@ func (s *Saga) Execute(ctx context.Context) error {
 		if err := step.Action(ctx); err != nil {
 			s.logger.Error("Saga step failed", zap.String("step", step.Name), zap.Error(err))
 
+			// Best-effort rollback: compensate every executed step in reverse,
+			// even if an individual compensation fails (otherwise a single
+			// failure would leave the remaining steps un-compensated). The
+			// original action error is returned as the cause.
 			for i := len(executedSteps) - 1; i >= 0; i-- {
 				if executedSteps[i].Compensate == nil {
 					continue
 				}
 				if rollbackErr := executedSteps[i].Compensate(ctx); rollbackErr != nil {
 					s.logger.Error("Compensation step failed", zap.String("step", executedSteps[i].Name), zap.Error(rollbackErr))
-					return rollbackErr
 				}
 			}
 			return err

@@ -1,0 +1,25 @@
+# Slurm settings for the local Dockerized cluster (.deploy/local/slurm).
+#
+# IMPORTANT: these keys must be NESTED under a top-level `slurm:` key — the
+# backend maps them via `Slurm slurm.Config `yaml:"slurm"`` in internal/config.
+# Flat/top-level keys are silently ignored (you'll get empty base URL + version
+# and a `Post "/slurmdb//accounts": unsupported protocol scheme ""` error).
+#
+# Copy this whole `slurm:` block into your clustron-backend/config.yaml.
+#
+# Do NOT also set SLURM_* env vars: setting even one of them replaces the entire
+# slurm config struct (config.Merge is per-top-level-field), wiping the others.
+# Put these in ONE place — here, or as env vars.
+#
+#   slurm_restful_version: must be a version the running image serves. Slurm
+#     25.11 serves v0.0.42 / v0.0.43 / v0.0.44; `make slurm-up` prints the list.
+#   slurm_root_token: paste the output of `make slurm-token`. Tokens expire
+#     (default 1h) — re-mint when you start getting 401s.
+#
+# (slurm_token_helper_url is only needed for the per-user job endpoints, which
+# are out of scope here; it's defined-but-not-required, so it's omitted.)
+
+slurm:
+  slurm_restful_base_url: "http://localhost:6820"
+  slurm_restful_version: "v0.0.44"
+  slurm_root_token: "PASTE_OUTPUT_OF_make_slurm-token"

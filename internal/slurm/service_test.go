@@ -1,13 +1,19 @@
 package slurm
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestParseUserAssociationResponse(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected ParsedUserAssociationResponse
@@ -43,16 +49,16 @@ func TestParseUserAssociationResponse(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ParseUserAssociationResponse(tt.input)
-			assert.Equal(t, tt.expected, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseUserAssociationResponse(tc.input)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
 
 func TestParseAccountAssociationResponse(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected ParsedAccountAssociationResponse
@@ -86,10 +92,63 @@ func TestParseAccountAssociationResponse(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ParseAccountAssociationResponse(tt.input)
-			assert.Equal(t, tt.expected, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseAccountAssociationResponse(tc.input)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestCreateAccountAssociationParent(t *testing.T) {
+	testCases := []struct {
+		name             string
+		accounts         []string
+		parent           string
+		expectedAccounts []any
+		expectedParent   any // value of association_condition.association.parent; nil means the field must be omitted
+	}{
+		{
+			name:             "with parent nests the accounts under it",
+			accounts:         []string{"proj101-base", "proj101-admin"},
+			parent:           "proj101",
+			expectedAccounts: []any{"proj101-base", "proj101-admin"},
+			expectedParent:   "proj101",
+		},
+		{
+			name:             "without parent keeps the account under root",
+			accounts:         []string{"proj101"},
+			parent:           "",
+			expectedAccounts: []any{"proj101"},
+			expectedParent:   nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodPost, r.Method)
+				require.Equal(t, "/slurmdb/v0.0.44/accounts_association", r.URL.Path)
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&gotBody))
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"added_accounts": " Adding Account(s)\n  proj101-base\n", "errors": [], "warnings": []}`))
+			}))
+			defer server.Close()
+
+			svc := NewService(zap.NewNop(), "", server.URL, "v0.0.44", "root-token", nil, nil)
+
+			resp, err := svc.CreateAccountAssociation(context.Background(), tc.accounts, nil, tc.parent)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"proj101-base"}, resp.AddedAccounts)
+
+			cond, ok := gotBody["association_condition"].(map[string]any)
+			require.True(t, ok, "request must contain association_condition")
+			assert.Equal(t, tc.expectedAccounts, cond["accounts"])
+
+			assoc, ok := cond["association"].(map[string]any)
+			require.True(t, ok, "request must contain association_condition.association")
+			assert.Equal(t, tc.expectedParent, assoc["parent"])
 		})
 	}
 }

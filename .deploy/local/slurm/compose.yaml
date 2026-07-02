@@ -1,0 +1,156 @@
+# Local Dockerized Slurm cluster for Clustron backend development.
+#
+# Self-contained: uses the prebuilt giovtorres/slurm-docker-cluster image
+# (no source compile). Brings up slurmdbd + slurmctld + slurmrestd (JWT auth on
+# :6820) + one dynamic compute node, backed by MariaDB for accounting.
+#
+# This lets the backend's internal/slurm functions (CreateAccount, CreateUser,
+# CreateAssociation, job submission, ...) talk to a real slurmrestd.
+#
+# Quick start (from clustron-backend/):
+#   make slurm-up        # or: ./.deploy/local/slurm/deploy.sh
+#   make slurm-token     # mint a root JWT for slurm_root_token
+# See README.md in this directory for full details.
+
+name: clustron-slurm-local
+
+x-slurm-image: &slurm-image giovtorres/slurm-docker-cluster:${SLURM_VERSION:-25.11.4}
+
+services:
+  mysql:
+    image: mariadb:12
+    hostname: mysql
+    container_name: clustron-slurm-mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: slurm_acct_db
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: password
+    volumes:
+      - var_lib_mysql:/var/lib/mysql
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  slurmdbd:
+    image: *slurm-image
+    init: true
+    command: ["slurmdbd"]
+    container_name: clustron-slurm-slurmdbd
+    hostname: slurmdbd
+    environment:
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: password
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6819"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pidof slurmdbd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  slurmctld:
+    image: *slurm-image
+    init: true
+    command: ["slurmctld"]
+    container_name: clustron-slurm-slurmctld
+    hostname: slurmctld
+    privileged: true
+    working_dir: /data
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - slurm_jobdir:/data
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6817"
+    depends_on:
+      slurmdbd:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "scontrol ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  slurmrestd:
+    image: *slurm-image
+    init: true
+    command: ["slurmrestd"]
+    container_name: clustron-slurm-slurmrestd
+    hostname: slurmrestd
+    privileged: true
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - var_log_slurm:/var/log/slurm
+    ports:
+      # Host:Container. The backend's slurm_restful_base_url points here.
+      - "6820:6820"
+    depends_on:
+      slurmctld:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /var/run/slurmrestd/slurmrestd.socket"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cpu-worker:
+    image: *slurm-image
+    init: true
+    command: ["slurmd-cpu"]
+    working_dir: /data
+    privileged: true
+    environment:
+      COMPOSE_PROJECT_NAME: clustron-slurm-local
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - slurm_jobdir:/data
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6818"
+    depends_on:
+      slurmctld:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pidof slurmd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  etc_munge:
+  etc_slurm:
+  var_log_slurm:
+  slurm_jobdir:
+  var_lib_mysql:
+
+networks:
+  slurm-network:
+    driver: bridge
