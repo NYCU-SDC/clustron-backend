@@ -541,6 +541,38 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		},
 	})
 
+	// Mirror the LDAP membership into Slurm: every member is associated with
+	// the group's base account; owners/admins additionally with the admin
+	// account. users_association (== `sacctmgr add user`) creates the Slurm
+	// user record if it does not exist.
+	slurmAccounts := []string{slurm.BaseAccountName(baseCN)}
+	if accessLevel == grouprole.AccessLevelOwner || accessLevel == grouprole.AccessLevelAdmin {
+		slurmAccounts = append(slurmAccounts, slurm.AdminAccountName(baseCN))
+	}
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateSlurmUserAssociations",
+		Action: func(ctx context.Context) error {
+			// nil clusterNames associates the user on slurmdbd's cluster(s).
+			_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, slurmAccounts, nil)
+			if err != nil {
+				logger.Error("create slurm user associations failed", zap.String("username", ldapUserInfo.Username), zap.Strings("accounts", slurmAccounts), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			var errs []error
+			for _, account := range slurmAccounts {
+				if derr := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, account); derr != nil {
+					logger.Error("compensate: delete slurm user association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", account), zap.Error(derr))
+					errs = append(errs, derr)
+				}
+			}
+			return errors.Join(errs...)
+		},
+	})
+
 	err = saga.Execute(ctx)
 	if err != nil {
 		logger.Error("saga execution failed", zap.Error(err))
