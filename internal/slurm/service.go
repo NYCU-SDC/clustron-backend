@@ -829,7 +829,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
 	if response.StatusCode != http.StatusOK {
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
-		logger.Error("failed to create Slurm user association", zap.Error(err))
+		logger.Error("failed to create Slurm account association", zap.Error(err))
 		span.RecordError(err)
 		return ParsedAccountAssociationResponse{}, err
 	}
