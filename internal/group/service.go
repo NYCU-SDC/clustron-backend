@@ -594,16 +594,20 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		},
 	})
 
+	slurmBaseAccount := fmt.Sprintf("%s-base", baseCN)
+
 	saga.AddStep(internal.SagaStep{
-		Name: "CreateSlurmAccount",
+		Name: "CreateSlurmTopAccount",
 		Action: func(ctx context.Context) error {
-			// A Clustron group maps to a Slurm accounting account. Use the
-			// accounts_association endpoint (== `sacctmgr add account`) so the
-			// account is created *with* its cluster association and is usable;
-			// nil clusterNames associates it to slurmdbd's cluster(s).
+			// A Clustron group maps to a small Slurm account tree: a top-level
+			// account named after the group, with -base/-admin children created
+			// in the next step. The accounts_association endpoint (== `sacctmgr
+			// add account`) creates each account *with* its cluster association
+			// so it is usable; nil clusterNames associates it to slurmdbd's
+			// cluster(s).
 			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{baseCN}, nil, "")
 			if err != nil {
-				logger.Error("failed to create account in Slurm", zap.Error(err))
+				logger.Error("failed to create top-level account in Slurm", zap.Error(err))
 				span.RecordError(err)
 				return err
 			}
@@ -612,7 +616,33 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		Compensate: func(ctx context.Context) error {
 			err := s.slurmStore.DeleteAccount(ctx, baseCN)
 			if err != nil {
-				logger.Error("failed to delete account in Slurm", zap.Error(err))
+				logger.Error("failed to delete top-level account in Slurm", zap.Error(err))
+			}
+			return err
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateSlurmChildAccounts",
+		Action: func(ctx context.Context) error {
+			// The admin child reuses the LDAP admin CN (<name>-admin); the base
+			// child needs its own -base suffix because the top-level account
+			// already took the bare group name.
+			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{slurmBaseAccount, adminCN}, nil, baseCN)
+			if err != nil {
+				logger.Error("failed to create base/admin child accounts in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := errors.Join(
+				s.slurmStore.DeleteAccount(ctx, adminCN),
+				s.slurmStore.DeleteAccount(ctx, slurmBaseAccount),
+			)
+			if err != nil {
+				logger.Error("failed to delete base/admin child accounts in Slurm", zap.Error(err))
 			}
 			return err
 		},
