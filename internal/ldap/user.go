@@ -10,7 +10,7 @@ import (
 )
 
 func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 
 	// check if uid is in use
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
@@ -78,7 +78,7 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 }
 
 func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	var filter strings.Builder
 	filter.WriteString("(|")
 	for _, uid := range uids {
@@ -101,8 +101,46 @@ func (c *Client) GetAllUserByUIDList(uids []string) ([]*ldap.Entry, error) {
 	return result.Entries, nil
 }
 
+func (c *Client) SearchUserByUIDList(uids []string, query string) ([]*ldap.Entry, error) {
+	if len(uids) == 0 {
+		return []*ldap.Entry{}, nil
+	}
+
+	base := c.LDAPUserDN
+	var filter strings.Builder
+	filter.WriteString("(&(|")
+	for _, uid := range uids {
+		_, err := fmt.Fprintf(&filter, "(uid=%s)", ldap.EscapeFilter(uid))
+		if err != nil {
+			return nil, err
+		}
+	}
+	filter.WriteString(")")
+
+	if query != "" {
+		escapedQuery := ldap.EscapeFilter(query)
+		_, err := fmt.Fprintf(&filter, "(|(uid=*%s*)(cn=*%s*))", escapedQuery, escapedQuery)
+		if err != nil {
+			return nil, err
+		}
+	}
+	filter.WriteString(")")
+
+	attributes := []string{
+		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
+	}
+
+	result, err := c.SearchByFilter(base, filter.String(), attributes)
+	if err != nil {
+		c.Logger.Error("failed to search users by query", zap.Error(err), zap.String("query", query))
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+
+	return result.Entries, nil
+}
+
 func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell", "uidNumber",
@@ -122,7 +160,7 @@ func (c *Client) GetUserInfo(uid string) (*ldap.Entry, error) {
 }
 
 func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := fmt.Sprintf("(uidNumber=%s)", ldap.EscapeFilter(fmt.Sprint(uidNumber)))
 	attributes := []string{
 		"dn", "uid", "cn", "sn", "sshPublicKey", "homeDirectory", "loginShell",
@@ -142,7 +180,7 @@ func (c *Client) GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error) {
 }
 
 func (c *Client) ExistUser(uid string) (bool, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(uid))
 
 	exist, err := c.entryExists(base, filter)
@@ -154,7 +192,7 @@ func (c *Client) ExistUser(uid string) (bool, error) {
 }
 
 func (c *Client) UpdateUser(uid string, cn string, sn string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Replace("cn", []string{cn})
 	modifyRequest.Replace("sn", []string{sn})
@@ -175,7 +213,7 @@ func (c *Client) UpdateUser(uid string, cn string, sn string) error {
 }
 
 func (c *Client) DeleteUser(uid string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 
 	err := c.Conn.Del(deleteRequest)
@@ -194,7 +232,7 @@ func (c *Client) DeleteUser(uid string) error {
 }
 
 func (c *Client) GetUsedUIDNumbers() ([]string, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := "(uidNumber=*)"
 	attributes := []string{"uidNumber"}
 
@@ -216,7 +254,7 @@ func (c *Client) GetUsedUIDNumbers() ([]string, error) {
 }
 
 func (c *Client) ExistSSHPublicKey(publicKey string) (bool, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := fmt.Sprintf("(sshPublicKey=%s)", ldap.EscapeFilter(publicKey))
 
 	exist, err := c.entryExists(base, filter)
@@ -228,7 +266,7 @@ func (c *Client) ExistSSHPublicKey(publicKey string) (bool, error) {
 }
 
 func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Add("sshPublicKey", []string{publicKey})
@@ -253,7 +291,7 @@ func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
 }
 
 func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Delete("sshPublicKey", []string{publicKey})
@@ -279,7 +317,7 @@ func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
 }
 
 func (c *Client) GetAllUIDNumbers() ([]string, error) {
-	base := "ou=People," + c.Config.LDAPBaseDN
+	base := c.LDAPUserDN
 	filter := "(uidNumber=*)"
 	attributes := []string{"uidNumber"}
 
@@ -301,7 +339,7 @@ func (c *Client) GetAllUIDNumbers() ([]string, error) {
 }
 
 func (c *Client) UpdateUserPassword(uid string, password string) error {
-	dn := fmt.Sprintf("uid=%s,ou=People,%s", uid, c.Config.LDAPBaseDN)
+	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Replace("userPassword", []string{password})
 

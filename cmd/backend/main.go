@@ -159,7 +159,7 @@ func main() {
 	groupRoleService := grouprole.NewService(logger, ldapGroupService, ldapClient, dbPool)
 	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapGroupService, ldapClient)
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient)
-	slurmService := slurm.NewService(logger, cfg.SlurmTokenHelperURL, cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion, settingService, redisService)
+	slurmService := slurm.NewService(logger, cfg.Slurm.SlurmTokenHelperURL, cfg.Slurm.SlurmRestfulBaseURL, cfg.Slurm.SlurmRestfulVersion, cfg.Slurm.SlurmRootToken, settingService, redisService)
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
 	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
@@ -236,6 +236,8 @@ func main() {
 	// Groups
 	mux.HandleFunc("GET /api/groups", authMiddleware.HandlerFunc(groupHandler.GetAllHandler))
 	mux.HandleFunc("POST /api/groups", authMiddleware.HandlerFunc(groupHandler.CreateHandler))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/title", authMiddleware.HandlerFunc(groupHandler.UpdateTitleHandler))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/description", authMiddleware.HandlerFunc(groupHandler.UpdateDescriptionHandler))
 	mux.HandleFunc("DELETE /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.DeleteHandler))
 	mux.HandleFunc("GET /api/groups/{group_id}", authMiddleware.HandlerFunc(groupHandler.GetByIDHandler))
 	mux.HandleFunc("POST /api/groups/{group_id}/archive", authMiddleware.HandlerFunc(groupHandler.ArchiveHandler))

@@ -34,8 +34,11 @@ SELECT uid_number FROM ldap_user WHERE id = $1;
 -- name: GetAllUserInfoByUIDNumber :many
 SELECT ldap_user.uid_number, u.* FROM ldap_user JOIN users u ON u.id = ldap_user.id WHERE uid_number IN (SELECT unnest($1::BIGINT[]));
 
--- name: CreateLDAPUser :exec
-INSERT INTO ldap_user (id, uid_number) VALUES ($1, $2);
+-- name: CreateLDAPUser :one
+INSERT INTO ldap_user (id) VALUES ($1) RETURNING uid_number;
+
+-- name: RegenerateLDAPUserUIDNumber :one
+UPDATE ldap_user SET uid_number = nextval('ldap_user_uid_number_seq') WHERE id = $1 RETURNING uid_number;
 
 -- name: UpdateLDAPUser :exec
 UPDATE ldap_user SET uid_number = $2 WHERE id = $1;
