@@ -149,14 +149,16 @@ We recommend to configure with environment variables.
 
 ### LDAP
 
-| Variable      | Description                                        | Required |
-| ------------- | -------------------------------------------------- | -------- |
-| LDAP_DEBUG    | Enable LDAP debug logging (`true` / `false`)       | No       |
-| LDAP_HOST     | Hostname of the LDAP server                        | Yes      |
-| LDAP_PORT     | Port of the LDAP server (default: `389`)           | Yes      |
-| LDAP_BASE_DN  | Base Distinguished Name for LDAP queries           | Yes      |
-| LDAP_BIND_DN  | Distinguished Name used to bind to the LDAP server | Yes      |
-| LDAP_BIND_PWD | Password for the LDAP bind DN                      | Yes      |
+| Variable           | Description                                                                                            | Required |
+|--------------------|--------------------------------------------------------------------------------------------------------| -------- |
+| LDAP_DEBUG         | Enable LDAP debug logging (`true` / `false`)                                                           | No       |
+| LDAP_HOST          | Hostname of the LDAP server                                                                            | Yes      |
+| LDAP_PORT          | Port of the LDAP server (default: `389`)                                                               | Yes      |
+| LDAP_BASE_DN       | Base Distinguished Name for LDAP queries                                                               | Yes      |
+| LDAP_USER_OU_NAME  | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes      |
+| LDAP_GROUP_OU_NAME | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes      |
+| LDAP_BIND_DN       | Distinguished Name used to bind to the LDAP server                                                     | Yes      |
+| LDAP_BIND_PWD      | Password for the LDAP bind DN                                                                          | Yes      |
 
 ### Slurm
 
