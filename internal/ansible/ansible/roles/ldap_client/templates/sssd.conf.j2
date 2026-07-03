@@ -19,3 +19,10 @@ ldap_id_use_start_tls = false
 ldap_tls_reqcert = allow
 enumerate = false
 cache_credentials = false
+
+{% if ldap_simple_allow_groups is defined and ldap_simple_allow_groups | length > 0 %}
+access_provider = simple
+simple_allow_groups = {{ ldap_simple_allow_groups }}
+{% else %}
+access_provider = permit
+{% endif %}

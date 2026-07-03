@@ -22,6 +22,7 @@
 
 - name: Create SSSD config file from template
   become: true
+  tags: [sssd]
   ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf

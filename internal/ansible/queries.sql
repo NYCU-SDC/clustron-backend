@@ -46,3 +46,26 @@ SELECT * FROM servers WHERE slurm_partition = $1 ORDER BY ansible_name;
 
 -- name: ListByStatus :many
 SELECT * FROM servers WHERE status = $1 ORDER BY ansible_name;
+
+-- name: ListAllowedLoginGroupCNs :many
+SELECT lg.ldap_cn
+FROM allowed_login_groups alg
+JOIN ldap_groups lg ON lg.group_id = alg.group_id AND lg.type = 'BASE'
+WHERE lg.ldap_cn IS NOT NULL
+ORDER BY lg.ldap_cn;
+
+-- name: ListAllowedLoginGroups :many
+SELECT alg.group_id, g.title, lg.ldap_cn
+FROM allowed_login_groups alg
+JOIN groups g ON g.id = alg.group_id
+JOIN ldap_groups lg ON lg.group_id = alg.group_id AND lg.type = 'BASE'
+ORDER BY g.title;
+
+-- name: ClearAllowedLoginGroups :exec
+DELETE FROM allowed_login_groups;
+
+-- name: AddAllowedLoginGroup :exec
+INSERT INTO allowed_login_groups (group_id) VALUES ($1) ON CONFLICT DO NOTHING;
+
+-- name: ExistBaseLdapGroup :one
+SELECT EXISTS (SELECT 1 FROM ldap_groups WHERE group_id = $1 AND type = 'BASE') AS exists;

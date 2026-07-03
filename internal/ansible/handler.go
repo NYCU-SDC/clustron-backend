@@ -56,6 +56,18 @@ type Store interface {
 	SetupAllNodes(ctx context.Context) error
 	ResetNode(ctx context.Context, id uuid.UUID) (Server, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error)
+	ListAllowedLoginGroups(ctx context.Context) ([]AllowedLoginGroupDetail, error)
+	SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUID) error
+}
+
+type UpdateAllowedLoginGroupsRequest struct {
+	GroupIDs []string `json:"groupIds" validate:"required,dive,uuid"`
+}
+
+type AllowedLoginGroupResponse struct {
+	GroupID string `json:"groupId"`
+	Title   string `json:"title"`
+	LdapCN  string `json:"ldapCn"`
 }
 
 type Handler struct {
@@ -191,6 +203,56 @@ func (h *Handler) SetupAll(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	if err := h.store.SetupAllNodes(traceCtx); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) GetAllowedLoginGroups(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetAllowedLoginGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	groups, err := h.store.ListAllowedLoginGroups(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	responses := make([]AllowedLoginGroupResponse, len(groups))
+	for i, g := range groups {
+		responses[i] = AllowedLoginGroupResponse{
+			GroupID: g.GroupID.String(),
+			Title:   g.Title,
+			LdapCN:  g.LdapCN,
+		}
+	}
+	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateAllowedLoginGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req UpdateAllowedLoginGroupsRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	groupIDs := make([]uuid.UUID, len(req.GroupIDs))
+	for i, raw := range req.GroupIDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		groupIDs[i] = id
+	}
+
+	if err := h.store.SetAllowedLoginGroups(traceCtx, groupIDs); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

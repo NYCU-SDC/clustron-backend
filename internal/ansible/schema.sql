@@ -36,3 +36,9 @@ CREATE TABLE IF NOT EXISTS servers
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ip_address_key ON servers(ip_address) WHERE ip_address IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ssh_config_host_key ON servers(ssh_config_host) WHERE ssh_config_host IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS servers_private_ip_key ON servers(private_ip) WHERE private_ip IS NOT NULL;
+
+-- rendered into SSSD's simple_allow_groups
+CREATE TABLE IF NOT EXISTS allowed_login_groups
+(
+    group_id UUID PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE
+);

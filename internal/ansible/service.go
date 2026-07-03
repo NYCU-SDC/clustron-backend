@@ -14,7 +14,9 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -32,6 +34,7 @@ const (
 )
 
 type Service struct {
+	db         *pgxpool.Pool
 	queries    *Queries
 	logger     *zap.Logger
 	tracer     trace.Tracer
@@ -43,8 +46,9 @@ type ServiceInterface interface {
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, ldapConfig ldap.Config) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapConfig ldap.Config) *Service {
 	return &Service{
+		db:         db,
 		queries:    New(db),
 		logger:     logger,
 		tracer:     otel.Tracer("ansible/service"),
@@ -379,6 +383,112 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 	return nil
 }
 
+// ListAllowedLoginGroups returns the cluster-wide list of Clustron groups whose members
+// are allowed to log in to compute nodes (rendered into SSSD's simple_allow_groups).
+func (s *Service) ListAllowedLoginGroups(ctx context.Context) ([]AllowedLoginGroupDetail, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListAllowedLoginGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	rows, err := s.queries.ListAllowedLoginGroups(traceCtx)
+	if err != nil {
+		return nil, databaseutil.WrapDBError(err, logger, "list allowed login groups")
+	}
+
+	result := make([]AllowedLoginGroupDetail, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, AllowedLoginGroupDetail{
+			GroupID: row.GroupID,
+			Title:   row.Title,
+			LdapCN:  row.LdapCn.String,
+		})
+	}
+	return result, nil
+}
+
+// SetAllowedLoginGroups replaces the entire allowed-login-group list with the given groups,
+// then re-renders sssd.conf on all compute nodes in the background. Each group must already
+// have a BASE LDAP group (i.e. a usable ldap_cn), otherwise the update is rejected.
+func (s *Service) SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "SetAllowedLoginGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	for _, id := range groupIDs {
+		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
+		if err != nil {
+			return databaseutil.WrapDBError(err, logger, "check base ldap group exists")
+		}
+		if !exist {
+			return databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "ldap_groups", "group_id", id.String(), logger, "find base ldap group for allowed login group")
+		}
+	}
+
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "begin tx for set allowed login groups")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
+	if err = qtx.ClearAllowedLoginGroups(traceCtx); err != nil {
+		return databaseutil.WrapDBError(err, logger, "clear allowed login groups")
+	}
+	for _, id := range groupIDs {
+		if err = qtx.AddAllowedLoginGroup(traceCtx, id); err != nil {
+			return databaseutil.WrapDBError(err, logger, "add allowed login group")
+		}
+	}
+	if err = tx.Commit(traceCtx); err != nil {
+		return databaseutil.WrapDBError(err, logger, "commit allowed login groups")
+	}
+
+	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
+	go s.applySSSDConfig(bgCtx)
+
+	return nil
+}
+
+// applySSSDConfig regenerates the inventory and re-runs only the SSSD-tagged ansible task
+// (--tags sssd) across all nodes, so sssd.conf is re-rendered and SSSD restarted without
+// running the slower roles (slurm build, etc.).
+func (s *Service) applySSSDConfig(ctx context.Context) {
+	logger := logutil.WithContext(ctx, s.logger)
+	logger.Info("[background] re-rendering sssd.conf via --tags sssd")
+
+	if err := s.generateInventory(ctx); err != nil {
+		logger.Error("fail to generate inventory for sssd re-render", zap.Error(err))
+		return
+	}
+
+	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
+		Inventory: InventoryFile,
+		Tags:      "sssd",
+	}
+
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks(MainPlaybook),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
+
+	exec := execute.NewDefaultExecute(
+		execute.WithCmd(playbookCmd),
+		execute.WithWrite(os.Stdout),
+		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithEnvVars(map[string]string{
+			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
+		}),
+	)
+
+	if err := exec.Execute(ctx); err != nil {
+		logger.Error("fail to re-render sssd.conf", zap.Error(err))
+		return
+	}
+
+	logger.Info("sssd.conf re-rendered on all nodes")
+}
+
 type AnsibleInventory struct {
 	All AnsibleGroup `yaml:"all"`
 }
@@ -463,6 +573,20 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 
 		inventory.All.Children[roleGroup].Hosts[srv.AnsibleName] = hostVars
+	}
+
+	allowedCNs, err := s.queries.ListAllowedLoginGroupCNs(ctx)
+	if err != nil {
+		return databaseutil.WrapDBError(err, s.logger, "list allowed login group cns")
+	}
+	cns := make([]string, 0, len(allowedCNs))
+	for _, cn := range allowedCNs {
+		if cn.Valid && cn.String != "" {
+			cns = append(cns, cn.String)
+		}
+	}
+	if len(cns) > 0 {
+		inventory.All.Vars["ldap_simple_allow_groups"] = strings.Join(cns, ", ")
 	}
 
 	yamlData, err := yaml.Marshal(&inventory)
