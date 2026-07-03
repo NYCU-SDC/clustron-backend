@@ -13,7 +13,14 @@ CREATE TABLE IF NOT EXISTS public_keys (
     public_key TEXT NOT NULL
 );
 
+CREATE SEQUENCE IF NOT EXISTS ldap_user_uid_number_seq
+    AS BIGINT
+    START WITH 10000
+    INCREMENT BY 1
+    MINVALUE 10000
+    NO MAXVALUE;
+
 CREATE TABLE IF NOT EXISTS ldap_user (
     id UUID PRIMARY KEY REFERENCES users(id) NOT NULL,
-    uid_number BIGINT UNIQUE NOT NULL
+    uid_number BIGINT UNIQUE NOT NULL DEFAULT nextval('ldap_user_uid_number_seq')
 );
