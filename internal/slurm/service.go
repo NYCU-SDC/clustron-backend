@@ -7,15 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strings"
+
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"strings"
 )
 
 type redisClient interface {
@@ -34,24 +36,28 @@ type settingStore interface {
 }
 
 type Service struct {
-	logger              *zap.Logger
-	tracer              trace.Tracer
-	slurmRestfulBaseURL string
-	slurmTokenHelperURL string
-	httpClient          *http.Client
-	redisClient         redisClient
+	logger               *zap.Logger
+	tracer               trace.Tracer
+	slurmRestfulBaseURL  string
+	slurmDatabaseBaseURL string
+	slurmTokenHelperURL  string
+	slurmRootToken       string
+	httpClient           *http.Client
+	redisClient          redisClient
 
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, settingStore settingStore, redisClient redisClient) *Service {
+func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
-		logger:              logger,
-		tracer:              otel.Tracer("slurm/service"),
-		slurmRestfulBaseURL: fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmTokenHelperURL: slurmTokenHelperURL,
-		httpClient:          &http.Client{},
-		redisClient:         redisClient,
+		logger:               logger,
+		tracer:               otel.Tracer("slurm/service"),
+		slurmRestfulBaseURL:  fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmDatabaseBaseURL: fmt.Sprintf("%s/slurmdb/%s", slurmRestfulBaseURL, slurmVersion),
+		slurmTokenHelperURL:  slurmTokenHelperURL,
+		slurmRootToken:       slurmRootToken,
+		httpClient:           &http.Client{},
+		redisClient:          redisClient,
 
 		settingStore: settingStore,
 	}
@@ -437,7 +443,648 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	return tokenString, nil
 }
 
-func ParseResponse(ctx context.Context, r *http.Response, s any) error {
+func (s *Service) CreateUser(ctx context.Context, users []User) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/users", s.slurmDatabaseBaseURL)
+
+	userRequest := UserRequest{
+		Users: users,
+	}
+
+	requestBody, err := json.Marshal(userRequest)
+	if err != nil {
+		logger.Error("failed to marshal user request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var usersResponse Response
+	err = ParseResponse(traceCtx, response, &usersResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(usersResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range usersResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully created users in slurm")
+	return nil
+}
+
+func (s *Service) CreateAccount(ctx context.Context, accounts []Account) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAccount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/accounts", s.slurmDatabaseBaseURL)
+
+	accountRequest := AccountRequest{
+		Accounts: accounts,
+	}
+
+	requestBody, err := json.Marshal(accountRequest)
+	if err != nil {
+		logger.Error("failed to marshal account request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var accountsResponse Response
+	err = ParseResponse(traceCtx, response, &accountsResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(accountsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range accountsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected account creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully created accounts in slurm")
+	return nil
+}
+
+func (s *Service) CreateAssociation(ctx context.Context, associations []Association) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAssociation")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/associations", s.slurmDatabaseBaseURL)
+
+	associationRequest := AssociationRequest{
+		Associations: associations,
+	}
+
+	requestBody, err := json.Marshal(associationRequest)
+	if err != nil {
+		logger.Error("failed to marshal associations request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm association", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var associationsResponse Response
+	err = ParseResponse(traceCtx, response, &associationsResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(associationsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range associationsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected association creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully created associations in slurm")
+	return nil
+}
+
+func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountNames, clusterNames []string) (ParsedUserAssociationResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateUserAssociation")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/users_association", s.slurmDatabaseBaseURL)
+
+	request := UserAssociationRequest{
+		AssociationCondition: UserAddCondition{
+			Users:    userNames,
+			Accounts: accountNames,
+			Clusters: clusterNames,
+		},
+		User: UserShort{},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal user associations request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedUserAssociationResponse{}, err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedUserAssociationResponse{}, err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedUserAssociationResponse{}, err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user association", zap.Error(err))
+		span.RecordError(err)
+		return ParsedUserAssociationResponse{}, err
+	}
+
+	var associationsResponse CreateUserAssociationResponse
+	err = ParseResponse(traceCtx, response, &associationsResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return ParsedUserAssociationResponse{}, err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(associationsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range associationsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user association creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return ParsedUserAssociationResponse{}, apiErr
+		}
+	}
+
+	parsedResponse := ParseUserAssociationResponse(associationsResponse.AddedUsers)
+
+	logger.Info("successfully created user associations in slurm")
+	return parsedResponse, nil
+}
+
+func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) (ParsedAccountAssociationResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAccountAssociation")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/accounts_association", s.slurmDatabaseBaseURL)
+
+	request := AccountAssociationRequest{
+		AssociationCondition: AccountAddCondition{
+			Accounts: accountNames,
+			Clusters: clusterNames,
+		},
+		Account: AccountShort{},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal account associations request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedAccountAssociationResponse{}, err
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedAccountAssociationResponse{}, err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return ParsedAccountAssociationResponse{}, err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to create Slurm user association", zap.Error(err))
+		span.RecordError(err)
+		return ParsedAccountAssociationResponse{}, err
+	}
+
+	var associationsResponse CreateAccountAssociationResponse
+	err = ParseResponse(traceCtx, response, &associationsResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return ParsedAccountAssociationResponse{}, err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(associationsResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range associationsResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected account association creation: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return ParsedAccountAssociationResponse{}, apiErr
+		}
+	}
+
+	parsedResponse := ParseAccountAssociationResponse(associationsResponse.AddedAccounts)
+
+	logger.Info("successfully created account associations in slurm")
+	return parsedResponse, nil
+}
+
+func (s *Service) DeleteUser(ctx context.Context, userName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/user/%s", s.slurmDatabaseBaseURL, userName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm user", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteUserResponse DeleteUserResponse
+	err = ParseResponse(traceCtx, response, &deleteUserResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteUserResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteUserResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected user deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully delete user in slurm", zap.String("user", userName))
+	return nil
+}
+
+func (s *Service) DeleteAccount(ctx context.Context, accountName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteAccount")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	requestPath := fmt.Sprintf("%s/account/%s", s.slurmDatabaseBaseURL, accountName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm account", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteAccountResponse DeleteAccountResponse
+	err = ParseResponse(traceCtx, response, &deleteAccountResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteAccountResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteAccountResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected account deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully delete account in slurm", zap.String("account", accountName))
+	return nil
+}
+
+func (s *Service) DeleteAssociation(ctx context.Context, userName, accountName string) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteAssociation")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+	// Delete association between designated user and account
+	requestPath := fmt.Sprintf("%s/associations/?user=%s&account=%s", s.slurmDatabaseBaseURL, userName, accountName)
+
+	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	if err != nil {
+		logger.Error("failed to create http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	httpRequest.Header.Add("X-SLURM-USER-TOKEN", s.slurmRootToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(httpRequest)
+	if err != nil {
+		logger.Error("failed to perform http request", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if cerr := response.Body.Close(); cerr != nil {
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	if response.StatusCode != http.StatusOK {
+		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
+		logger.Error("failed to delete Slurm associations", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	var deleteAssociationResponse DeleteAssociationResponse
+	err = ParseResponse(traceCtx, response, &deleteAssociationResponse)
+	if err != nil {
+		logger.Error("failed to parse response", zap.Error(err))
+		span.RecordError(err)
+		return err
+	}
+
+	// Slurm returns HTTP 200 even for logical failures.
+	// We must iterate through the 'errors' array to see if any actual errors were returned.
+	if len(deleteAssociationResponse.Errors) > 0 {
+		var errorMsgs []string
+		hasFatalError := false
+
+		for _, slurmErr := range deleteAssociationResponse.Errors {
+			// In Slurm, sometimes an ErrorCode of 0 is just an informational message or warning.
+			// Non-zero error codes indicate a real failure.
+			if slurmErr.ErrorCode != 0 {
+				hasFatalError = true
+				errorMsgs = append(errorMsgs, fmt.Sprintf("%s (code: %d)", slurmErr.Description, slurmErr.ErrorCode))
+			}
+		}
+
+		if hasFatalError {
+			apiErr := fmt.Errorf("slurm API rejected association deletion: %s", strings.Join(errorMsgs, "; "))
+			logger.Error("slurm api returned errors", zap.Error(apiErr))
+			span.RecordError(apiErr)
+			return apiErr
+		}
+	}
+
+	logger.Info("successfully delete associations in slurm", zap.String("user", userName), zap.String("account", accountName))
+	return nil
+}
+
+func ParseResponse(ctx context.Context, r *http.Response, s interface{}) error {
 	_, span := otel.Tracer("slurm/service").Start(ctx, "ParseResponse")
 	defer span.End()
 
@@ -460,4 +1107,141 @@ func ParseResponse(ctx context.Context, r *http.Response, s any) error {
 	}
 
 	return nil
+}
+
+// The association endpoints return a sacctmgr-style text body whose structure
+// is purely positional: a line indented by exactly one space is a section
+// header ("Adding User(s)", "Settings", "Associations"); a line indented by two
+// or more spaces is content belonging to the current section; a line with no
+// indentation is a freeform message to be ignored. The regexes below own that
+// grammar so the parsing logic never has to slice or prefix-test strings by
+// hand.
+var (
+	// associationLineRe classifies one line. Exactly one of the named "header"
+	// or "content" groups is populated (both already stripped of surrounding
+	// whitespace and any trailing "="); a blank or non-indented freeform line
+	// does not match at all.
+	associationLineRe = regexp.MustCompile(`^(?: (?P<header>\S.*?)| {2,}(?P<content>\S.*?))\s*=?\s*$`)
+	// associationSettingRe splits a "key = value" content line.
+	associationSettingRe = regexp.MustCompile(`^(.+?)\s*=\s*(.*?)\s*$`)
+	// associationFieldRe matches the "C = head", "A = base", "U = user" tokens
+	// of an association content line.
+	associationFieldRe = regexp.MustCompile(`([A-Za-z])\s*=\s*(\S+)`)
+
+	associationHeaderIdx  = associationLineRe.SubexpIndex("header")
+	associationContentIdx = associationLineRe.SubexpIndex("content")
+)
+
+func ParseUserAssociationResponse(input string) ParsedUserAssociationResponse {
+	input = strings.ReplaceAll(input, `\n`, "\n")
+
+	var result ParsedUserAssociationResponse
+	var section string
+
+	for _, line := range strings.Split(input, "\n") {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
+			continue
+		}
+		content := m[associationContentIdx]
+
+		switch section {
+		case "adding user(s)":
+			result.AddedUsers = append(result.AddedUsers, content)
+
+		case "settings":
+			if key, value, ok := parseAssociationSetting(content); ok {
+				switch key {
+				case "default account":
+					result.DefaultAccount = value
+				case "admin level":
+					result.AdminLevel = value
+				}
+			}
+
+		case "associations":
+			if assoc, ok := ParseAssociation(content); ok {
+				result.Associations = append(result.Associations, assoc)
+			}
+		}
+	}
+
+	return result
+}
+
+func ParseAccountAssociationResponse(input string) ParsedAccountAssociationResponse {
+	input = strings.ReplaceAll(input, `\n`, "\n")
+
+	var result ParsedAccountAssociationResponse
+	var section string
+
+	for _, line := range strings.Split(input, "\n") {
+		m := associationLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue // blank line or root-level freeform message
+		}
+		if header := m[associationHeaderIdx]; header != "" {
+			section = strings.ToLower(header)
+			continue
+		}
+		content := m[associationContentIdx]
+
+		switch section {
+		case "adding account(s)":
+			result.AddedAccounts = append(result.AddedAccounts, content)
+
+		case "settings":
+			if key, value, ok := parseAssociationSetting(content); ok {
+				switch key {
+				case "description":
+					result.Description = value
+				case "organization":
+					result.Organization = strings.ReplaceAll(value, `\`, "")
+				}
+			}
+
+		case "associations":
+			if assoc, ok := ParseAssociation(content); ok {
+				result.Associations = append(result.Associations, assoc)
+			}
+		}
+	}
+
+	return result
+}
+
+// parseAssociationSetting extracts a lower-cased key and its value from a
+// "key = value" settings line, reporting whether a "=" was present.
+func parseAssociationSetting(line string) (key, value string, ok bool) {
+	m := associationSettingRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", false
+	}
+	return strings.ToLower(m[1]), m[2], true
+}
+
+// ParseAssociation extracts the cluster (C), account (A) and user (U) tokens
+// from an association line such as "C = head       A = base       U = user".
+func ParseAssociation(line string) (Association, bool) {
+	var assoc Association
+
+	for _, m := range associationFieldRe.FindAllStringSubmatch(line, -1) {
+		switch strings.ToUpper(m[1]) {
+		case "C":
+			assoc.Cluster = m[2]
+		case "A":
+			assoc.Account = m[2]
+		case "U":
+			assoc.User = m[2]
+		}
+	}
+
+	if assoc.Cluster == "" && assoc.Account == "" {
+		return assoc, false
+	}
+	return assoc, true
 }

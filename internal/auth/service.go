@@ -2,7 +2,6 @@ package auth
 
 import (
 	"clustron-backend/internal"
-	"clustron-backend/internal/config"
 	"clustron-backend/internal/user"
 	"context"
 	"fmt"
@@ -24,7 +23,7 @@ type Service struct {
 
 	userStore userStore
 
-	presetMap       map[string]config.PresetUserInfo
+	presetMap       map[string]user.PresetUserInfo
 	tokenExpiration time.Duration
 }
 
@@ -35,7 +34,7 @@ type userStore interface {
 	UpdateStudentID(ctx context.Context, userID uuid.UUID, studentID string) (user.User, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, userStore userStore, tokenExpiration time.Duration, presetMap map[string]config.PresetUserInfo) *Service {
+func NewService(logger *zap.Logger, db DBTX, userStore userStore, tokenExpiration time.Duration, presetMap map[string]user.PresetUserInfo) *Service {
 	return &Service{
 		logger:          logger,
 		tracer:          otel.Tracer("membership/service"),
@@ -155,13 +154,13 @@ func (s *Service) FindOrCreateInfo(ctx context.Context, email, identifier string
 			if loginInfo.Providertype == providerType.String() {
 				return loginInfo, nil
 			}
-			
+
 			loginInfo, err = s.CreateInfo(ctx, loginInfo.UserID, providerType, loginInfo.Email.String, identifier)
 			if err != nil {
 				span.RecordError(err)
 				return LoginInfo{}, err
 			}
-			
+
 			return loginInfo, nil
 		} else {
 			// CreateInfo user

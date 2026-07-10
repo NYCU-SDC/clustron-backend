@@ -39,7 +39,6 @@ type LDAPClient interface {
 	CreateUser(uid string, cn string, sn string, sshPublicKey string, uidNumber string) error
 	DeleteUser(uid string) error
 	GetUserInfoByUIDNumber(uidNumber int64) (*ldap.Entry, error)
-	GetAllUIDNumbers() ([]string, error)
 	GetUserInfo(uid string) (*ldap.Entry, error)
 	ExistSSHPublicKey(publicKey string) (bool, error)
 	AddSSHPublicKey(uid string, publicKey string) error
@@ -51,7 +50,8 @@ type LDAPClient interface {
 //mockery:generate: true
 type Querier interface {
 	GetUIDByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
-	CreateLDAPUser(ctx context.Context, params CreateLDAPUserParams) error
+	CreateLDAPUser(ctx context.Context, id uuid.UUID) (int64, error)
+	RegenerateLDAPUserUIDNumber(ctx context.Context, id uuid.UUID) (int64, error)
 	UpdateLDAPUser(ctx context.Context, params UpdateLDAPUserParams) error
 	DeleteLDAPUser(ctx context.Context, userID uuid.UUID) error
 	ExistByUserID(ctx context.Context, userID uuid.UUID) (bool, error)
@@ -68,6 +68,11 @@ type Querier interface {
 type MembershipService interface {
 	ProcessPendingMemberships(ctx context.Context, userID uuid.UUID, email string, studentID string) error
 }
+
+// maxUIDAllocationAttempts bounds how many times onboarding will advance the
+// uid_number sequence looking for a value not already present in LDAP (e.g. an
+// entry an admin added manually, outside the app).
+const maxUIDAllocationAttempts = 5
 
 type Service struct {
 	logger            *zap.Logger
@@ -100,7 +105,7 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 
 	var (
 		err       error
-		uidNumber string
+		uidNumber int64
 	)
 
 	u, err := s.userStore.GetByID(ctx, userID)
@@ -155,14 +160,62 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 	})
 
 	saga.AddStep(internal.SagaStep{
-		Name: "Create LDAP User",
+		Name: "Store LDAP User Info",
 		Action: func(ctx context.Context) error {
-			uidNumber, err = s.GetAvailableUIDNumber(ctx)
+			uidNumber, err = s.query.CreateLDAPUser(traceCtx, userID)
 			if err != nil {
-				return fmt.Errorf("failed to get available uid number: %w", err)
+				if errors.Is(err, databaseutil.ErrUniqueViolation) {
+					logger.Warn("ldap_user record already exists for user", zap.String("userID", userID.String()))
+					return internal.ErrAlreadyOnboarded
+				}
+				logger.Error("failed to create ldap_user record", zap.String("userID", userID.String()), zap.Error(err))
+				return fmt.Errorf("failed to create ldap_user record: %w", internal.ErrAlreadyOnboarded)
 			}
 
-			err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", uidNumber)
+			// The sequence only guards uid_numbers the app allocated. An admin may
+			// have added an LDAP entry manually, so the assigned uid_number could
+			// already exist in the directory. Advance the sequence until we find a
+			// value that is free in LDAP.
+			for attempt := 0; ; attempt++ {
+				taken, err := s.isUIDNumberTakenInLDAP(uidNumber)
+				if err != nil {
+					logger.Error("failed to check uid number in LDAP", zap.Int64("uidNumber", uidNumber), zap.Error(err))
+					return err
+				}
+				if !taken {
+					break
+				}
+				if attempt >= maxUIDAllocationAttempts {
+					err = fmt.Errorf("failed to allocate an available uid number after %d attempts", maxUIDAllocationAttempts)
+					logger.Error("uid number allocation exhausted", zap.Error(err))
+					return err
+				}
+				logger.Warn("uid number already exists in LDAP, regenerating from sequence", zap.Int64("uidNumber", uidNumber))
+				uidNumber, err = s.query.RegenerateLDAPUserUIDNumber(traceCtx, userID)
+				if err != nil {
+					logger.Error("failed to regenerate uid number", zap.String("userID", userID.String()), zap.Error(err))
+					return fmt.Errorf("failed to regenerate uid number: %w", err)
+				}
+			}
+
+			logger.Info("created ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumber))
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			err := s.query.DeleteLDAPUser(ctx, userID)
+			if err != nil {
+				logger.Error("failed to delete ldap_user record during compensation", zap.String("userID", userID.String()), zap.Error(err))
+				return fmt.Errorf("failed to delete ldap_user record during compensation: %w", err)
+			}
+			logger.Info("deleted ldap_user record during compensation", zap.String("userID", userID.String()))
+			return nil
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "Create LDAP User",
+		Action: func(ctx context.Context) error {
+			err = s.ldapClient.CreateUser(linuxUsername.String, fullName.String, "User", "", strconv.FormatInt(uidNumber, 10))
 			if err != nil {
 				if errors.Is(err, ldaputil.ErrUserExists) {
 					logger.Warn("LDAP user already exists", zap.String("linuxUsername", linuxUsername.String))
@@ -170,7 +223,7 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 				}
 				return fmt.Errorf("failed to create LDAP user: %w", err)
 			}
-			logger.Info("created LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.String("uidNumber", uidNumber))
+			logger.Info("created LDAP user", zap.String("userID", userID.String()), zap.String("linuxUsername", linuxUsername.String), zap.Int64("uidNumber", uidNumber))
 			return nil
 		},
 		Compensate: func(ctx context.Context) error {
@@ -180,38 +233,6 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 				return fmt.Errorf("failed to delete LDAP user during compensation: %w", err)
 			}
 			logger.Info("deleted LDAP user during compensation", zap.String("linuxUsername", linuxUsername.String))
-			return nil
-		},
-	})
-
-	saga.AddStep(internal.SagaStep{
-		Name: "Store LDAP User Info",
-		Action: func(ctx context.Context) error {
-			uidNumberInt, err := strconv.ParseInt(uidNumber, 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to parse uid number to int64: %w", err)
-			}
-			err = s.query.CreateLDAPUser(traceCtx, CreateLDAPUserParams{
-				ID:        userID,
-				UidNumber: uidNumberInt,
-			})
-			if err != nil {
-				if errors.Is(err, databaseutil.ErrUniqueViolation) {
-					logger.Warn("ldap_user record already exists for user", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt))
-					return internal.ErrAlreadyOnboarded
-				}
-				logger.Error("failed to create ldap_user record", zap.String("userID", userID.String()), zap.Int64("uidNumber", uidNumberInt), zap.Error(err))
-				return fmt.Errorf("failed to create ldap_user record: %w", internal.ErrAlreadyOnboarded)
-			}
-			return nil
-		},
-		Compensate: func(ctx context.Context) error {
-			err := s.query.DeleteLDAPUser(ctx, userID)
-			if err != nil {
-				logger.Error("failed to delete ldap_user record during compensation", zap.String("userID", userID.String()), zap.Error(err))
-				return fmt.Errorf("failed to delete ldap_user record during compensation: %w", err)
-			}
-			logger.Info("no compensation needed for Store LDAP User Info step", zap.String("userID", userID.String()))
 			return nil
 		},
 	})
@@ -234,6 +255,19 @@ func (s *Service) OnboardUser(ctx context.Context, userID uuid.UUID, fullName pg
 	}
 
 	return nil
+}
+
+// isUIDNumberTakenInLDAP reports whether an LDAP entry with the given uidNumber
+// already exists in the directory.
+func (s *Service) isUIDNumberTakenInLDAP(uidNumber int64) (bool, error) {
+	_, err := s.ldapClient.GetUserInfoByUIDNumber(uidNumber)
+	if err != nil {
+		if errors.Is(err, ldaputil.ErrUserNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *Service) GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (LDAPUserInfo, error) {
@@ -538,41 +572,6 @@ func (s *Service) IsLinuxUsernameExists(ctx context.Context, linuxUsername strin
 	}
 
 	return exists, nil
-}
-
-func (s *Service) GetAvailableUIDNumber(ctx context.Context) (string, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetAvailableUidNumber")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	uidNumbers, err := s.ldapClient.GetAllUIDNumbers()
-	if err != nil {
-		logger.Error("failed to get all uid numbers from LDAP", zap.Error(err))
-		span.RecordError(err)
-		return "", err
-	}
-
-	uidNumbersMap := make(map[int]bool)
-	for _, uidStr := range uidNumbers {
-		var uid int
-		_, err := fmt.Sscanf(uidStr, "%d", &uid)
-		if err != nil {
-			logger.Warn("failed to parse uid number", zap.String("uidStr", uidStr), zap.Error(err))
-			continue
-		}
-		uidNumbersMap[uid] = true
-	}
-
-	for uid := 10000; uid < 60000; uid++ {
-		if !uidNumbersMap[uid] {
-			return fmt.Sprintf("%d", uid), nil
-		}
-	}
-
-	err = fmt.Errorf("no available uid number found")
-	logger.Error("failed to find available uid number", zap.Error(err))
-	span.RecordError(err)
-	return "", err
 }
 
 func (s *Service) UpdatePassword(ctx context.Context, userID uuid.UUID, newPassword string) error {

@@ -66,17 +66,19 @@ func newTestClient(t *testing.T) *Client {
 	}))
 
 	cfg := &Config{
-		LDAPHost:    "localhost",
-		LDAPPort:    port,
-		LDAPBaseDN:  "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
-		LDAPBindDN:  "cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
-		LDAPBindPwd: "admin",
+		LDAPHost:        "localhost",
+		LDAPPort:        port,
+		LDAPBaseDN:      "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
+		LDAPGroupOUName: "Groups",
+		LDAPUserOUName:  "People",
+		LDAPBindDN:      "cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club",
+		LDAPBindPwd:     "admin",
 	}
 
 	client, err := NewClient(cfg, logger)
 	require.NoError(t, err)
 
-	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN))
+	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN, cfg.LDAPGroupOUName, cfg.LDAPUserOUName))
 
 	return client
 }
@@ -98,8 +100,8 @@ func waitForLDAPReady(ctx context.Context, pool dockertest.ClosablePool, resourc
 	})
 }
 
-func setupBaseDIT(c *ldap.Conn, baseDN string) error {
-	orgUnits := []string{"People", "Groups"}
+func setupBaseDIT(c *ldap.Conn, baseDN, groupOU, userOU string) error {
+	orgUnits := []string{groupOU, userOU}
 
 	for _, ou := range orgUnits {
 		req := ldap.NewAddRequest(fmt.Sprintf("ou=%s,%s", ou, baseDN), nil)

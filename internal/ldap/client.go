@@ -7,26 +7,12 @@ import (
 	"go.uber.org/zap"
 )
 
-//mockery:generate: true
-type LDAPClient interface {
-	CreateGroup(groupName, gidNumber string, memberUids []string) error
-	DeleteGroup(groupName string) error
-	AddUserToGroup(groupName, memberUid string) error
-	CreateUser(uid, cn, sn, sshPublicKey, uidNumber string) error
-	DeleteUser(uid string) error
-	AddSSHPublicKey(uid, publicKey string) error
-	DeleteSSHPublicKey(uid string, publicKey string) error
-	GetUserInfo(uid string) (*ldap.Entry, error)
-	GetGroupInfo(groupName string) (*ldap.Entry, error)
-	RemoveUserFromGroup(groupName, memberUid string) error
-	ExistSSHPublicKey(publicKey string) (bool, error)
-	GetAllUIDNumbers() ([]string, error)
-}
-
 type Client struct {
-	Conn   *ldap.Conn
-	Config *Config
-	Logger *zap.Logger
+	Conn        *ldap.Conn
+	Config      *Config
+	Logger      *zap.Logger
+	LDAPUserDN  string
+	LDAPGroupDN string
 }
 
 func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
@@ -41,7 +27,13 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to bind LDAP: %w", err)
 	}
 
-	client := &Client{Conn: conn, Config: cfg, Logger: logger}
+	client := &Client{
+		Conn:        conn,
+		Config:      cfg,
+		Logger:      logger,
+		LDAPUserDN:  fmt.Sprintf("ou=%s,%s", cfg.LDAPUserOUName, cfg.LDAPBaseDN),
+		LDAPGroupDN: fmt.Sprintf("ou=%s,%s", cfg.LDAPGroupOUName, cfg.LDAPBaseDN),
+	}
 
 	logger.Info("LDAP connection established and bound successfully")
 	return client, nil
