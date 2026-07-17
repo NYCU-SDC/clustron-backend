@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
@@ -255,6 +256,11 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if strings.HasSuffix(request.LDAPGroupName, "-base") || strings.HasSuffix(request.LDAPGroupName, "-admin") {
+		h.problemWriter.WriteError(traceCtx, w, handlerutil.ErrValidation, logger)
 		return
 	}
 
