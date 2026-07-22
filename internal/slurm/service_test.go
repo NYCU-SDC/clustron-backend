@@ -153,7 +153,7 @@ func TestCreateAccountAssociationParent(t *testing.T) {
 			}))
 			defer server.Close()
 
-			svc := slurm.NewService(zap.NewNop(), "", server.URL, apiVersion, "root-token", nil, nil)
+			svc := slurm.NewService(zap.NewNop(), "", server.URL, apiVersion, "root-token", "token-helper-key", nil, nil)
 
 			resp, err := svc.CreateAccountAssociation(context.Background(), tc.accounts, nil, tc.parent)
 			require.NoError(t, err)
