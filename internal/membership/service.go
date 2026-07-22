@@ -6,6 +6,7 @@ import (
 	"clustron-backend/internal/jwt"
 	ldaputil "clustron-backend/internal/ldap"
 	"clustron-backend/internal/setting"
+	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/user"
 	"clustron-backend/internal/user/role"
 	"context"
@@ -60,6 +61,15 @@ type LDAPClient interface {
 	SearchUserByUIDList(uidList []string, query string) ([]*ldap.Entry, error)
 }
 
+// SlurmStore associates a group member with the group's Slurm accounts,
+// mirroring their LDAP access. CreateUserAssociation is `sacctmgr add user`:
+// it associates the user with each account (and creates the Slurm user record
+// if absent). DeleteAssociation removes one user-account association.
+type SlurmStore interface {
+	CreateUserAssociation(ctx context.Context, userNames, accountNames, clusterNames []string) (slurm.ParsedUserAssociationResponse, error)
+	DeleteAssociation(ctx context.Context, userName, accountName string) error
+}
+
 type Service struct {
 	logger  *zap.Logger
 	tracer  trace.Tracer
@@ -71,9 +81,10 @@ type Service struct {
 	groupStore     GroupStore
 	settingStore   SettingStore
 	ldapClient     LDAPClient
+	slurmStore     SlurmStore
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, groupStore GroupStore, ldapClient LDAPClient) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, groupRoleStore GroupRoleStore, settingStore SettingStore, groupStore GroupStore, ldapClient LDAPClient, slurmStore SlurmStore) *Service {
 	return &Service{
 		logger:         logger,
 		tracer:         otel.Tracer("membership/service"),
@@ -84,6 +95,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, userStore UserStore, group
 		settingStore:   settingStore,
 		groupStore:     groupStore,
 		ldapClient:     ldapClient,
+		slurmStore:     slurmStore,
 	}
 }
 
@@ -529,6 +541,38 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		},
 	})
 
+	// Mirror the LDAP membership into Slurm: every member is associated with
+	// the group's base account; owners/admins additionally with the admin
+	// account. users_association (== `sacctmgr add user`) creates the Slurm
+	// user record if it does not exist.
+	slurmAccounts := []string{slurm.BaseAccountName(baseCN)}
+	if accessLevel == grouprole.AccessLevelOwner || accessLevel == grouprole.AccessLevelAdmin {
+		slurmAccounts = append(slurmAccounts, slurm.AdminAccountName(baseCN))
+	}
+
+	saga.AddStep(internal.SagaStep{
+		Name: "CreateSlurmUserAssociations",
+		Action: func(ctx context.Context) error {
+			// nil clusterNames associates the user on slurmdbd's cluster(s).
+			_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, slurmAccounts, nil)
+			if err != nil {
+				logger.Error("create slurm user associations failed", zap.String("username", ldapUserInfo.Username), zap.Strings("accounts", slurmAccounts), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			var errs []error
+			for _, account := range slurmAccounts {
+				if derr := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, account); derr != nil {
+					logger.Error("compensate: delete slurm user association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", account), zap.Error(derr))
+					errs = append(errs, derr)
+				}
+			}
+			return errors.Join(errs...)
+		},
+	})
+
 	err = saga.Execute(ctx)
 	if err != nil {
 		logger.Error("saga execution failed", zap.Error(err))
@@ -659,6 +703,53 @@ func (s *Service) Remove(ctx context.Context, groupId uuid.UUID, userId uuid.UUI
 			},
 		})
 	}
+
+	// Delete the Slurm associations mirroring this membership. Admin first,
+	// then base — one saga step per association because Saga.Execute only
+	// compensates fully completed steps.
+	if grouprole.AccessLevel(roleInfo.AccessLevel) == grouprole.AccessLevelOwner || grouprole.AccessLevel(roleInfo.AccessLevel) == grouprole.AccessLevelAdmin {
+		adminAccount := slurm.AdminAccountName(baseCN)
+		saga.AddStep(internal.SagaStep{
+			Name: "DeleteSlurmAdminAssociation",
+			Action: func(ctx context.Context) error {
+				err := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, adminAccount)
+				if err != nil {
+					logger.Warn("delete slurm admin association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", adminAccount), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+			Compensate: func(ctx context.Context) error {
+				_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, []string{adminAccount}, nil)
+				if err != nil {
+					logger.Warn("compensate: recreate slurm admin association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", adminAccount), zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		})
+	}
+
+	baseAccount := slurm.BaseAccountName(baseCN)
+	saga.AddStep(internal.SagaStep{
+		Name: "DeleteSlurmBaseAssociation",
+		Action: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAssociation(ctx, ldapUserInfo.Username, baseAccount)
+			if err != nil {
+				logger.Warn("delete slurm base association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", baseAccount), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.slurmStore.CreateUserAssociation(ctx, []string{ldapUserInfo.Username}, []string{baseAccount}, nil)
+			if err != nil {
+				logger.Warn("compensate: recreate slurm base association failed", zap.String("username", ldapUserInfo.Username), zap.String("account", baseAccount), zap.Error(err))
+				return err
+			}
+			return nil
+		},
+	})
 
 	saga.AddStep(internal.SagaStep{
 		Name: "DeleteMembership",

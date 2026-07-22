@@ -594,7 +594,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		},
 	})
 
-	slurmBaseAccount := fmt.Sprintf("%s-base", baseCN)
+	slurmBaseAccount := slurm.BaseAccountName(baseCN)
 
 	saga.AddStep(internal.SagaStep{
 		Name: "CreateSlurmTopAccount",
@@ -831,7 +831,7 @@ func (s *Service) Delete(ctx context.Context, groupID uuid.UUID) error {
 		},
 	})
 
-	slurmBaseAccount := fmt.Sprintf("%s-base", baseCN)
+	slurmBaseAccount := slurm.BaseAccountName(baseCN)
 
 	// Steps 3-5: tear down the group's Slurm account tree children-first —
 	// slurmdbd refuses to delete an account that still has child associations.
