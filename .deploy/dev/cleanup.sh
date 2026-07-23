@@ -2,3 +2,4 @@
 
 set -e
 docker compose down
+docker compose -f slurm/compose.yaml down

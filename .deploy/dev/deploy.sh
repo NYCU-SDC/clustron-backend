@@ -2,8 +2,17 @@
 
 set -e
 
+echo ":: Starting Slurm cluster..."
+docker compose -f slurm/compose.yaml down
+docker compose -f slurm/compose.yaml pull
+docker compose -f slurm/compose.yaml up -d --wait
+
+echo ":: Minting Slurm root token..."
+TOKEN=$(./slurm/mint-token.sh root infinite)
+
+echo ":: Deploying backend..."
 docker compose down
 docker compose pull
-docker compose up -d --wait
+SLURM_ROOT_TOKEN="$TOKEN" docker compose up -d --wait
 
 echo "finish"
