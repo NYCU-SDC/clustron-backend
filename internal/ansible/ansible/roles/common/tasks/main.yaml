@@ -5,6 +5,7 @@
     cache_valid_time: 3600
 
 - name: Set timezone to Asia/Taipei
+  become: true
   community.general.timezone:
     name: Asia/Taipei
 
