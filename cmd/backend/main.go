@@ -265,12 +265,12 @@ func main() {
 	mux.HandleFunc("GET /api/servers", authMiddleware.HandlerFunc(ansibleHandler.List))
 	mux.HandleFunc("POST /api/servers", authMiddleware.HandlerFunc(ansibleHandler.AddNode))
 	mux.HandleFunc("POST /api/servers/setup", authMiddleware.HandlerFunc(ansibleHandler.SetupAll))
-	mux.HandleFunc("GET /api/servers/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.GetAllowedLoginGroups))
-	mux.HandleFunc("PUT /api/servers/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.UpdateAllowedLoginGroups))
 	mux.HandleFunc("GET /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.GetByID))
 	mux.HandleFunc("DELETE /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.Delete))
 	mux.HandleFunc("POST /api/servers/{server_id}/reset", authMiddleware.HandlerFunc(ansibleHandler.ResetNode))
 	mux.HandleFunc("PATCH /api/servers/{server_id}/role", authMiddleware.HandlerFunc(ansibleHandler.UpdateRole))
+	mux.HandleFunc("GET /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.GetAllowedLoginGroups))
+	mux.HandleFunc("PUT /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.UpdateAllowedLoginGroups))
 
 	// Modules
 	mux.HandleFunc("GET /api/modules", authMiddleware.HandlerFunc(moduleHandler.List))

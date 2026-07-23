@@ -56,8 +56,8 @@ type Store interface {
 	SetupAllNodes(ctx context.Context) error
 	ResetNode(ctx context.Context, id uuid.UUID) (Server, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error)
-	ListAllowedLoginGroups(ctx context.Context) ([]AllowedLoginGroupDetail, error)
-	SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUID) error
+	ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error)
+	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error
 }
 
 type UpdateAllowedLoginGroupsRequest struct {
@@ -214,7 +214,12 @@ func (h *Handler) GetAllowedLoginGroups(w http.ResponseWriter, r *http.Request) 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	groups, err := h.store.ListAllowedLoginGroups(traceCtx)
+	serverID, ok := h.parseServerID(traceCtx, w, r, logger)
+	if !ok {
+		return
+	}
+
+	groups, err := h.store.ListAllowedLoginGroups(traceCtx, serverID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -236,6 +241,11 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	serverID, ok := h.parseServerID(traceCtx, w, r, logger)
+	if !ok {
+		return
+	}
+
 	var req UpdateAllowedLoginGroupsRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -252,7 +262,7 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		groupIDs[i] = id
 	}
 
-	if err := h.store.SetAllowedLoginGroups(traceCtx, groupIDs); err != nil {
+	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groupIDs); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

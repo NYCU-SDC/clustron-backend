@@ -2,6 +2,7 @@ package ansible
 
 import (
 	"bytes"
+	"clustron-backend/internal"
 	"context"
 	"fmt"
 	"io"
@@ -31,6 +32,9 @@ const (
 	InventoryFile = "hosts.yaml"
 	MainPlaybook  = "playbooks/nodes.yaml"
 	LogFilePath   = "ansible-deploy.log"
+
+	headNodeRole    = "head_nodes"
+	computeNodeRole = "compute_nodes"
 )
 
 type Service struct {
@@ -282,6 +286,16 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	if role == headNodeRole {
+		hasAllowedLoginGroups, err := s.queries.ExistServerAllowedLoginGroup(traceCtx, id)
+		if err != nil {
+			return Server{}, databaseutil.WrapDBError(err, logger, "check server allowed login groups")
+		}
+		if err = validateAllowedLoginGroupRoleChange(role, hasAllowedLoginGroups); err != nil {
+			return Server{}, err
+		}
+	}
+
 	server, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{ID: id, AnsibleRole: role})
 	if err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "update server role")
@@ -383,14 +397,18 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 	return nil
 }
 
-// ListAllowedLoginGroups returns the cluster-wide list of Clustron groups whose members
-// are allowed to log in to compute nodes (rendered into SSSD's simple_allow_groups).
-func (s *Service) ListAllowedLoginGroups(ctx context.Context) ([]AllowedLoginGroupDetail, error) {
+// ListAllowedLoginGroups returns the Clustron groups whose members are allowed to log in
+// to a server (rendered into that server's SSSD simple_allow_groups).
+func (s *Service) ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListAllowedLoginGroups")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	rows, err := s.queries.ListAllowedLoginGroups(traceCtx)
+	if _, err := s.queries.GetByID(traceCtx, serverID); err != nil {
+		return nil, databaseutil.WrapDBError(err, logger, "get server by id")
+	}
+
+	rows, err := s.queries.ListServerAllowedLoginGroups(traceCtx, serverID)
 	if err != nil {
 		return nil, databaseutil.WrapDBError(err, logger, "list allowed login groups")
 	}
@@ -406,13 +424,21 @@ func (s *Service) ListAllowedLoginGroups(ctx context.Context) ([]AllowedLoginGro
 	return result, nil
 }
 
-// SetAllowedLoginGroups replaces the entire allowed-login-group list with the given groups,
-// then re-renders sssd.conf on all compute nodes in the background. Each group must already
-// have a BASE LDAP group (i.e. a usable ldap_cn), otherwise the update is rejected.
-func (s *Service) SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUID) error {
+// SetAllowedLoginGroups replaces a server's allowed-login-group list with the given groups,
+// then re-renders that server's sssd.conf in the background. Each group must already have a
+// BASE LDAP group (i.e. a usable ldap_cn), otherwise the update is rejected.
+func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetAllowedLoginGroups")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	server, err := s.queries.GetByID(traceCtx, serverID)
+	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "get server by id")
+	}
+	if err = validateAllowedLoginGroupTarget(server.AnsibleRole, groupIDs); err != nil {
+		return err
+	}
 
 	for _, id := range groupIDs {
 		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
@@ -431,11 +457,14 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUI
 	defer func() { _ = tx.Rollback(traceCtx) }()
 
 	qtx := s.queries.WithTx(tx)
-	if err = qtx.ClearAllowedLoginGroups(traceCtx); err != nil {
+	if err = qtx.ClearServerAllowedLoginGroups(traceCtx, serverID); err != nil {
 		return databaseutil.WrapDBError(err, logger, "clear allowed login groups")
 	}
 	for _, id := range groupIDs {
-		if err = qtx.AddAllowedLoginGroup(traceCtx, id); err != nil {
+		if err = qtx.AddServerAllowedLoginGroup(traceCtx, AddServerAllowedLoginGroupParams{
+			ServerID: serverID,
+			GroupID:  id,
+		}); err != nil {
 			return databaseutil.WrapDBError(err, logger, "add allowed login group")
 		}
 	}
@@ -443,18 +472,34 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, groupIDs []uuid.UUI
 		return databaseutil.WrapDBError(err, logger, "commit allowed login groups")
 	}
 
-	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
-	go s.applySSSDConfig(bgCtx)
+	if server.AnsibleRole == computeNodeRole {
+		bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
+		go s.applySSSDConfig(bgCtx, server)
+	}
 
 	return nil
 }
 
+func validateAllowedLoginGroupTarget(role string, groupIDs []uuid.UUID) error {
+	if role != computeNodeRole && len(groupIDs) > 0 {
+		return internal.ErrAllowedLoginGroupsUnsupported
+	}
+	return nil
+}
+
+func validateAllowedLoginGroupRoleChange(role string, hasAllowedLoginGroups bool) error {
+	if role == headNodeRole && hasAllowedLoginGroups {
+		return internal.ErrAllowedLoginGroupsRoleConflict
+	}
+	return nil
+}
+
 // applySSSDConfig regenerates the inventory and re-runs only the SSSD-tagged ansible task
-// (--tags sssd) across all nodes, so sssd.conf is re-rendered and SSSD restarted without
-// running the slower roles (slurm build, etc.).
-func (s *Service) applySSSDConfig(ctx context.Context) {
+// (--tags sssd) for a server, so sssd.conf is re-rendered and SSSD restarted without running
+// the slower roles (slurm build, etc.).
+func (s *Service) applySSSDConfig(ctx context.Context, server Server) {
 	logger := logutil.WithContext(ctx, s.logger)
-	logger.Info("[background] re-rendering sssd.conf via --tags sssd")
+	logger.Info("[background] re-rendering sssd.conf via --tags sssd", zap.String("node", server.AnsibleName))
 
 	if err := s.generateInventory(ctx); err != nil {
 		logger.Error("fail to generate inventory for sssd re-render", zap.Error(err))
@@ -464,6 +509,7 @@ func (s *Service) applySSSDConfig(ctx context.Context) {
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Inventory: InventoryFile,
 		Tags:      "sssd",
+		Limit:     server.AnsibleName,
 	}
 
 	playbookCmd := playbook.NewAnsiblePlaybookCmd(
@@ -486,7 +532,7 @@ func (s *Service) applySSSDConfig(ctx context.Context) {
 		return
 	}
 
-	logger.Info("sssd.conf re-rendered on all nodes")
+	logger.Info("sssd.conf re-rendered", zap.String("node", server.AnsibleName))
 }
 
 type AnsibleInventory struct {
@@ -500,13 +546,14 @@ type AnsibleChild struct {
 	Hosts map[string]HostVars `yaml:"hosts,omitempty"`
 }
 type HostVars struct {
-	AnsibleHost       string `yaml:"ansible_host,omitempty"`
-	AnsibleUser       string `yaml:"ansible_user"`
-	AnsibleSSHPrivate string `yaml:"ansible_ssh_private_key_file,omitempty"`
-	PrivateIP         string `yaml:"private_ip,omitempty"`
-	CPUCores          int32  `yaml:"cpu_cores,omitempty"`
-	MemoryMB          int32  `yaml:"memory_mb,omitempty"`
-	SlurmPartition    string `yaml:"slurm_partition,omitempty"`
+	AnsibleHost           string `yaml:"ansible_host,omitempty"`
+	AnsibleUser           string `yaml:"ansible_user"`
+	AnsibleSSHPrivate     string `yaml:"ansible_ssh_private_key_file,omitempty"`
+	PrivateIP             string `yaml:"private_ip,omitempty"`
+	CPUCores              int32  `yaml:"cpu_cores,omitempty"`
+	MemoryMB              int32  `yaml:"memory_mb,omitempty"`
+	SlurmPartition        string `yaml:"slurm_partition,omitempty"`
+	LDAPSimpleAllowGroups string `yaml:"ldap_simple_allow_groups,omitempty"`
 }
 
 func (s *Service) generateInventory(ctx context.Context) error {
@@ -572,21 +619,19 @@ func (s *Service) generateInventory(ctx context.Context) error {
 			hostVars.SlurmPartition = srv.SlurmPartition.String
 		}
 
-		inventory.All.Children[roleGroup].Hosts[srv.AnsibleName] = hostVars
-	}
-
-	allowedCNs, err := s.queries.ListAllowedLoginGroupCNs(ctx)
-	if err != nil {
-		return databaseutil.WrapDBError(err, s.logger, "list allowed login group cns")
-	}
-	cns := make([]string, 0, len(allowedCNs))
-	for _, cn := range allowedCNs {
-		if cn.Valid && cn.String != "" {
-			cns = append(cns, cn.String)
+		allowedCNs, err := s.queries.ListAllowedLoginGroupCNsByServerID(ctx, srv.ID)
+		if err != nil {
+			return databaseutil.WrapDBError(err, s.logger, "list allowed login group cns")
 		}
-	}
-	if len(cns) > 0 {
-		inventory.All.Vars["ldap_simple_allow_groups"] = strings.Join(cns, ", ")
+		cns := make([]string, 0, len(allowedCNs))
+		for _, cn := range allowedCNs {
+			if cn.Valid && cn.String != "" {
+				cns = append(cns, cn.String)
+			}
+		}
+		hostVars.LDAPSimpleAllowGroups = strings.Join(cns, ", ")
+
+		inventory.All.Children[roleGroup].Hosts[srv.AnsibleName] = hostVars
 	}
 
 	yamlData, err := yaml.Marshal(&inventory)
