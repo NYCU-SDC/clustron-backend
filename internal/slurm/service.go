@@ -49,15 +49,15 @@ type Service struct {
 	settingStore settingStore
 }
 
-func NewService(logger *zap.Logger, slurmTokenHelperURL string, slurmRestfulBaseURL string, slurmVersion string, slurmRootToken string, slurmTokenHelperAPIKey string, settingStore settingStore, redisClient redisClient) *Service {
+func NewService(logger *zap.Logger, cfg Config, settingStore settingStore, redisClient redisClient) *Service {
 	return &Service{
 		logger:                 logger,
 		tracer:                 otel.Tracer("slurm/service"),
-		slurmRestfulBaseURL:    fmt.Sprintf("%s/slurm/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmDatabaseBaseURL:   fmt.Sprintf("%s/slurmdb/%s", slurmRestfulBaseURL, slurmVersion),
-		slurmTokenHelperAPIKey: slurmTokenHelperAPIKey,
-		slurmTokenHelperURL:    slurmTokenHelperURL,
-		slurmRootToken:         slurmRootToken,
+		slurmRestfulBaseURL:    fmt.Sprintf("%s/slurm/%s", cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion),
+		slurmDatabaseBaseURL:   fmt.Sprintf("%s/slurmdb/%s", cfg.SlurmRestfulBaseURL, cfg.SlurmRestfulVersion),
+		slurmTokenHelperAPIKey: cfg.SlurmTokenHelperAPIKey,
+		slurmTokenHelperURL:    cfg.SlurmTokenHelperURL,
+		slurmRootToken:         cfg.SlurmRootToken,
 		httpClient:             &http.Client{},
 		redisClient:            redisClient,
 
