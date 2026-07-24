@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"clustron-backend/internal/ldap"
 
@@ -121,10 +122,13 @@ func (s *Service) AddNode(ctx context.Context, params CreateParams) (Server, err
 		return server, fmt.Errorf("fail to generate inventory: %w", err)
 	}
 
-	bgCtx := context.Background()
-	bgCtx = trace.ContextWithSpanContext(bgCtx, span.SpanContext())
+	bgCtx := context.WithoutCancel(ctx)
+	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
-	go s.runAnsibleInBackground(bgCtx, server)
+	go func() {
+		defer cancel()
+		s.runAnsibleInBackground(bgCtx, server)
+	}()
 
 	return server, nil
 }
@@ -328,8 +332,13 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 		return Server{}, fmt.Errorf("fail to generate inventory: %w", err)
 	}
 
-	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
-	go s.runAnsibleInBackground(bgCtx, server)
+	bgCtx := context.WithoutCancel(ctx)
+	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
+
+	go func() {
+		defer cancel()
+		s.runAnsibleInBackground(bgCtx, server)
+	}()
 
 	return updated, nil
 }
@@ -371,8 +380,13 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 		return Server{}, fmt.Errorf("failed to generate inventory: %w", err)
 	}
 
-	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
-	go s.runAnsibleInBackground(bgCtx, server)
+	bgCtx := context.WithoutCancel(ctx)
+	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
+
+	go func() {
+		defer cancel()
+		s.runAnsibleInBackground(bgCtx, server)
+	}()
 
 	return updated, nil
 }
@@ -493,8 +507,13 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	}
 
 	if server.AnsibleRole == computeNodeRole {
-		bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
-		go s.applySSSDConfig(bgCtx, server)
+		bgCtx := context.WithoutCancel(ctx)
+		bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
+
+		go func() {
+			defer cancel()
+			s.applySSSDConfig(bgCtx, server)
+		}()
 	}
 
 	return nil
