@@ -535,27 +535,6 @@ func (s *Service) applySSSDConfig(ctx context.Context, server Server) {
 	logger.Info("sssd.conf re-rendered", zap.String("node", server.AnsibleName))
 }
 
-type AnsibleInventory struct {
-	All AnsibleGroup `yaml:"all"`
-}
-type AnsibleGroup struct {
-	Vars     map[string]interface{}  `yaml:"vars,omitempty"`
-	Children map[string]AnsibleChild `yaml:"children,omitempty"`
-}
-type AnsibleChild struct {
-	Hosts map[string]HostVars `yaml:"hosts,omitempty"`
-}
-type HostVars struct {
-	AnsibleHost           string `yaml:"ansible_host,omitempty"`
-	AnsibleUser           string `yaml:"ansible_user"`
-	AnsibleSSHPrivate     string `yaml:"ansible_ssh_private_key_file,omitempty"`
-	PrivateIP             string `yaml:"private_ip,omitempty"`
-	CPUCores              int32  `yaml:"cpu_cores,omitempty"`
-	MemoryMB              int32  `yaml:"memory_mb,omitempty"`
-	SlurmPartition        string `yaml:"slurm_partition,omitempty"`
-	LDAPSimpleAllowGroups string `yaml:"ldap_simple_allow_groups,omitempty"`
-}
-
 func (s *Service) generateInventory(ctx context.Context) error {
 	servers, err := s.queries.ListAll(ctx)
 	if err != nil {
