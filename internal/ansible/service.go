@@ -348,7 +348,7 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 
 	if err = s.generateInventory(traceCtx); err != nil {
 		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
-		return Server{}, fmt.Errorf("產生 inventory 失敗: %w", err)
+		return Server{}, fmt.Errorf("failed to generate inventory: %w", err)
 	}
 
 	bgCtx := trace.ContextWithSpanContext(context.Background(), span.SpanContext())
@@ -388,7 +388,7 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 
 	logger.Info("deploying all nodes...")
 	if err := exec.Execute(traceCtx); err != nil {
-		logger.Error("全叢集 Ansible 執行失敗", zap.Error(err))
+		logger.Error("failed to deploy all nodes", zap.Error(err))
 		span.RecordError(err)
 		return err
 	}
