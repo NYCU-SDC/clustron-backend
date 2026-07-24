@@ -286,8 +286,15 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "begin tx for updating server role")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
 	if role == headNodeRole {
-		hasAllowedLoginGroups, err := s.queries.ExistServerAllowedLoginGroup(traceCtx, id)
+		hasAllowedLoginGroups, err := qtx.ExistServerAllowedLoginGroup(traceCtx, id)
 		if err != nil {
 			return Server{}, databaseutil.WrapDBError(err, logger, "check server allowed login groups")
 		}
@@ -296,22 +303,25 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 		}
 	}
 
-	server, err := s.queries.UpdateRole(traceCtx, UpdateRoleParams{ID: id, AnsibleRole: role})
+	server, err := qtx.UpdateRole(traceCtx, UpdateRoleParams{ID: id, AnsibleRole: role})
 	if err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "update server role")
 	}
 
-	updated, err := s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
+	updated, err := qtx.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
 	if err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "set server status to provisioning")
 	}
-	if err = s.queries.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
+	if err = qtx.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
 		ID:              id,
 		ProvisionDetail: pgtype.Text{Valid: false},
 	}); err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "clear provision detail")
 	}
 	updated.ProvisionDetail = pgtype.Text{Valid: false}
+	if err = tx.Commit(traceCtx); err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "commit server role update")
+	}
 
 	if err = s.generateInventory(traceCtx); err != nil {
 		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
