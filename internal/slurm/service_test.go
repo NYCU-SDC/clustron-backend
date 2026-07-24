@@ -152,8 +152,13 @@ func TestCreateAccountAssociationParent(t *testing.T) {
 				_, _ = w.Write([]byte(`{"added_accounts": " Adding Account(s)\n  proj101-base\n", "errors": [], "warnings": []}`))
 			}))
 			defer server.Close()
-
-			svc := slurm.NewService(zap.NewNop(), "", server.URL, apiVersion, "root-token", "token-helper-key", nil, nil)
+			svc := slurm.NewService(zap.NewNop(), slurm.Config{
+				SlurmRestfulBaseURL:    server.URL,
+				SlurmRestfulVersion:    apiVersion,
+				SlurmRootToken:         "root-token",
+				SlurmTokenHelperAPIKey: "token-helper-key",
+				SlurmTokenHelperURL:    "token-helper-url",
+			}, nil, nil)
 
 			resp, err := svc.CreateAccountAssociation(context.Background(), tc.accounts, nil, tc.parent)
 			require.NoError(t, err)
