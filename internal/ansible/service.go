@@ -329,22 +329,32 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	server, err := s.queries.GetByID(traceCtx, id)
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "begin tx for resetting server")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
+	server, err := qtx.GetByID(traceCtx, id)
 	if err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "get server by id")
 	}
 
-	updated, err := s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
+	updated, err := qtx.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "provisioning"})
 	if err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "reset server status")
 	}
-	if err = s.queries.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
+	if err = qtx.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
 		ID:              id,
 		ProvisionDetail: pgtype.Text{Valid: false},
 	}); err != nil {
 		return Server{}, databaseutil.WrapDBError(err, logger, "clear provision detail")
 	}
 	updated.ProvisionDetail = pgtype.Text{Valid: false}
+	if err = tx.Commit(traceCtx); err != nil {
+		return Server{}, databaseutil.WrapDBError(err, logger, "commit server reset")
+	}
 
 	if err = s.generateInventory(traceCtx); err != nil {
 		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
