@@ -782,7 +782,10 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 	return parsedResponse, nil
 }
 
-func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string) (ParsedAccountAssociationResponse, error) {
+// CreateAccountAssociation is the `sacctmgr add account` equivalent: it creates
+// the accounts AND their cluster associations in one call. A non-empty parent
+// places the accounts under that parent account; empty means under root.
+func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, clusterNames []string, parent string) (ParsedAccountAssociationResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateAccountAssociation")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -791,8 +794,9 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 
 	request := AccountAssociationRequest{
 		AssociationCondition: AccountAddCondition{
-			Accounts: accountNames,
-			Clusters: clusterNames,
+			Accounts:    accountNames,
+			Clusters:    clusterNames,
+			Association: AssociationRecSet{Parent: parent},
 		},
 		Account: AccountShort{},
 	}
@@ -829,7 +833,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	// Catch standard HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
 	if response.StatusCode != http.StatusOK {
 		err = fmt.Errorf("unexpected http status code: %d", response.StatusCode)
-		logger.Error("failed to create Slurm user association", zap.Error(err))
+		logger.Error("failed to create Slurm account association", zap.Error(err))
 		span.RecordError(err)
 		return ParsedAccountAssociationResponse{}, err
 	}
