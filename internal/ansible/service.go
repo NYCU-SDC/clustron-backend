@@ -36,6 +36,7 @@ const (
 
 	headNodeRole    = "head_nodes"
 	computeNodeRole = "compute_nodes"
+	sssdTag         = "sssd"
 )
 
 type Service struct {
@@ -127,7 +128,7 @@ func (s *Service) AddNode(ctx context.Context, params CreateParams) (Server, err
 
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server)
+		s.runAnsibleInBackground(bgCtx, server, "")
 	}()
 
 	return server, nil
@@ -224,13 +225,23 @@ func parseAnsibleError(output string) string {
 	return sb.String()
 }
 
-func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
+func (s *Service) runAnsibleInBackground(ctx context.Context, server Server, tags string) {
 	logger := logutil.WithContext(ctx, s.logger)
-	logger.Info("[background] start setup node", zap.String("node", server.AnsibleName))
+	sssdOnly := tags == sssdTag
+	if sssdOnly {
+		logger.Info("[background] re-rendering sssd.conf via --tags sssd", zap.String("node", server.AnsibleName))
+		if err := s.generateInventory(ctx); err != nil {
+			logger.Error("fail to generate inventory for sssd re-render", zap.Error(err))
+			return
+		}
+	} else {
+		logger.Info("[background] start setup node", zap.String("node", server.AnsibleName))
+	}
 
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Inventory: InventoryFile,
 		Limit:     server.AnsibleName,
+		Tags:      tags,
 	}
 
 	playbookCmd := playbook.NewAnsiblePlaybookCmd(
@@ -247,11 +258,17 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
 			})
 		},
 	}
+	stdoutWriter := io.Writer(tracker)
+	stderrWriter := io.Writer(tracker)
+	if sssdOnly {
+		stdoutWriter = os.Stdout
+		stderrWriter = os.Stderr
+	}
 
 	exec := execute.NewDefaultExecute(
 		execute.WithCmd(playbookCmd),
-		execute.WithWrite(tracker),
-		execute.WithWriteError(tracker),
+		execute.WithWrite(stdoutWriter),
+		execute.WithWriteError(stderrWriter),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 		execute.WithCmdRunDir(AnsibleDir),
 		execute.WithEnvVars(map[string]string{
@@ -261,6 +278,10 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
 
 	err := exec.Execute(ctx)
 	if err != nil {
+		if sssdOnly {
+			logger.Error("fail to re-render sssd.conf", zap.Error(err), zap.String("node", server.AnsibleName))
+			return
+		}
 		logger.Error("fail to deploy node", zap.Error(err), zap.String("node", server.AnsibleName))
 		errSummary := parseAnsibleError(tracker.AllOutput.String())
 		_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
@@ -271,6 +292,11 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server) {
 			ID:     server.ID,
 			Status: "failed",
 		})
+		return
+	}
+
+	if sssdOnly {
+		logger.Info("sssd.conf re-rendered", zap.String("node", server.AnsibleName))
 		return
 	}
 
@@ -337,7 +363,7 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server)
+		s.runAnsibleInBackground(bgCtx, server, "")
 	}()
 
 	return updated, nil
@@ -385,7 +411,7 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server)
+		s.runAnsibleInBackground(bgCtx, server, "")
 	}()
 
 	return updated, nil
@@ -512,7 +538,7 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 
 		go func() {
 			defer cancel()
-			s.applySSSDConfig(bgCtx, server)
+			s.runAnsibleInBackground(bgCtx, server, sssdTag)
 		}()
 	}
 
@@ -531,47 +557,6 @@ func validateAllowedLoginGroupRoleChange(role string, hasAllowedLoginGroups bool
 		return internal.ErrAllowedLoginGroupsRoleConflict
 	}
 	return nil
-}
-
-// applySSSDConfig regenerates the inventory and re-runs only the SSSD-tagged ansible task
-// (--tags sssd) for a server, so sssd.conf is re-rendered and SSSD restarted without running
-// the slower roles (slurm build, etc.).
-func (s *Service) applySSSDConfig(ctx context.Context, server Server) {
-	logger := logutil.WithContext(ctx, s.logger)
-	logger.Info("[background] re-rendering sssd.conf via --tags sssd", zap.String("node", server.AnsibleName))
-
-	if err := s.generateInventory(ctx); err != nil {
-		logger.Error("fail to generate inventory for sssd re-render", zap.Error(err))
-		return
-	}
-
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: InventoryFile,
-		Tags:      "sssd",
-		Limit:     server.AnsibleName,
-	}
-
-	playbookCmd := playbook.NewAnsiblePlaybookCmd(
-		playbook.WithPlaybooks(MainPlaybook),
-		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
-	)
-
-	exec := execute.NewDefaultExecute(
-		execute.WithCmd(playbookCmd),
-		execute.WithWrite(os.Stdout),
-		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
-		execute.WithEnvVars(map[string]string{
-			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
-		}),
-	)
-
-	if err := exec.Execute(ctx); err != nil {
-		logger.Error("fail to re-render sssd.conf", zap.Error(err))
-		return
-	}
-
-	logger.Info("sssd.conf re-rendered", zap.String("node", server.AnsibleName))
 }
 
 func (s *Service) generateInventory(ctx context.Context) error {
