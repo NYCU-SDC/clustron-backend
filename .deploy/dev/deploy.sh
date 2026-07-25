@@ -2,6 +2,13 @@
 
 set -e
 
+# Shared network so the backend can reach slurmrestd by service name instead
+# of a host-published port. Created here (not owned by either compose file)
+# so neither project's `down` tries to remove a network the other is still
+# attached to.
+NETWORK="clustron-dev-slurm-net"
+docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK"
+
 echo ":: Starting Slurm cluster..."
 docker compose -f slurm/compose.yaml down
 docker compose -f slurm/compose.yaml pull

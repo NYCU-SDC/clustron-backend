@@ -6,6 +6,7 @@ services:
     networks:
       - internal
       - traefik
+      - slurm
     depends_on:
       postgres:
         condition: service_healthy
@@ -25,7 +26,7 @@ services:
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable
       - BASE_URL=https://api.dev.clustron.sdc.nycu.club
       - SLURM_TOKEN_HELPER_URL=${SLURM_TOKEN_HELPER_URL}
-      - SLURM_RESTFUL_BASE_URL=${SLURM_RESTFUL_BASE_URL}
+      - SLURM_RESTFUL_BASE_URL=http://slurmrestd:6820
       - SLURM_RESTFUL_VERSION=v0.0.44
       - SLURM_ROOT_TOKEN=${SLURM_ROOT_TOKEN}
       - MIGRATION_SOURCE=file:///app/migrations
@@ -100,4 +101,7 @@ services:
 networks:
   internal:
   traefik:
+    external: true
+  slurm:
+    name: clustron-dev-slurm-net
     external: true

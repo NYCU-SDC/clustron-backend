@@ -4,7 +4,9 @@
 # slurmdbd + slurmctld + slurmrestd (JWT auth on :6820) + one dynamic compute
 # node, backed by MariaDB for accounting. dev/deploy.sh starts this cluster,
 # waits for it to become healthy, then mints a root JWT via mint-token.sh and
-# passes it to the backend as SLURM_ROOT_TOKEN.
+# passes it to the backend as SLURM_ROOT_TOKEN. slurmrestd joins the `shared`
+# network (see dev/deploy.sh) so the backend reaches it as http://slurmrestd:6820
+# — no host port is published.
 
 name: clustron-slurm-dev
 
@@ -96,14 +98,16 @@ services:
       - etc_munge:/etc/munge
       - etc_slurm:/etc/slurm
       - var_log_slurm:/var/log/slurm
-    ports:
-      # Host:Container. The backend's SLURM_RESTFUL_BASE_URL points here.
-      - "6820:6820"
+    expose:
+      - "6820"
     depends_on:
       slurmctld:
         condition: service_healthy
     networks:
       - slurm-network
+      # Lets the backend (attached to this same network via dev/compose.yaml)
+      # reach this container as http://slurmrestd:6820. No host port needed.
+      - shared
     healthcheck:
       test: ["CMD-SHELL", "test -S /var/run/slurmrestd/slurmrestd.socket"]
       interval: 10s
@@ -148,3 +152,6 @@ volumes:
 networks:
   slurm-network:
     driver: bridge
+  shared:
+    name: clustron-dev-slurm-net
+    external: true
