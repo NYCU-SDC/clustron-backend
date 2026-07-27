@@ -1,0 +1,157 @@
+# Dockerized Slurm cluster for the "dev" deployment environment.
+#
+# Mirrors .deploy/local/slurm (see its README.md for full details): brings up
+# slurmdbd + slurmctld + slurmrestd (JWT auth on :6820) + one dynamic compute
+# node, backed by MariaDB for accounting. dev/deploy.sh starts this cluster,
+# waits for it to become healthy, then mints a root JWT via mint-token.sh and
+# passes it to the backend as SLURM_ROOT_TOKEN. slurmrestd joins the `shared`
+# network (see dev/deploy.sh) so the backend reaches it as http://slurmrestd:6820
+# — no host port is published.
+
+name: clustron-slurm-dev
+
+x-slurm-image: &slurm-image giovtorres/slurm-docker-cluster:${SLURM_VERSION:-25.11.4}
+
+services:
+  mysql:
+    image: mariadb:12
+    hostname: mysql
+    container_name: clustron-slurm-dev-mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: slurm_acct_db
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: password
+    volumes:
+      - var_lib_mysql:/var/lib/mysql
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  slurmdbd:
+    image: *slurm-image
+    init: true
+    command: ["slurmdbd"]
+    container_name: clustron-slurm-dev-slurmdbd
+    hostname: slurmdbd
+    environment:
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: password
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6819"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pidof slurmdbd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  slurmctld:
+    image: *slurm-image
+    init: true
+    command: ["slurmctld"]
+    container_name: clustron-slurm-dev-slurmctld
+    hostname: slurmctld
+    privileged: true
+    working_dir: /data
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - slurm_jobdir:/data
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6817"
+    depends_on:
+      slurmdbd:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "scontrol ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  slurmrestd:
+    image: *slurm-image
+    init: true
+    command: ["slurmrestd"]
+    container_name: clustron-slurm-dev-slurmrestd
+    hostname: slurmrestd
+    privileged: true
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6820"
+    depends_on:
+      slurmctld:
+        condition: service_healthy
+    networks:
+      - slurm-network
+      # Lets the backend (attached to this same network via dev/compose.yaml)
+      # reach this container as http://slurmrestd:6820. No host port needed.
+      - shared
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /var/run/slurmrestd/slurmrestd.socket"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cpu-worker:
+    image: *slurm-image
+    init: true
+    command: ["slurmd-cpu"]
+    working_dir: /data
+    privileged: true
+    environment:
+      COMPOSE_PROJECT_NAME: clustron-slurm-dev
+    volumes:
+      - etc_munge:/etc/munge
+      - etc_slurm:/etc/slurm
+      - slurm_jobdir:/data
+      - var_log_slurm:/var/log/slurm
+    expose:
+      - "6818"
+    depends_on:
+      slurmctld:
+        condition: service_healthy
+    networks:
+      - slurm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pidof slurmd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  etc_munge:
+  etc_slurm:
+  var_log_slurm:
+  slurm_jobdir:
+  var_lib_mysql:
+
+networks:
+  slurm-network:
+    driver: bridge
+  shared:
+    name: clustron-dev-slurm-net
+    external: true
