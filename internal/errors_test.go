@@ -24,3 +24,10 @@ func TestAllowedLoginGroupErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestServerAlreadyExistsErrorMapping(t *testing.T) {
+	got := ErrorHandler(ErrServerAlreadyExists)
+	if got.Status != http.StatusBadRequest {
+		t.Fatalf("ErrorHandler() status = %d, want %d", got.Status, http.StatusBadRequest)
+	}
+}

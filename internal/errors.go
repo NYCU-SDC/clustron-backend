@@ -27,6 +27,7 @@ var (
 	ErrDatabaseConflict = errors.New("database conflict")
 
 	// Ansible Errors
+	ErrServerAlreadyExists            = errors.New("server already exists")
 	ErrAllowedLoginGroupsUnsupported  = errors.New("allowed login groups can only be configured on compute nodes")
 	ErrAllowedLoginGroupsRoleConflict = errors.New("clear allowed login groups before changing the server to a head node")
 
@@ -110,6 +111,8 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewConflictProblem("database conflict")
 	// Ansible Errors
+	case errors.Is(err, ErrServerAlreadyExists):
+		return problem.NewBadRequestProblem(err.Error())
 	case errors.Is(err, ErrAllowedLoginGroupsUnsupported):
 		return NewUnprocessableEntityProblem(err.Error())
 	case errors.Is(err, ErrAllowedLoginGroupsRoleConflict):

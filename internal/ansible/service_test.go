@@ -9,8 +9,27 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
+
+func TestMapCreateServerError(t *testing.T) {
+	err := mapCreateServerError(&pgconn.PgError{Code: "23505"}, "cpu3", zap.NewNop())
+	if !errors.Is(err, internal.ErrServerAlreadyExists) {
+		t.Fatalf("mapCreateServerError() error = %v, want ErrServerAlreadyExists", err)
+	}
+}
+
+func validAddNodeRequest(name string) AddNodeRequest {
+	return AddNodeRequest{
+		AnsibleName: name,
+		IpAddress:   "192.0.2.1",
+		SshUser:     "ubuntu",
+		AnsibleRole: computeNodeRole,
+	}
+}
 
 func TestAddNodeRequestAnsibleNameValidation(t *testing.T) {
 	tests := []struct {
@@ -50,13 +69,15 @@ func TestAddNodeRequestSshUserValidation(t *testing.T) {
 		name          string
 		ipAddress     string
 		sshConfigHost string
+		privateIP     string
 		sshUser       string
 		wantErr       bool
 	}{
 		{name: "IP with user", ipAddress: "192.0.2.1", sshUser: "ubuntu"},
 		{name: "IP without user", ipAddress: "192.0.2.1", wantErr: true},
-		{name: "SSH config with user", sshConfigHost: "compute-node", sshUser: "ubuntu"},
-		{name: "SSH config without user", sshConfigHost: "compute-node"},
+		{name: "SSH config with user", sshConfigHost: "compute-node", privateIP: "192.0.2.2", sshUser: "ubuntu"},
+		{name: "SSH config without user", sshConfigHost: "compute-node", privateIP: "192.0.2.2"},
+		{name: "SSH config without private IP", sshConfigHost: "compute-node", wantErr: true},
 		{name: "IP and SSH config without user", ipAddress: "192.0.2.1", sshConfigHost: "compute-node", wantErr: true},
 	}
 
@@ -67,6 +88,7 @@ func TestAddNodeRequestSshUserValidation(t *testing.T) {
 				AnsibleName:   "compute-node",
 				IpAddress:     tt.ipAddress,
 				SshConfigHost: tt.sshConfigHost,
+				PrivateIp:     tt.privateIP,
 				SshUser:       tt.sshUser,
 				AnsibleRole:   computeNodeRole,
 			}
@@ -76,6 +98,126 @@ func TestAddNodeRequestSshUserValidation(t *testing.T) {
 				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestAddNodeRequestIPValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     AddNodeRequest
+		wantErr bool
+	}{
+		{name: "direct IP", req: validAddNodeRequest("compute-01")},
+		{
+			name: "SSH config with private IP",
+			req: AddNodeRequest{
+				AnsibleName:   "compute-01",
+				SshConfigHost: "compute-01",
+				PrivateIp:     "10.0.0.1",
+				AnsibleRole:   computeNodeRole,
+			},
+		},
+		{
+			name: "SSH config without private IP",
+			req: AddNodeRequest{
+				AnsibleName:   "compute-01",
+				SshConfigHost: "compute-01",
+				AnsibleRole:   computeNodeRole,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid direct IP",
+			req: AddNodeRequest{
+				AnsibleName: "compute-01",
+				IpAddress:   "not-an-ip",
+				SshUser:     "ubuntu",
+				AnsibleRole: computeNodeRole,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid private IP",
+			req: AddNodeRequest{
+				AnsibleName:   "compute-01",
+				SshConfigHost: "compute-01",
+				PrivateIp:     "not-an-ip",
+				AnsibleRole:   computeNodeRole,
+			},
+			wantErr: true,
+		},
+	}
+
+	validate := validator.New()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate.Struct(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAddNodesRequestValidation(t *testing.T) {
+	validServers := []AddNodeRequest{validAddNodeRequest("compute-01")}
+	tooManyServers := make([]AddNodeRequest, 51)
+	for i := range tooManyServers {
+		tooManyServers[i] = validAddNodeRequest("compute-01")
+	}
+
+	tests := []struct {
+		name    string
+		req     AddNodesRequest
+		wantErr bool
+	}{
+		{name: "one server", req: AddNodesRequest{Servers: validServers}},
+		{name: "empty", req: AddNodesRequest{}, wantErr: true},
+		{name: "more than fifty", req: AddNodesRequest{Servers: tooManyServers}, wantErr: true},
+		{name: "invalid nested server", req: AddNodesRequest{Servers: []AddNodeRequest{{}}}, wantErr: true},
+	}
+
+	validate := validator.New()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate.Struct(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestToCreateParams(t *testing.T) {
+	cpuCores := int32(32)
+	memoryMB := int32(131072)
+	req := AddNodeRequest{
+		AnsibleName:    "compute-01",
+		IpAddress:      "192.0.2.1",
+		PrivateIp:      "10.0.0.1",
+		SshUser:        "ubuntu",
+		SshKeyName:     "cluster-key",
+		AnsibleRole:    computeNodeRole,
+		SlurmPartition: "gpu",
+		CpuCores:       &cpuCores,
+		MemoryMb:       &memoryMB,
+	}
+
+	got := toCreateParams(req)
+	want := CreateParams{
+		AnsibleName:    "compute-01",
+		IpAddress:      pgtype.Text{String: "192.0.2.1", Valid: true},
+		PrivateIp:      pgtype.Text{String: "10.0.0.1", Valid: true},
+		SshUser:        pgtype.Text{String: "ubuntu", Valid: true},
+		SshKeyName:     pgtype.Text{String: "cluster-key", Valid: true},
+		AnsibleRole:    computeNodeRole,
+		SlurmPartition: pgtype.Text{String: "gpu", Valid: true},
+		CpuCores:       pgtype.Int4{Int32: cpuCores, Valid: true},
+		MemoryMb:       pgtype.Int4{Int32: memoryMB, Valid: true},
+	}
+
+	if got != want {
+		t.Fatalf("toCreateParams() = %#v, want %#v", got, want)
 	}
 }
 
@@ -217,5 +359,29 @@ func TestParseAnsibleError(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseAnsibleRecap(t *testing.T) {
+	output := "PLAY RECAP ****\n" +
+		"compute-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0\n" +
+		"compute-02 : ok=4 changed=0 unreachable=1 failed=0 skipped=0 rescued=0 ignored=0\n" +
+		"compute-03 : ok=8 changed=1 unreachable=0 failed=1 skipped=0 rescued=0 ignored=0\n" +
+		"TASKS RECAP ****\n" +
+		"common : configure host -------------------------------- 1.00s\n"
+
+	got := parseAnsibleRecap(output)
+	want := map[string]bool{
+		"compute-01": true,
+		"compute-02": false,
+		"compute-03": false,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("parseAnsibleRecap() = %#v, want %#v", got, want)
+	}
+	for host, wantSuccess := range want {
+		if got[host] != wantSuccess {
+			t.Errorf("parseAnsibleRecap()[%q] = %v, want %v", host, got[host], wantSuccess)
+		}
 	}
 }

@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"clustron-backend/internal"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"clustron-backend/internal/ldap"
@@ -17,6 +20,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
@@ -35,10 +39,10 @@ const (
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
 	LogFilePath         = "ansible-deploy.log"
 
-	headNodeRole    = "head_nodes"
-	computeNodeRole = "compute_nodes"
-	sssdTag         = "sssd"
-	nfsExportsTag   = "nfs_exports"
+	headNodeRole            = "head_nodes"
+	computeNodeRole         = "compute_nodes"
+	sssdTag                 = "sssd"
+	computePrerequisiteTags = "nfs_exports,slurm_config"
 )
 
 type Service struct {
@@ -47,11 +51,13 @@ type Service struct {
 	logger     *zap.Logger
 	tracer     trace.Tracer
 	ldapConfig ldap.Config
+	ansibleMu  sync.Mutex
 }
 
 type ServiceInterface interface {
 	SetupAllNodes(ctx context.Context) error
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
+	AddNodes(ctx context.Context, params []CreateParams) ([]Server, error)
 }
 
 func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapConfig ldap.Config) *Service {
@@ -104,36 +110,61 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Service) AddNode(ctx context.Context, params CreateParams) (Server, error) {
-	traceCtx, span := s.tracer.Start(ctx, "AddNode")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	params.Status = "provisioning"
-	server, err := s.queries.Create(traceCtx, params)
+	servers, err := s.AddNodes(ctx, []CreateParams{params})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create new server in db")
-		span.RecordError(err)
 		return Server{}, err
 	}
+	return servers[0], nil
+}
 
-	err = s.generateInventory(traceCtx)
+func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server, error) {
+	traceCtx, span := s.tracer.Start(ctx, "AddNodes")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+	if len(params) == 0 {
+		return []Server{}, nil
+	}
+
+	tx, err := s.db.Begin(traceCtx)
 	if err != nil {
-		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{
-			server.ID,
-			"failed",
-		})
-		return server, fmt.Errorf("fail to generate inventory: %w", err)
+		return nil, databaseutil.WrapDBError(err, logger, "begin tx for adding servers")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
+	servers := make([]Server, len(params))
+	for i := range params {
+		params[i].Status = "provisioning"
+		server, err := qtx.Create(traceCtx, params[i])
+		if err != nil {
+			err = mapCreateServerError(err, params[i].AnsibleName, logger)
+			span.RecordError(err)
+			return nil, err
+		}
+		servers[i] = server
+	}
+
+	if err = tx.Commit(traceCtx); err != nil {
+		return nil, databaseutil.WrapDBError(err, logger, "commit added servers")
 	}
 
 	bgCtx := context.WithoutCancel(ctx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
-
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server, "")
+		s.runAnsibleInBackground(bgCtx, servers, "")
 	}()
 
-	return server, nil
+	return servers, nil
+}
+
+func mapCreateServerError(err error, ansibleName string, logger *zap.Logger) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrUniqueViolation {
+		logger.Warn("Server already exists", zap.String("ansible_name", ansibleName))
+		return fmt.Errorf("%w: %q", internal.ErrServerAlreadyExists, ansibleName)
+	}
+	return databaseutil.WrapDBError(err, logger, fmt.Sprintf("create server %q in db", ansibleName))
 }
 
 type stageTrackingWriter struct {
@@ -249,123 +280,193 @@ func parseAnsibleError(output string) string {
 	return sb.String()
 }
 
-func (s *Service) runAnsibleInBackground(ctx context.Context, server Server, tags string) {
+func (s *Service) runAnsibleInBackground(ctx context.Context, servers []Server, tags string) {
+	s.ansibleMu.Lock()
+	defer s.ansibleMu.Unlock()
+	if len(servers) == 0 {
+		return
+	}
+
 	logger := logutil.WithContext(ctx, s.logger)
-	sssdOnly := tags == sssdTag
-	if sssdOnly {
-		logger.Info("[background] re-rendering sssd.conf via --tags sssd", zap.String("node", server.AnsibleName))
-		if err := s.generateInventory(ctx); err != nil {
-			logger.Error("fail to generate inventory for sssd re-render", zap.Error(err))
+	serverNames := make([]string, len(servers))
+	serverIDs := make([]uuid.UUID, len(servers))
+	hasComputeNode := false
+	hasHeadNode := false
+	for i, server := range servers {
+		serverNames[i] = server.AnsibleName
+		serverIDs[i] = server.ID
+		hasComputeNode = hasComputeNode || server.AnsibleRole == computeNodeRole
+		hasHeadNode = hasHeadNode || server.AnsibleRole == headNodeRole
+	}
+
+	if err := s.generateInventory(ctx); err != nil {
+		detail := fmt.Sprintf("failed to generate inventory: %v", err)
+		logger.Error("fail to generate inventory", zap.Error(err), zap.Strings("nodes", serverNames))
+		if tags != sssdTag {
+			s.failServers(ctx, serverIDs, detail)
+		}
+		return
+	}
+	if tags == sssdTag {
+		logger.Info("[background] re-rendering sssd.conf", zap.Strings("nodes", serverNames))
+		if err := s.executeNodesPlaybook(ctx, serverNames, tags, os.Stdout, os.Stderr); err != nil {
+			logger.Error("fail to re-render sssd.conf", zap.Error(err), zap.Strings("nodes", serverNames))
 			return
 		}
-	} else {
-		logger.Info("[background] start setup node", zap.String("node", server.AnsibleName))
+		logger.Info("sssd.conf re-rendered", zap.Strings("nodes", serverNames))
+		return
 	}
-
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: InventoryFile,
-		Limit:     server.AnsibleName,
-		Tags:      tags,
-	}
-
-	playbookCmd := playbook.NewAnsiblePlaybookCmd(
-		playbook.WithPlaybooks(MainPlaybook),
-		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
-	)
 
 	tracker := &stageTrackingWriter{
 		delegate: os.Stderr,
 		onTaskLine: func(taskName string) {
-			_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
-				ID:              server.ID,
-				ProvisionDetail: pgtype.Text{String: taskName, Valid: true},
-			})
+			s.updateServersProvisionDetail(ctx, serverIDs, taskName)
 		},
 	}
-	stdoutWriter := io.Writer(tracker)
-	stderrWriter := io.Writer(tracker)
-	if sssdOnly {
-		stdoutWriter = os.Stdout
-		stderrWriter = os.Stderr
-	}
-	if !sssdOnly && server.AnsibleRole == computeNodeRole {
-		if err := s.runUpdateRoles(ctx, tracker, nfsExportsTag); err != nil {
-			logger.Error("fail to authorize compute node in NFS exports", zap.Error(err), zap.String("node", server.AnsibleName))
-			errSummary := parseAnsibleError(tracker.AllOutput.String())
-			_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
-				ID:              server.ID,
-				ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
-			})
-			_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-				ID:     server.ID,
-				Status: "failed",
-			})
+
+	// A new head node configures its shared services before the compute-node play runs.
+	// Existing head nodes need their NFS exports and Slurm config refreshed before
+	// new compute nodes mount the shares and start slurmd.
+	if hasComputeNode && !hasHeadNode {
+		if err := s.runUpdateRoles(ctx, tracker, computePrerequisiteTags); err != nil {
+			detail := parseAnsibleError(tracker.AllOutput.String())
+			logger.Error("fail to prepare cluster configuration for compute nodes", zap.Error(err))
+			s.failServers(ctx, serverIDs, detail)
 			return
 		}
+		tracker.AllOutput.Reset()
+		tracker.lineBuffer.Reset()
 	}
-	tracker.AllOutput.Reset()
-	tracker.lineBuffer.Reset()
 
+	logger.Info("[background] start setup nodes", zap.Strings("nodes", serverNames))
+	deployErr := s.executeNodesPlaybook(ctx, serverNames, tags, tracker, tracker)
+	deployOutput := tracker.AllOutput.String()
+	successful := make(map[uuid.UUID]bool, len(servers))
+	failureDetails := make(map[uuid.UUID]string, len(servers))
+	if deployErr == nil {
+		for _, id := range serverIDs {
+			successful[id] = true
+		}
+	} else {
+		recap := parseAnsibleRecap(deployOutput)
+		for _, server := range servers {
+			successful[server.ID] = recap[server.AnsibleName]
+			if !successful[server.ID] {
+				failureDetails[server.ID] = parseAnsibleError(deployOutput)
+			}
+		}
+		logger.Error("some servers failed to deploy", zap.Error(deployErr), zap.Strings("nodes", serverNames))
+	}
+
+	hasSuccessfulServer := false
+	for _, ok := range successful {
+		hasSuccessfulServer = hasSuccessfulServer || ok
+	}
+	if hasSuccessfulServer {
+		tracker.AllOutput.Reset()
+		tracker.lineBuffer.Reset()
+		if err := s.runUpdateRoles(ctx, tracker, ""); err != nil {
+			detail := parseAnsibleError(tracker.AllOutput.String())
+			logger.Error("fail to update cluster configuration after adding server batch", zap.Error(err))
+			for id, ok := range successful {
+				if ok {
+					successful[id] = false
+					failureDetails[id] = detail
+				}
+			}
+		}
+	}
+
+	for _, server := range servers {
+		if successful[server.ID] {
+			s.updateServerProvisionResult(ctx, server.ID, "active", pgtype.Text{Valid: false})
+			continue
+		}
+		detail := failureDetails[server.ID]
+		s.updateServerProvisionResult(ctx, server.ID, "failed", pgtype.Text{String: detail, Valid: detail != ""})
+	}
+}
+
+func (s *Service) executeNodesPlaybook(
+	ctx context.Context,
+	serverNames []string,
+	tags string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	options := &playbook.AnsiblePlaybookOptions{
+		Inventory: InventoryFile,
+		Tags:      tags,
+	}
+	if len(serverNames) > 0 {
+		options.Limit = strings.Join(serverNames, ",")
+	}
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks(MainPlaybook),
+		playbook.WithPlaybookOptions(options),
+	)
 	exec := execute.NewDefaultExecute(
 		execute.WithCmd(playbookCmd),
-		execute.WithWrite(stdoutWriter),
-		execute.WithWriteError(stderrWriter),
+		execute.WithWrite(stdout),
+		execute.WithWriteError(stderr),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 		execute.WithCmdRunDir(AnsibleDir),
 		execute.WithEnvVars(map[string]string{
 			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
 	)
+	return exec.Execute(ctx)
+}
 
-	err := exec.Execute(ctx)
-	if err != nil {
-		if sssdOnly {
-			logger.Error("fail to re-render sssd.conf", zap.Error(err), zap.String("node", server.AnsibleName))
-			return
+func parseAnsibleRecap(output string) map[string]bool {
+	result := make(map[string]bool)
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 || fields[1] != ":" {
+			continue
 		}
-		logger.Error("fail to deploy node", zap.Error(err), zap.String("node", server.AnsibleName))
-		errSummary := parseAnsibleError(tracker.AllOutput.String())
+		unreachable, failed, foundUnreachable, foundFailed := 0, 0, false, false
+		for _, field := range fields[2:] {
+			key, raw, ok := strings.Cut(field, "=")
+			if !ok {
+				continue
+			}
+			value, err := strconv.Atoi(raw)
+			if err != nil {
+				continue
+			}
+			switch key {
+			case "unreachable":
+				unreachable, foundUnreachable = value, true
+			case "failed":
+				failed, foundFailed = value, true
+			}
+		}
+		if foundUnreachable && foundFailed {
+			result[fields[0]] = unreachable == 0 && failed == 0
+		}
+	}
+	return result
+}
+
+func (s *Service) failServers(ctx context.Context, ids []uuid.UUID, detail string) {
+	for _, id := range ids {
+		s.updateServerProvisionResult(ctx, id, "failed", pgtype.Text{String: detail, Valid: detail != ""})
+	}
+}
+
+func (s *Service) updateServersProvisionDetail(ctx context.Context, ids []uuid.UUID, detail string) {
+	for _, id := range ids {
 		_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
-			ID:              server.ID,
-			ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
+			ID:              id,
+			ProvisionDetail: pgtype.Text{String: detail, Valid: detail != ""},
 		})
-		_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-			ID:     server.ID,
-			Status: "failed",
-		})
-		return
 	}
+}
 
-	if sssdOnly {
-		logger.Info("sssd.conf re-rendered", zap.String("node", server.AnsibleName))
-		return
-	}
-
-	tracker.AllOutput.Reset()
-	tracker.lineBuffer.Reset()
-	if err = s.runUpdateRoles(ctx, tracker, ""); err != nil {
-		logger.Error("fail to update cluster configuration after node change", zap.Error(err), zap.String("node", server.AnsibleName))
-		errSummary := parseAnsibleError(tracker.AllOutput.String())
-		_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
-			ID:              server.ID,
-			ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
-		})
-		_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-			ID:     server.ID,
-			Status: "failed",
-		})
-		return
-	}
-
-	logger.Info("deploy successfully!", zap.String("node", server.AnsibleName))
-	_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
-		ID:              server.ID,
-		ProvisionDetail: pgtype.Text{Valid: false},
-	})
-	_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
-		ID:     server.ID,
-		Status: "active",
-	})
+func (s *Service) updateServerProvisionResult(ctx context.Context, id uuid.UUID, status string, detail pgtype.Text) {
+	_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{ID: id, ProvisionDetail: detail})
+	_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{ID: id, Status: status})
 }
 
 func (s *Service) runUpdateRoles(ctx context.Context, output io.Writer, tags string) error {
@@ -440,17 +541,12 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 		return Server{}, databaseutil.WrapDBError(err, logger, "commit server role update")
 	}
 
-	if err = s.generateInventory(traceCtx); err != nil {
-		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
-		return Server{}, fmt.Errorf("fail to generate inventory: %w", err)
-	}
-
 	bgCtx := context.WithoutCancel(ctx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server, "")
+		s.runAnsibleInBackground(bgCtx, []Server{server}, "")
 	}()
 
 	return updated, nil
@@ -488,17 +584,12 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 		return Server{}, databaseutil.WrapDBError(err, logger, "commit server reset")
 	}
 
-	if err = s.generateInventory(traceCtx); err != nil {
-		_, _ = s.queries.UpdateStatus(traceCtx, UpdateStatusParams{ID: id, Status: "failed"})
-		return Server{}, fmt.Errorf("failed to generate inventory: %w", err)
-	}
-
 	bgCtx := context.WithoutCancel(ctx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 	go func() {
 		defer cancel()
-		s.runAnsibleInBackground(bgCtx, server, "")
+		s.runAnsibleInBackground(bgCtx, []Server{server}, "")
 	}()
 
 	return updated, nil
@@ -508,33 +599,16 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetupAllNodes")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+	s.ansibleMu.Lock()
+	defer s.ansibleMu.Unlock()
 
 	if err := s.generateInventory(traceCtx); err != nil {
 		span.RecordError(err)
 		return err
 	}
 
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: InventoryFile,
-	}
-
-	playbookCmd := playbook.NewAnsiblePlaybookCmd(
-		playbook.WithPlaybooks(MainPlaybook),
-		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
-	)
-
-	exec := execute.NewDefaultExecute(
-		execute.WithCmd(playbookCmd),
-		execute.WithWrite(os.Stdout),
-		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
-		execute.WithEnvVars(map[string]string{
-			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
-		}),
-	)
-
 	logger.Info("deploying all nodes...")
-	if err := exec.Execute(traceCtx); err != nil {
+	if err := s.executeNodesPlaybook(traceCtx, nil, "", os.Stdout, os.Stderr); err != nil {
 		logger.Error("failed to deploy all nodes", zap.Error(err))
 		span.RecordError(err)
 		return err
@@ -625,7 +699,7 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 
 		go func() {
 			defer cancel()
-			s.runAnsibleInBackground(bgCtx, server, sssdTag)
+			s.runAnsibleInBackground(bgCtx, []Server{server}, sssdTag)
 		}()
 	}
 
@@ -730,9 +804,25 @@ func (s *Service) generateInventory(ctx context.Context) error {
 	}
 
 	filePath := filepath.Join(AnsibleDir, InventoryFile)
-	err = os.WriteFile(filePath, yamlData, 0644)
+	tempFile, err := os.CreateTemp(AnsibleDir, ".hosts-*.yaml")
 	if err != nil {
-		return fmt.Errorf("failed to write hosts.yaml: %w", err)
+		return fmt.Errorf("failed to create temporary inventory: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+	if _, err = tempFile.Write(yamlData); err != nil {
+		_ = tempFile.Close()
+		return fmt.Errorf("failed to write temporary inventory: %w", err)
+	}
+	if err = tempFile.Chmod(0644); err != nil {
+		_ = tempFile.Close()
+		return fmt.Errorf("failed to set inventory permissions: %w", err)
+	}
+	if err = tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary inventory: %w", err)
+	}
+	if err = os.Rename(tempPath, filePath); err != nil {
+		return fmt.Errorf("failed to replace hosts.yaml: %w", err)
 	}
 
 	return nil

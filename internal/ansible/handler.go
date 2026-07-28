@@ -17,15 +17,23 @@ import (
 
 type AddNodeRequest struct {
 	AnsibleName    string `json:"ansible_name"     validate:"required,max=253,hostname_rfc1123"`
-	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost"`
+	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost,omitempty,ip"`
 	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress"`
-	PrivateIp      string `json:"private_ip"`
+	PrivateIp      string `json:"private_ip"       validate:"required_without=IpAddress,omitempty,ip"`
 	SshUser        string `json:"ssh_user"         validate:"required_with=IpAddress"`
 	SshKeyName     string `json:"ssh_key_name"`
 	AnsibleRole    string `json:"ansible_role"     validate:"required"`
 	SlurmPartition string `json:"slurm_partition"`
 	CpuCores       *int32 `json:"cpu_cores"`
 	MemoryMb       *int32 `json:"memory_mb"`
+}
+
+type AddNodesRequest struct {
+	Servers []AddNodeRequest `json:"servers" validate:"required,min=1,max=50,dive"`
+}
+
+type AddNodesResponse struct {
+	Servers []ServerResponse `json:"servers"`
 }
 
 type ServerResponse struct {
@@ -51,6 +59,7 @@ type UpdateRoleRequest struct {
 type Store interface {
 	ListAll(ctx context.Context) ([]Server, error)
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
+	AddNodes(ctx context.Context, params []CreateParams) ([]Server, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Server, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	SetupAllNodes(ctx context.Context) error
@@ -117,31 +126,41 @@ func (h *Handler) AddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := CreateParams{
-		AnsibleName:   req.AnsibleName,
-		IpAddress:     pgtype.Text{String: req.IpAddress, Valid: req.IpAddress != ""},
-		SshConfigHost: pgtype.Text{String: req.SshConfigHost, Valid: req.SshConfigHost != ""},
-		PrivateIp:     pgtype.Text{String: req.PrivateIp, Valid: req.PrivateIp != ""},
-		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
-		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
-		AnsibleRole:   req.AnsibleRole,
-	}
-	if req.SlurmPartition != "" {
-		params.SlurmPartition = pgtype.Text{String: req.SlurmPartition, Valid: true}
-	}
-	if req.CpuCores != nil {
-		params.CpuCores = pgtype.Int4{Int32: *req.CpuCores, Valid: true}
-	}
-	if req.MemoryMb != nil {
-		params.MemoryMb = pgtype.Int4{Int32: *req.MemoryMb, Valid: true}
-	}
-
-	server, err := h.store.AddNode(traceCtx, params)
+	server, err := h.store.AddNode(traceCtx, toCreateParams(req))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, toResponse(server))
+}
+
+func (h *Handler) AddNodes(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "AddNodes")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req AddNodesRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	params := make([]CreateParams, len(req.Servers))
+	for i, server := range req.Servers {
+		params[i] = toCreateParams(server)
+	}
+
+	servers, err := h.store.AddNodes(traceCtx, params)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	responses := make([]ServerResponse, len(servers))
+	for i, server := range servers {
+		responses[i] = toResponse(server)
+	}
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, AddNodesResponse{Servers: responses})
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -338,4 +357,26 @@ func toResponse(s Server) ServerResponse {
 		resp.MemoryMb = &v
 	}
 	return resp
+}
+
+func toCreateParams(req AddNodeRequest) CreateParams {
+	params := CreateParams{
+		AnsibleName:   req.AnsibleName,
+		IpAddress:     pgtype.Text{String: req.IpAddress, Valid: req.IpAddress != ""},
+		SshConfigHost: pgtype.Text{String: req.SshConfigHost, Valid: req.SshConfigHost != ""},
+		PrivateIp:     pgtype.Text{String: req.PrivateIp, Valid: req.PrivateIp != ""},
+		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
+		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
+		AnsibleRole:   req.AnsibleRole,
+	}
+	if req.SlurmPartition != "" {
+		params.SlurmPartition = pgtype.Text{String: req.SlurmPartition, Valid: true}
+	}
+	if req.CpuCores != nil {
+		params.CpuCores = pgtype.Int4{Int32: *req.CpuCores, Valid: true}
+	}
+	if req.MemoryMb != nil {
+		params.MemoryMb = pgtype.Int4{Int32: *req.MemoryMb, Valid: true}
+	}
+	return params
 }
