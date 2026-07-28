@@ -1,0 +1,15 @@
+- name: Update configuration affected by node roles
+  hosts: head_nodes
+  gather_facts: true
+  tasks:
+    - name: Update NFS exports for compute nodes
+      ansible.builtin.import_role:
+        name: nfs_server
+        tasks_from: update_roles
+      tags: nfs_exports
+
+    - name: Update Slurm cluster configuration
+      ansible.builtin.import_role:
+        name: slurm_controller
+        tasks_from: update_roles
+      tags: slurm_config

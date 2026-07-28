@@ -33,8 +33,9 @@ ReturnToService=1
 # --- COMPUTE NODES ---
 {% if 'compute_nodes' in groups %}
 {% for host in groups['compute_nodes'] %}
-{% if hostvars[host]['ansible_default_ipv4'] is defined and hostvars[host]['ansible_default_ipv4']['address'] is defined %}
-NodeName={{ host }} NodeAddr={{ hostvars[host]['ansible_default_ipv4']['address'] }} CPUs={{ hostvars[host].cpu_cores | default(1) }} RealMemory={{ hostvars[host].memory_mb | default(1024) }} State=UNKNOWN
+{% set node_addr = hostvars[host].private_ip | default(hostvars[host].ansible_host, true) %}
+{% if node_addr %}
+NodeName={{ host }} NodeAddr={{ node_addr }} CPUs={{ hostvars[host].cpu_cores | default(1) }} RealMemory={{ hostvars[host].memory_mb | default(1024) }} State=UNKNOWN
 {% endif %}
 {% endfor %}
 

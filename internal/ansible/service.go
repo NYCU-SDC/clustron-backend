@@ -29,14 +29,16 @@ import (
 )
 
 const (
-	AnsibleDir    = "internal/ansible/ansible"
-	InventoryFile = "hosts.yaml"
-	MainPlaybook  = "playbooks/nodes.yaml"
-	LogFilePath   = "ansible-deploy.log"
+	AnsibleDir          = "internal/ansible/ansible"
+	InventoryFile       = "hosts.yaml"
+	MainPlaybook        = "playbooks/nodes.yaml"
+	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
+	LogFilePath         = "ansible-deploy.log"
 
 	headNodeRole    = "head_nodes"
 	computeNodeRole = "compute_nodes"
 	sssdTag         = "sssd"
+	nfsExportsTag   = "nfs_exports"
 )
 
 type Service struct {
@@ -264,6 +266,23 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server, tag
 		stdoutWriter = os.Stdout
 		stderrWriter = os.Stderr
 	}
+	if !sssdOnly && server.AnsibleRole == computeNodeRole {
+		if err := s.runUpdateRoles(ctx, tracker, nfsExportsTag); err != nil {
+			logger.Error("fail to authorize compute node in NFS exports", zap.Error(err), zap.String("node", server.AnsibleName))
+			errSummary := parseAnsibleError(tracker.AllOutput.String())
+			_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
+				ID:              server.ID,
+				ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
+			})
+			_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
+				ID:     server.ID,
+				Status: "failed",
+			})
+			return
+		}
+	}
+	tracker.AllOutput.Reset()
+	tracker.lineBuffer.Reset()
 
 	exec := execute.NewDefaultExecute(
 		execute.WithCmd(playbookCmd),
@@ -300,6 +319,22 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server, tag
 		return
 	}
 
+	tracker.AllOutput.Reset()
+	tracker.lineBuffer.Reset()
+	if err = s.runUpdateRoles(ctx, tracker, ""); err != nil {
+		logger.Error("fail to update cluster configuration after node change", zap.Error(err), zap.String("node", server.AnsibleName))
+		errSummary := parseAnsibleError(tracker.AllOutput.String())
+		_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
+			ID:              server.ID,
+			ProvisionDetail: pgtype.Text{String: errSummary, Valid: true},
+		})
+		_, _ = s.queries.UpdateStatus(ctx, UpdateStatusParams{
+			ID:     server.ID,
+			Status: "failed",
+		})
+		return
+	}
+
 	logger.Info("deploy successfully!", zap.String("node", server.AnsibleName))
 	_ = s.queries.UpdateProvisionDetail(ctx, UpdateProvisionDetailParams{
 		ID:              server.ID,
@@ -309,6 +344,36 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, server Server, tag
 		ID:     server.ID,
 		Status: "active",
 	})
+}
+
+func (s *Service) runUpdateRoles(ctx context.Context, output io.Writer, tags string) error {
+	logger := logutil.WithContext(ctx, s.logger)
+	logger.Info("[background] updating cluster configuration")
+
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks(UpdateRolesPlaybook),
+		playbook.WithPlaybookOptions(&playbook.AnsiblePlaybookOptions{
+			Inventory: InventoryFile,
+			Tags:      tags,
+		}),
+	)
+
+	exec := execute.NewDefaultExecute(
+		execute.WithCmd(playbookCmd),
+		execute.WithWrite(output),
+		execute.WithWriteError(output),
+		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithEnvVars(map[string]string{
+			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
+		}),
+	)
+
+	if err := exec.Execute(ctx); err != nil {
+		return err
+	}
+	logger.Info("cluster configuration updated")
+	return nil
 }
 
 func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error) {
@@ -600,7 +665,7 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 
 		hostVars := HostVars{
-			AnsibleUser: srv.SshUser,
+			AnsibleUser: srv.SshUser.String,
 			CPUCores:    srv.CpuCores.Int32,
 			MemoryMB:    srv.MemoryMb.Int32,
 		}

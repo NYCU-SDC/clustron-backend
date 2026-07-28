@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS servers
     private_ip      VARCHAR(50),
 
     -- SSH authentication
-    ssh_user        VARCHAR(255) NOT NULL,
+    ssh_user        VARCHAR(255),
     ssh_key_name    VARCHAR(255),
 
     -- Ansible & Slurm properties
@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS servers
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW(),
 
+    CONSTRAINT servers_ansible_name_hostname_check CHECK (
+        char_length(ansible_name) <= 253
+        AND ansible_name ~ '^([a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62}){1}(\.[a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62})*?$'
+    ),
+    CONSTRAINT servers_ssh_user_connection_check CHECK (
+        ip_address IS NULL OR NULLIF(ssh_user, '') IS NOT NULL
+    ),
     CONSTRAINT chk_connection CHECK (ip_address IS NOT NULL OR ssh_config_host IS NOT NULL)
 );
 

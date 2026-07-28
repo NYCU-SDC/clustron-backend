@@ -1,0 +1,9 @@
+- name: Deploy slurm.conf
+  become: true
+  ansible.builtin.template:
+    src: slurm.conf.j2
+    dest: /etc/slurm/slurm.conf
+    owner: slurm
+    group: slurm
+    mode: '0644'
+  notify: Reconfigure Slurm

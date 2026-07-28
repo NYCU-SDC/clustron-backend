@@ -16,11 +16,11 @@ import (
 )
 
 type AddNodeRequest struct {
-	AnsibleName    string `json:"ansible_name"     validate:"required"`
+	AnsibleName    string `json:"ansible_name"     validate:"required,max=253,hostname_rfc1123"`
 	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost"`
 	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress"`
 	PrivateIp      string `json:"private_ip"`
-	SshUser        string `json:"ssh_user"         validate:"required"`
+	SshUser        string `json:"ssh_user"         validate:"required_with=IpAddress"`
 	SshKeyName     string `json:"ssh_key_name"`
 	AnsibleRole    string `json:"ansible_role"     validate:"required"`
 	SlurmPartition string `json:"slurm_partition"`
@@ -34,7 +34,7 @@ type ServerResponse struct {
 	IpAddress       string  `json:"ip_address,omitempty"`
 	SshConfigHost   string  `json:"ssh_config_host,omitempty"`
 	PrivateIp       string  `json:"private_ip,omitempty"`
-	SshUser         string  `json:"ssh_user"`
+	SshUser         string  `json:"ssh_user,omitempty"`
 	SshKeyName      string  `json:"ssh_key_name,omitempty"`
 	AnsibleRole     string  `json:"ansible_role"`
 	SlurmPartition  string  `json:"slurm_partition,omitempty"`
@@ -122,7 +122,7 @@ func (h *Handler) AddNode(w http.ResponseWriter, r *http.Request) {
 		IpAddress:     pgtype.Text{String: req.IpAddress, Valid: req.IpAddress != ""},
 		SshConfigHost: pgtype.Text{String: req.SshConfigHost, Valid: req.SshConfigHost != ""},
 		PrivateIp:     pgtype.Text{String: req.PrivateIp, Valid: req.PrivateIp != ""},
-		SshUser:       req.SshUser,
+		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
 		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
 		AnsibleRole:   req.AnsibleRole,
 	}
@@ -306,7 +306,7 @@ func toResponse(s Server) ServerResponse {
 	resp := ServerResponse{
 		ID:          s.ID.String(),
 		AnsibleName: s.AnsibleName,
-		SshUser:     s.SshUser,
+		SshUser:     s.SshUser.String,
 		AnsibleRole: s.AnsibleRole,
 		Status:      s.Status,
 	}

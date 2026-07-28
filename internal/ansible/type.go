@@ -22,7 +22,7 @@ type AnsibleChild struct {
 }
 type HostVars struct {
 	AnsibleHost           string `yaml:"ansible_host,omitempty"`
-	AnsibleUser           string `yaml:"ansible_user"`
+	AnsibleUser           string `yaml:"ansible_user,omitempty"`
 	AnsibleSSHPrivate     string `yaml:"ansible_ssh_private_key_file,omitempty"`
 	PrivateIP             string `yaml:"private_ip,omitempty"`
 	CPUCores              int32  `yaml:"cpu_cores,omitempty"`

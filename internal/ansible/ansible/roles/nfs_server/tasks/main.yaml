@@ -15,16 +15,5 @@
     - /opt
     - /etc/slurm
 
-- name: Configure NFS exports
-  become: true
-  ansible.builtin.template:
-    src: exports.j2
-    dest: /etc/exports
-    owner: root
-    group: root
-    mode: '0644'
-
-- name: Reload NFS
-  become: true
-  ansible.builtin.command: exportfs -ra
-  changed_when: true
+- name: Configure NFS exports for compute nodes
+  ansible.builtin.import_tasks: update_roles.yaml

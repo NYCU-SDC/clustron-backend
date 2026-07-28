@@ -117,15 +117,8 @@
     mode: '0600'
   notify: Restart Slurmdbd
 
-- name: Deploy slurm.conf
-  become: true
-  ansible.builtin.template:
-    src: slurm.conf.j2
-    dest: /etc/slurm/slurm.conf
-    owner: slurm
-    group: slurm
-    mode: '0644'
-  notify: Reconfigure Slurm
+- name: Deploy cluster configuration
+  ansible.builtin.import_tasks: update_roles.yaml
 
 - name: Deploy gres.conf
   become: true

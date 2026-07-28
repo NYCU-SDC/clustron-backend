@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS servers
     private_ip      VARCHAR(50),
 
     -- SSH authentication
-    ssh_user        VARCHAR(255) NOT NULL,
+    ssh_user        VARCHAR(255),
     ssh_key_name    VARCHAR(255),
 
     -- Ansible & Slurm properties
@@ -30,9 +30,24 @@ CREATE TABLE IF NOT EXISTS servers
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW(),
 
+    CONSTRAINT servers_ansible_name_hostname_check CHECK (
+        char_length(ansible_name) <= 253
+        AND ansible_name ~ '^([a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62}){1}(\.[a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62})*?$'
+    ),
+    CONSTRAINT servers_ssh_user_connection_check CHECK (
+        ip_address IS NULL OR NULLIF(ssh_user, '') IS NOT NULL
+    ),
     CONSTRAINT chk_connection CHECK (ip_address IS NOT NULL OR ssh_config_host IS NOT NULL)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ip_address_key ON servers(ip_address) WHERE ip_address IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ssh_config_host_key ON servers(ssh_config_host) WHERE ssh_config_host IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS servers_private_ip_key ON servers(private_ip) WHERE private_ip IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS allowed_login_groups
+(
+    server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+
+    PRIMARY KEY (server_id, group_id)
+);
