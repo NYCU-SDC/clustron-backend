@@ -148,3 +148,74 @@ func TestValidateAllowedLoginGroupRoleChange(t *testing.T) {
 		})
 	}
 }
+
+func TestParseAnsibleError(t *testing.T) {
+	tests := []struct {
+		name       string
+		output     string
+		want       []string
+		wantAbsent []string
+	}{
+		{
+			name: "legacy fatal output",
+			output: "TASK [Install package]\n" +
+				"fatal: [compute-01]: FAILED! => {\"msg\": \"package not found\"}\n" +
+				"PLAY RECAP ****\n" +
+				"compute-01 : ok=1 changed=0 unreachable=0 failed=1\n",
+			want: []string{
+				"Stage: Install package",
+				"fatal: [compute-01]: FAILED!",
+				"PLAY RECAP:",
+			},
+			wantAbsent: []string{"Output tail:"},
+		},
+		{
+			name: "new error output",
+			output: "TASK [Validate configuration]\n" +
+				"[ERROR]: Task failed: configuration is invalid\n" +
+				"PLAY RECAP ****\n" +
+				"compute-01 : ok=0 changed=0 unreachable=0 failed=1\n" +
+				"TASKS RECAP ****\n" +
+				"Validate configuration ----------------------------- 0.14s\n",
+			want: []string{
+				"Stage: Validate configuration",
+				"[ERROR]: Task failed: configuration is invalid",
+				"compute-01 : ok=0 changed=0 unreachable=0 failed=1",
+			},
+			wantAbsent: []string{"Output tail:", "TASKS RECAP", "0.14s"},
+		},
+		{
+			name:   "unknown output falls back to raw tail",
+			output: "unexpected callback output\nconnection closed by remote host\n",
+			want: []string{
+				"Output tail:",
+				"unexpected callback output",
+				"connection closed by remote host",
+			},
+		},
+		{
+			name:   "raw tail is bounded",
+			output: "oldest line\n" + strings.Repeat("middle line\n", maxAnsibleErrorOutputLines-1) + "newest line",
+			want:   []string{"middle line", "newest line"},
+			wantAbsent: []string{
+				"oldest line",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseAnsibleError(tt.output)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("parseAnsibleError() = %q, want substring %q", got, want)
+				}
+			}
+			for _, unwanted := range tt.wantAbsent {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("parseAnsibleError() = %q, unwanted substring %q", got, unwanted)
+				}
+			}
+		})
+	}
+}

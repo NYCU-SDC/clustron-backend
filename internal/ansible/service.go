@@ -172,14 +172,20 @@ func extractTaskName(line string) string {
 	return line[start+1 : end]
 }
 
+const maxAnsibleErrorOutputLines = 20
+
 func parseAnsibleError(output string) string {
 	lines := strings.Split(output, "\n")
 
 	var currentTask, failedTask string
-	var errorLines, recapLines []string
+	var errorLines, recapLines, outputLines []string
 	inRecap := false
 
 	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine != "" {
+			outputLines = append(outputLines, trimmedLine)
+		}
 		if strings.HasPrefix(line, "TASK [") {
 			currentTask = extractTaskName(line)
 		}
@@ -187,14 +193,18 @@ func parseAnsibleError(output string) string {
 			inRecap = true
 			continue
 		}
+		if strings.HasPrefix(line, "TASKS RECAP") {
+			inRecap = false
+			continue
+		}
 		if inRecap && strings.TrimSpace(line) != "" {
 			recapLines = append(recapLines, line)
 		}
-		if strings.Contains(line, "fatal:") || strings.Contains(line, "FAILED!") {
+		if strings.Contains(line, "fatal:") || strings.Contains(line, "FAILED!") || strings.Contains(line, "[ERROR]:") {
 			if failedTask == "" {
 				failedTask = currentTask
 			}
-			errorLines = append(errorLines, strings.TrimSpace(line))
+			errorLines = append(errorLines, trimmedLine)
 		}
 	}
 
@@ -221,6 +231,18 @@ func parseAnsibleError(output string) string {
 		for _, l := range recapLines {
 			sb.WriteString("  ")
 			sb.WriteString(l)
+			sb.WriteByte('\n')
+		}
+	}
+	if len(errorLines) == 0 && len(outputLines) > 0 {
+		if sb.Len() > 0 && !strings.HasSuffix(sb.String(), "\n\n") {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString("Output tail:\n")
+		start := max(0, len(outputLines)-maxAnsibleErrorOutputLines)
+		for _, line := range outputLines[start:] {
+			sb.WriteString("  ")
+			sb.WriteString(line)
 			sb.WriteByte('\n')
 		}
 	}
