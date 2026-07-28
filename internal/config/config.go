@@ -218,10 +218,11 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		Secret:            os.Getenv("SECRET"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		Slurm: slurm.Config{
-			SlurmRootToken:      os.Getenv("SLURM_ROOT_TOKEN"),
-			SlurmTokenHelperURL: os.Getenv("SLURM_TOKEN_HELPER_URL"),
-			SlurmRestfulBaseURL: os.Getenv("SLURM_RESTFUL_BASE_URL"),
-			SlurmRestfulVersion: os.Getenv("SLURM_RESTFUL_VERSION"),
+			SlurmRootToken:         os.Getenv("SLURM_ROOT_TOKEN"),
+			SlurmTokenHelperURL:    os.Getenv("SLURM_TOKEN_HELPER_URL"),
+			SlurmTokenHelperAPIKey: os.Getenv("SLURM_TOKEN_HELPER_API_KEY"),
+			SlurmRestfulBaseURL:    os.Getenv("SLURM_RESTFUL_BASE_URL"),
+			SlurmRestfulVersion:    os.Getenv("SLURM_RESTFUL_VERSION"),
 		},
 		MigrationSource:         os.Getenv("MIGRATION_SOURCE"),
 		CasbinPolicySource:      os.Getenv("CASBIN_POLICY_SOURCE"),
@@ -262,6 +263,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.Secret, "secret", "", "secret")
 	flag.StringVar(&flagConfig.DatabaseURL, "database_url", "", "database url")
 	flag.StringVar(&flagConfig.Slurm.SlurmTokenHelperURL, "slurm_token_helper_url", "", "slurm token helper url")
+	flag.StringVar(&flagConfig.Slurm.SlurmTokenHelperAPIKey, "slurm_token_helper_api_key", "", "slurm token helper api key")
 	flag.StringVar(&flagConfig.Slurm.SlurmRestfulBaseURL, "slurm_restful_base_url", "", "slurm restful base url")
 	flag.StringVar(&flagConfig.Slurm.SlurmRestfulVersion, "slurm_restful_version", "", "slurm restful version")
 	flag.StringVar(&flagConfig.Slurm.SlurmRootToken, "slurm_root_token", "", "slurm root token")

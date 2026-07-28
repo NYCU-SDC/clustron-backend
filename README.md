@@ -91,6 +91,7 @@ services:
       - DATABASE_URL=postgres://postgres:password@postgres:5432/clustron?sslmode=disable # change as needed
       - BASE_URL=https://api.stage.clustron.sdc.nycu.club # change as needed
       - SLURM_TOKEN_HELPER_URL=${SLURM_TOKEN_HELPER_URL} # change as needed
+      - SLURM_TOKEN_HELPER_API_KEY=${SLURM_TOKEN_HELPER_API_KEY} # change as needed
       - SLURM_RESTFUL_BASE_URL=${SLURM_RESTFUL_BASE_URL} # change as needed
       - SLURM_RESTFUL_VERSION=v0.0.44
       - MIGRATION_SOURCE=file:///app/migrations
@@ -162,12 +163,13 @@ We recommend to configure with environment variables.
 
 ### Slurm
 
-| Variable               | Description                                        | Required |
-| ---------------------- | -------------------------------------------------- | -------- |
-| SLURM_TOKEN_HELPER_URL | URL of the Slurm token helper service              | Yes      |
-| SLURM_RESTFUL_BASE_URL | Base URL of the Slurm RESTful API node             | Yes      |
-| SLURM_RESTFUL_VERSION  | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
-| SLURM_ROOT_TOKEN       | Root JWT for the Slurm RESTful API                 | Yes      |
+| Variable                   | Description                                         | Required |
+|----------------------------|-----------------------------------------------------| -------- |
+| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service               | Yes      |
+| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service       | Yes      |
+| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node              | Yes      |
+| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`)  | Yes      |
+| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                  | Yes      |
 
 **Slurm Token Helper** is a service that retrieves a Slurm JWT token for Slurm RESTful API access.
 
