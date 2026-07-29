@@ -18,12 +18,12 @@ import (
 type AddNodeRequest struct {
 	AnsibleName    string `json:"ansible_name"     validate:"required,max=253,hostname_rfc1123"`
 	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost,omitempty,ip"`
-	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress"`
+	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress,max=255"`
 	PrivateIp      string `json:"private_ip"       validate:"required_without=IpAddress,omitempty,ip"`
-	SshUser        string `json:"ssh_user"         validate:"required_with=IpAddress"`
-	SshKeyName     string `json:"ssh_key_name"`
-	AnsibleRole    string `json:"ansible_role"     validate:"required"`
-	SlurmPartition string `json:"slurm_partition"`
+	SshUser        string `json:"ssh_user"         validate:"required_with=IpAddress,max=255"`
+	SshKeyName     string `json:"ssh_key_name"     validate:"max=255"`
+	AnsibleRole    string `json:"ansible_role"     validate:"required,oneof=head_nodes compute_nodes"`
+	SlurmPartition string `json:"slurm_partition"  validate:"max=255"`
 	CpuCores       *int32 `json:"cpu_cores"`
 	MemoryMb       *int32 `json:"memory_mb"`
 }
@@ -53,7 +53,7 @@ type ServerResponse struct {
 }
 
 type UpdateRoleRequest struct {
-	AnsibleRole string `json:"ansible_role" validate:"required"`
+	AnsibleRole string `json:"ansible_role" validate:"required,oneof=head_nodes compute_nodes"`
 }
 
 type Store interface {

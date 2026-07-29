@@ -2,11 +2,13 @@ package ansible
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"clustron-backend/internal"
 
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,10 +17,56 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestMapCreateServerError(t *testing.T) {
-	err := mapCreateServerError(&pgconn.PgError{Code: "23505"}, "cpu3", zap.NewNop())
-	if !errors.Is(err, internal.ErrServerAlreadyExists) {
-		t.Fatalf("mapCreateServerError() error = %v, want ErrServerAlreadyExists", err)
+func TestDuplicateServerField(t *testing.T) {
+	params := CreateParams{
+		AnsibleName:   "cpu3",
+		IpAddress:     pgtype.Text{String: "192.0.2.3", Valid: true},
+		PrivateIp:     pgtype.Text{String: "10.0.0.3", Valid: true},
+		SshConfigHost: pgtype.Text{String: "cpu3-ssh", Valid: true},
+	}
+	tests := []struct {
+		constraint string
+		wantDetail string
+	}{
+		{constraint: "servers_ansible_name_key", wantDetail: `ansible_name "cpu3"`},
+		{constraint: "servers_ip_address_key", wantDetail: `ip_address "192.0.2.3"`},
+		{constraint: "servers_ssh_config_host_key", wantDetail: `ssh_config_host "cpu3-ssh"`},
+		{constraint: "servers_private_ip_key", wantDetail: `private_ip "10.0.0.3"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.constraint, func(t *testing.T) {
+			field, value := duplicateServerField(tt.constraint, params)
+			detail := fmt.Sprintf(`%s %q`, field, value)
+			if detail != tt.wantDetail {
+				t.Fatalf("duplicateServerField() detail = %q, want %q", detail, tt.wantDetail)
+			}
+		})
+	}
+}
+
+func TestMapAllowedLoginGroupError(t *testing.T) {
+	serverID := uuid.New()
+	groupID := uuid.New()
+	tests := []struct {
+		name       string
+		constraint string
+		wantValue  string
+	}{
+		{name: "server removed", constraint: "allowed_login_groups_server_id_fkey", wantValue: serverID.String()},
+		{name: "group removed", constraint: "allowed_login_groups_group_id_fkey", wantValue: groupID.String()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, groupID, zap.NewNop())
+			if !errors.Is(err, handlerutil.ErrNotFound) {
+				t.Fatalf("mapAllowedLoginGroupError() error = %v, want ErrNotFound", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantValue) {
+				t.Fatalf("mapAllowedLoginGroupError() error = %q, want value %q", err, tt.wantValue)
+			}
+		})
 	}
 }
 
@@ -156,6 +204,42 @@ func TestAddNodeRequestIPValidation(t *testing.T) {
 				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestServerRequestStringValidation(t *testing.T) {
+	longValue := strings.Repeat("a", 256)
+	tests := []struct {
+		name string
+		req  AddNodeRequest
+	}{
+		{name: "SSH config host too long", req: AddNodeRequest{AnsibleName: "cpu3", SshConfigHost: longValue, PrivateIp: "10.0.0.3", AnsibleRole: computeNodeRole}},
+		{name: "SSH user too long", req: AddNodeRequest{AnsibleName: "cpu3", IpAddress: "192.0.2.3", SshUser: longValue, AnsibleRole: computeNodeRole}},
+		{name: "SSH key name too long", req: AddNodeRequest{AnsibleName: "cpu3", IpAddress: "192.0.2.3", SshUser: "ubuntu", SshKeyName: longValue, AnsibleRole: computeNodeRole}},
+		{name: "role too long", req: AddNodeRequest{AnsibleName: "cpu3", IpAddress: "192.0.2.3", SshUser: "ubuntu", AnsibleRole: longValue}},
+		{name: "partition too long", req: AddNodeRequest{AnsibleName: "cpu3", IpAddress: "192.0.2.3", SshUser: "ubuntu", AnsibleRole: computeNodeRole, SlurmPartition: longValue}},
+		{name: "unknown role", req: AddNodeRequest{AnsibleName: "cpu3", IpAddress: "192.0.2.3", SshUser: "ubuntu", AnsibleRole: "worker"}},
+	}
+
+	validate := validator.New()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validate.Struct(tt.req); err == nil {
+				t.Fatal("validator.Struct() error = nil, want validation error")
+			}
+		})
+	}
+}
+
+func TestUpdateRoleRequestValidation(t *testing.T) {
+	validate := validator.New()
+	for _, role := range []string{headNodeRole, computeNodeRole} {
+		if err := validate.Struct(UpdateRoleRequest{AnsibleRole: role}); err != nil {
+			t.Errorf("validator.Struct(%q) error = %v", role, err)
+		}
+	}
+	if err := validate.Struct(UpdateRoleRequest{AnsibleRole: "worker"}); err == nil {
+		t.Fatal("validator.Struct(unknown role) error = nil, want validation error")
 	}
 }
 

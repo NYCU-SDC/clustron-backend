@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 )
 
@@ -110,6 +111,12 @@ func ErrorHandler(err error) problem.Problem {
 	// Database Errors
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewConflictProblem("database conflict")
+	case errors.Is(err, databaseutil.ErrUniqueViolation):
+		return NewConflictProblem("database unique constraint conflict")
+	case errors.Is(err, databaseutil.ErrForeignKeyViolation):
+		return NewConflictProblem("database foreign key conflict")
+	case errors.Is(err, databaseutil.ErrDeadlockDetected):
+		return NewConflictProblem("database transaction could not be completed")
 	// Ansible Errors
 	case errors.Is(err, ErrServerAlreadyExists):
 		return problem.NewBadRequestProblem(err.Error())

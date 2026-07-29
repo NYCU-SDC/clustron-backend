@@ -17,6 +17,7 @@ import (
 	"clustron-backend/internal/ldap"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -104,7 +105,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		return databaseutil.WrapDBError(err, logger, "delete server")
 	}
 	if rows == 0 {
-		return databaseutil.WrapDBError(err, logger, "server not found")
+		return handlerutil.NewNotFoundError("servers", "id", id.String(), "")
 	}
 	return nil
 }
@@ -137,7 +138,14 @@ func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server
 		params[i].Status = "provisioning"
 		server, err := qtx.Create(traceCtx, params[i])
 		if err != nil {
-			err = mapCreateServerError(err, params[i].AnsibleName, logger)
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrUniqueViolation {
+				field, value := duplicateServerField(pgErr.ConstraintName, params[i])
+				logger.Warn("Server already exists", zap.String("field", field), zap.String("value", value))
+				err = fmt.Errorf("%w: %s %q", internal.ErrServerAlreadyExists, field, value)
+			} else {
+				err = databaseutil.WrapDBError(err, logger, fmt.Sprintf("create server %q in db", params[i].AnsibleName))
+			}
 			span.RecordError(err)
 			return nil, err
 		}
@@ -158,13 +166,17 @@ func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server
 	return servers, nil
 }
 
-func mapCreateServerError(err error, ansibleName string, logger *zap.Logger) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrUniqueViolation {
-		logger.Warn("Server already exists", zap.String("ansible_name", ansibleName))
-		return fmt.Errorf("%w: %q", internal.ErrServerAlreadyExists, ansibleName)
+func duplicateServerField(constraint string, params CreateParams) (string, string) {
+	switch constraint {
+	case "servers_ip_address_key":
+		return "ip_address", params.IpAddress.String
+	case "servers_ssh_config_host_key":
+		return "ssh_config_host", params.SshConfigHost.String
+	case "servers_private_ip_key":
+		return "private_ip", params.PrivateIp.String
+	default:
+		return "ansible_name", params.AnsibleName
 	}
-	return databaseutil.WrapDBError(err, logger, fmt.Sprintf("create server %q in db", ansibleName))
 }
 
 type stageTrackingWriter struct {
@@ -598,23 +610,21 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 func (s *Service) SetupAllNodes(ctx context.Context) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetupAllNodes")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-	s.ansibleMu.Lock()
-	defer s.ansibleMu.Unlock()
 
-	if err := s.generateInventory(traceCtx); err != nil {
+	servers, err := s.ListAll(traceCtx)
+	if err != nil {
 		span.RecordError(err)
 		return err
 	}
 
-	logger.Info("deploying all nodes...")
-	if err := s.executeNodesPlaybook(traceCtx, nil, "", os.Stdout, os.Stderr); err != nil {
-		logger.Error("failed to deploy all nodes", zap.Error(err))
-		span.RecordError(err)
-		return err
-	}
+	bgCtx := context.WithoutCancel(ctx)
+	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
-	logger.Info("all cluster deploy successfully")
+	go func() {
+		defer cancel()
+		s.runAnsibleInBackground(bgCtx, servers, "")
+	}()
+
 	return nil
 }
 
@@ -686,7 +696,7 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 			ServerID: serverID,
 			GroupID:  id,
 		}); err != nil {
-			return databaseutil.WrapDBError(err, logger, "add allowed login group")
+			return mapAllowedLoginGroupError(err, serverID, id, logger)
 		}
 	}
 	if err = tx.Commit(traceCtx); err != nil {
@@ -704,6 +714,17 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	}
 
 	return nil
+}
+
+func mapAllowedLoginGroupError(err error, serverID, groupID uuid.UUID, logger *zap.Logger) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
+		if pgErr.ConstraintName == "allowed_login_groups_server_id_fkey" {
+			return handlerutil.NewNotFoundError("servers", "id", serverID.String(), "")
+		}
+		return handlerutil.NewNotFoundError("groups", "id", groupID.String(), "")
+	}
+	return databaseutil.WrapDBError(err, logger, "add allowed login group")
 }
 
 func validateAllowedLoginGroupTarget(role string, groupIDs []uuid.UUID) error {
