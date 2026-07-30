@@ -1,4 +1,6 @@
 .idea
+.vscode
+.venv
 bin
 .DS_Store
 
@@ -14,3 +16,5 @@ queries.sql.go
 sqlc.yaml
 full_schema.sql
 full_policy.csv
+
+internal/ansible/ansible/hosts.yaml
