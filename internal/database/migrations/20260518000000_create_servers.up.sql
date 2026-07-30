@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS servers
     CONSTRAINT chk_connection CHECK (ip_address IS NOT NULL OR ssh_config_host IS NOT NULL),
     CONSTRAINT servers_cluster_address_check CHECK (
         NULLIF(ip_address, '') IS NOT NULL OR NULLIF(private_ip, '') IS NOT NULL
-    )
+    ),
+    CONSTRAINT servers_cpu_cores_positive_check CHECK (cpu_cores >= 1),
+    CONSTRAINT servers_memory_mb_positive_check CHECK (memory_mb >= 1)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS servers_ip_address_key ON servers(ip_address) WHERE ip_address IS NOT NULL;

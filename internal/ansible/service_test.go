@@ -231,6 +231,40 @@ func TestServerRequestStringValidation(t *testing.T) {
 	}
 }
 
+func TestAddNodeRequestHardwareValidation(t *testing.T) {
+	one := int32(1)
+	zero := int32(0)
+	negative := int32(-1)
+
+	tests := []struct {
+		name      string
+		cpuCores  *int32
+		memoryMB  *int32
+		wantError bool
+	}{
+		{name: "omitted"},
+		{name: "minimum values", cpuCores: &one, memoryMB: &one},
+		{name: "zero CPU cores", cpuCores: &zero, wantError: true},
+		{name: "negative CPU cores", cpuCores: &negative, wantError: true},
+		{name: "zero memory", memoryMB: &zero, wantError: true},
+		{name: "negative memory", memoryMB: &negative, wantError: true},
+	}
+
+	validate := validator.New()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := validAddNodeRequest("compute-01")
+			req.CpuCores = tt.cpuCores
+			req.MemoryMb = tt.memoryMB
+
+			err := validate.Struct(req)
+			if (err != nil) != tt.wantError {
+				t.Fatalf("validator.Struct() error = %v, wantError %v", err, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestUpdateRoleRequestValidation(t *testing.T) {
 	validate := validator.New()
 	for _, role := range []string{headNodeRole, computeNodeRole} {

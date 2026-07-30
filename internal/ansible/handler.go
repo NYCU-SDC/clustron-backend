@@ -24,8 +24,8 @@ type AddNodeRequest struct {
 	SshKeyName     string `json:"ssh_key_name"     validate:"max=255"`
 	AnsibleRole    string `json:"ansible_role"     validate:"required,oneof=head_nodes compute_nodes"`
 	SlurmPartition string `json:"slurm_partition"  validate:"max=255"`
-	CpuCores       *int32 `json:"cpu_cores"`
-	MemoryMb       *int32 `json:"memory_mb"`
+	CpuCores       *int32 `json:"cpu_cores"       validate:"omitempty,min=1"`
+	MemoryMb       *int32 `json:"memory_mb"       validate:"omitempty,min=1"`
 }
 
 type AddNodesRequest struct {
