@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	AnsibleDir          = "internal/ansible/ansible"
+	ExecuteFolder		= "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
@@ -422,7 +422,7 @@ func (s *Service) executeNodesPlaybook(
 		execute.WithWrite(stdout),
 		execute.WithWriteError(stderr),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithCmdRunDir(ExecuteFolder),
 		execute.WithEnvVars(map[string]string{
 			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
@@ -498,7 +498,7 @@ func (s *Service) runUpdateRoles(ctx context.Context, output io.Writer, tags str
 		execute.WithWrite(output),
 		execute.WithWriteError(output),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithCmdRunDir(ExecuteFolder),
 		execute.WithEnvVars(map[string]string{
 			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
@@ -747,15 +747,15 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		return databaseutil.WrapDBError(err, s.logger, "list all servers from db")
 	}
 
-	inventory := AnsibleInventory{
-		All: AnsibleGroup{
+	inventory := InventoryFiles{
+		All: ServerGroup{
 			Vars: map[string]interface{}{
 				"slurm_version": "25.11.4-1",
 				"ldap_base_dn":  s.ldapConfig.LDAPBaseDN,
 				"ldap_bind_dn":  s.ldapConfig.LDAPBindDN,
 				"ldap_bind_pwd": s.ldapConfig.LDAPBindPwd,
 			},
-			Children: make(map[string]AnsibleChild),
+			Children: make(map[string]ChildNode),
 		},
 	}
 
@@ -776,24 +776,24 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		roleGroup := srv.AnsibleRole
 
 		if _, exists := inventory.All.Children[roleGroup]; !exists {
-			inventory.All.Children[roleGroup] = AnsibleChild{
+			inventory.All.Children[roleGroup] = ChildNode{
 				Hosts: make(map[string]HostVars),
 			}
 		}
 
 		hostVars := HostVars{
-			AnsibleUser: srv.SshUser.String,
+			UserName: srv.SshUser.String,
 			CPUCores:    srv.CpuCores.Int32,
 			MemoryMB:    srv.MemoryMb.Int32,
 		}
 
 		if srv.IpAddress.Valid {
-			hostVars.AnsibleHost = srv.IpAddress.String
+			hostVars.HostName = srv.IpAddress.String
 			if srv.SshKeyName.Valid && srv.SshKeyName.String != "" {
-				hostVars.AnsibleSSHPrivate = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
+				hostVars.SSHKeyPath = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
 			}
 		} else if srv.SshConfigHost.Valid {
-			hostVars.AnsibleHost = srv.SshConfigHost.String
+			hostVars.HostName = srv.SshConfigHost.String
 		}
 
 		if srv.PrivateIp.Valid {
@@ -824,8 +824,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		return fmt.Errorf("YAML marshal failed: %w", err)
 	}
 
-	filePath := filepath.Join(AnsibleDir, InventoryFile)
-	tempFile, err := os.CreateTemp(AnsibleDir, ".hosts-*.yaml")
+	filePath := filepath.Join(ExecuteFolder, InventoryFile)
+	tempFile, err := os.CreateTemp(ExecuteFolder, ".hosts-*.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary inventory: %w", err)
 	}
