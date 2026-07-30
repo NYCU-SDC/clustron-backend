@@ -351,7 +351,7 @@ func TestHostVarsAnsibleUserYAML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := yaml.Marshal(HostVars{AnsibleUser: tt.ansibleUser})
+			data, err := yaml.Marshal(HostVars{UserName: tt.ansibleUser})
 			if err != nil {
 				t.Fatalf("yaml.Marshal() error = %v", err)
 			}

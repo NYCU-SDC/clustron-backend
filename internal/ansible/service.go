@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	AnsibleDir          = "internal/ansible/ansible"
+	ExecuteFolder		= "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
@@ -422,7 +422,7 @@ func (s *Service) executeNodesPlaybook(
 		execute.WithWrite(stdout),
 		execute.WithWriteError(stderr),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithCmdRunDir(ExecuteFolder),
 		execute.WithEnvVars(map[string]string{
 			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
@@ -498,7 +498,7 @@ func (s *Service) runUpdateRoles(ctx context.Context, output io.Writer, tags str
 		execute.WithWrite(output),
 		execute.WithWriteError(output),
 		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
-		execute.WithCmdRunDir(AnsibleDir),
+		execute.WithCmdRunDir(ExecuteFolder),
 		execute.WithEnvVars(map[string]string{
 			"ANSIBLE_CALLBACKS_ENABLED": "profile_tasks",
 		}),
@@ -782,18 +782,18 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 
 		hostVars := HostVars{
-			AnsibleUser: srv.SshUser.String,
+			UserName: srv.SshUser.String,
 			CPUCores:    srv.CpuCores.Int32,
 			MemoryMB:    srv.MemoryMb.Int32,
 		}
 
 		if srv.IpAddress.Valid {
-			hostVars.AnsibleHost = srv.IpAddress.String
+			hostVars.HostName = srv.IpAddress.String
 			if srv.SshKeyName.Valid && srv.SshKeyName.String != "" {
-				hostVars.AnsibleSSHPrivate = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
+				hostVars.SSHKeyPath = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
 			}
 		} else if srv.SshConfigHost.Valid {
-			hostVars.AnsibleHost = srv.SshConfigHost.String
+			hostVars.HostName = srv.SshConfigHost.String
 		}
 
 		if srv.PrivateIp.Valid {
@@ -824,8 +824,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		return fmt.Errorf("YAML marshal failed: %w", err)
 	}
 
-	filePath := filepath.Join(AnsibleDir, InventoryFile)
-	tempFile, err := os.CreateTemp(AnsibleDir, ".hosts-*.yaml")
+	filePath := filepath.Join(ExecuteFolder, InventoryFile)
+	tempFile, err := os.CreateTemp(ExecuteFolder, ".hosts-*.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary inventory: %w", err)
 	}
