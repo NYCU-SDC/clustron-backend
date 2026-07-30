@@ -106,6 +106,7 @@
     - "slurm-smd-client_{{ slurm_version }}_amd64.deb"
     - "slurm-smd-slurmctld_{{ slurm_version }}_amd64.deb"
     - "slurm-smd-slurmdbd_{{ slurm_version }}_amd64.deb"
+    - "slurm-smd-slurmrestd_{{ slurm_version }}_amd64.deb"
 
 - name: Deploy slurmdbd.conf
   become: true
