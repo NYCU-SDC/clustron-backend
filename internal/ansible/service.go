@@ -156,7 +156,7 @@ func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server
 		return nil, databaseutil.WrapDBError(err, logger, "commit added servers")
 	}
 
-	bgCtx := context.WithoutCancel(ctx)
+	bgCtx := context.WithoutCancel(traceCtx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 	go func() {
 		defer cancel()
@@ -553,7 +553,7 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 		return Server{}, databaseutil.WrapDBError(err, logger, "commit server role update")
 	}
 
-	bgCtx := context.WithoutCancel(ctx)
+	bgCtx := context.WithoutCancel(traceCtx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 	go func() {
@@ -596,7 +596,7 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 		return Server{}, databaseutil.WrapDBError(err, logger, "commit server reset")
 	}
 
-	bgCtx := context.WithoutCancel(ctx)
+	bgCtx := context.WithoutCancel(traceCtx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 	go func() {
@@ -617,7 +617,7 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 		return err
 	}
 
-	bgCtx := context.WithoutCancel(ctx)
+	bgCtx := context.WithoutCancel(traceCtx)
 	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 	go func() {
@@ -704,7 +704,7 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	}
 
 	if server.AnsibleRole == computeNodeRole {
-		bgCtx := context.WithoutCancel(ctx)
+		bgCtx := context.WithoutCancel(traceCtx)
 		bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
 
 		go func() {
