@@ -1,18 +1,37 @@
-# echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Deploying Start" >> ./deploy.log
+#!/usr/bin/env bash
+# Verify that the services needed by the backend are running with the image
+# version pinned in compose.yaml, and start the ones that are not.
+# Keep this list in sync with compose.yaml.
+set -euo pipefail
 
-DB_NAME="clustron-local-postgres-1"
-LDAP_NAME="clustron-local-ldap-1"
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-if ! docker compose ps ${DB_NAME} | grep -q "running"; then
-    echo "Database not running. Starting..."
-    docker start ${DB_NAME}
-else
-    echo "Database already running."
+# <compose service> <expected image>, ldap_admin is optional so it is skipped.
+SERVICES=(
+    "postgres postgres:18"
+    "ldap osixia/openldap:1.5.0"
+    "redis redis:8.6.4"
+)
+
+pending=()
+for entry in "${SERVICES[@]}"; do
+    read -r service image <<< "$entry"
+
+    # State and image of the container, empty when it was never created.
+    status="$(docker compose ps -a --format '{{.State}} {{.Image}}' "$service")"
+
+    if [ "$status" = "running $image" ]; then
+        echo "  -> ${service} is running (${image})."
+    else
+        echo "  -> ${service} is not running as ${image} (got: ${status:-no container}), starting..."
+        pending+=("$service")
+    fi
+done
+
+if [ "${#pending[@]}" -eq 0 ]; then
+    exit 0
 fi
 
-if ! docker compose ps ${LDAP_NAME} | grep -q "running"; then
-    echo "LDAP not running. Starting..."
-    docker start ${LDAP_NAME}
-else
-    echo "LDAP already running."
-fi
+# 'up' creates what is missing, starts what is stopped and recreates whatever
+# no longer matches compose.yaml; '--wait' blocks until they report healthy.
+docker compose up -d --wait "${pending[@]}"
