@@ -210,12 +210,6 @@ git fetch
 
 ## Install necessary dependencies
 
-### Install Go packages
-
-```bash
-make prepare
-```
-
 Be sure you have `make` installed. You can check by:
 
 ```bash
@@ -249,7 +243,7 @@ You can also find more OS-specific installing methods from the documentation.
 
 ## Run the backend
 
-You can simply start the backend service via command:
+You can simply start the backend service via command and this will download the dependencies automatically:
 
 ```bash
 make run

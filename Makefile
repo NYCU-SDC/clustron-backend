@@ -5,27 +5,18 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
-.PHONY: all prepare run build test gen slurm-up slurm-down slurm-token
+.PHONY: all run build test gen slurm-up slurm-down slurm-token
 
 all: build
 
-prepare:
-	@echo -e ":: $(GREEN) Preparing environment...$(NC)"
+run:
+	@echo -e ":: $(GREEN)Starting backend...$(NC)"
 	@echo -e "-> Downloading go dependencies..."
 	@go mod download \
 		|| (echo -e "-> $(RED) Failed to download go dependencies$(NC)" && exit 1)
-	@echo -e "-> Deploying depending services..."
-	@cd ./.deploy/local \
-    	&& ./deploy.sh \
-    	|| (echo -e "  -> $(RED)Depending services deploy failed$(NC)" && exit 1)
-	@echo -e "==> $(BLUE)Environment preparation completed$(NC)"
-
-run:
-	@echo -e ":: $(GREEN)Starting backend...$(NC)"
 	@echo -e "-> Starting depending services..."
-	@cd ./.deploy/local \
-		&& ./start.sh \
-		|| (echo -e "  -> $(RED)Depending services start failed. Make sure you run 'make prepare' previously.$(NC)" && exit 1)
+	@docker compose -f ./.deploy/local/compose.yml up -d --wait \
+		|| (echo -e "  -> $(RED)Depending services start failed.$(NC)" && exit 1)
 	@(exec 3<>/dev/tcp/localhost/6820) 2>/dev/null \
 		|| echo -e "  -> $(RED)Warning:$(NC) local Slurm cluster not reachable on :6820. Group creation and job endpoints will fail. Run 'make slurm-up' first if you need them."
 	@make gen
