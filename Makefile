@@ -5,7 +5,7 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
-.PHONY: all run build test gen slurm-up slurm-down slurm-token
+.PHONY: all run build test gen clear slurm-up slurm-down slurm-token
 
 all: build
 
@@ -15,7 +15,7 @@ run:
 	@go mod download \
 		|| (echo -e "-> $(RED) Failed to download go dependencies$(NC)" && exit 1)
 	@echo -e "-> Starting depending services..."
-	@docker compose -f ./.deploy/local/compose.yml up -d --wait \
+	@docker compose -f ./.deploy/local/compose.yaml up -d --wait \
 		|| (echo -e "  -> $(RED)Depending services start failed.$(NC)" && exit 1)
 	@(exec 3<>/dev/tcp/localhost/6820) 2>/dev/null \
 		|| echo -e "  -> $(RED)Warning:$(NC) local Slurm cluster not reachable on :6820. Group creation and job endpoints will fail. Run 'make slurm-up' first if you need them."
@@ -46,6 +46,15 @@ gen:
 	@echo -e "  -> Running go generate..."
 	@mockery
 	@echo -e "==> $(BLUE)Generation completed$(NC)"
+
+clear:
+	@echo -e ":: $(GREEN)Cleaning up...$(NC)"
+	@echo -e "  -> Stopping and removing depending services..."
+	@docker compose -f ./.deploy/local/compose.yaml down --remove-orphans \
+		|| (echo -e "  -> $(RED)Failed to remove depending services$(NC)" && exit 1)
+	@echo -e "  -> Removing backend binary..."
+	@rm -rf bin/
+	@echo -e "==> $(BLUE)Cleanup completed$(NC)"
 
 TARGET ?= ./cmd/backend/main.go
 IGNORE_PKGS ?= go.uber.org/zap, go.opentelemetry.io/otel, github.com/google/uuid, regexp, strings, net/url, fmt, ssh, net/http, github.com/NYCU-SDC/summer/pkg/log, github.com/NYCU-SDC/summer/pkg/problem, github.com/NYCU-SDC/summer/pkg/database, strconv
