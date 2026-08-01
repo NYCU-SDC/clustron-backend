@@ -50,7 +50,7 @@ gen:
 clear:
 	@echo -e ":: $(GREEN)Cleaning up...$(NC)"
 	@echo -e "  -> Stopping and removing depending services..."
-	@docker compose -f ./.deploy/local/compose.yaml down --remove-orphans \
+	@docker compose -f ./.deploy/local/compose.yaml down -v --remove-orphans \
 		|| (echo -e "  -> $(RED)Failed to remove depending services$(NC)" && exit 1)
 	@echo -e "  -> Removing backend binary..."
 	@rm -rf bin/
