@@ -259,6 +259,25 @@ make build
 
 The binary file will be `./bin/backend`.
 
+## Clean up
+
+To tear down the local development environment, run:
+
+```bash
+make clear
+```
+
+This will:
+
+1. Stop and remove the dependent service containers defined in `./.deploy/local/compose.yaml` (Postgres, OpenLDAP, Redis), together with their volumes and any orphan containers. **All data stored in these services will be lost.**
+2. Remove the `./bin/` directory containing the built binary.
+
+The local Slurm cluster is managed separately and is not removed by `make clear`. To tear it down, run:
+
+```bash
+make slurm-down
+```
+
 ## Pre-push hook (Optional)
 
 We recommend you enable the pre-push hook if wish to commit to this repository.
