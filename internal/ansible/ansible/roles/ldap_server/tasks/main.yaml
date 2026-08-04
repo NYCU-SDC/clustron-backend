@@ -1,0 +1,55 @@
+- name: Preseed slapd domain configuration
+  become: true
+  ansible.builtin.debconf:
+    name: slapd
+    question: 'slapd/domain'
+    value: 'clustron.prj.internal.sdc.nycu.club'
+    vtype: 'string'
+
+- name: Install LDAP Server (slapd) and utils
+  become: true
+  ansible.builtin.apt:
+    name:
+      - slapd
+      - ldap-utils
+    state: present
+
+- name: Ensure LDAP is running
+  become: true
+  ansible.builtin.service:
+    name: slapd
+    state: started
+    enabled: true
+
+- name: Create base structure LDIF file
+  become: true
+  ansible.builtin.copy:
+    dest: /tmp/base_structure.ldif
+    mode: '0644'
+    content: |
+      dn: dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: top
+      objectClass: dcObject
+      objectClass: organization
+      o: Clustron Project
+      dc: clustron
+
+      # ou=People
+      dn: ou=People,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: organizationalUnit
+      ou: People
+
+      # ou=Groups
+      dn: ou=Groups,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
+      objectClass: organizationalUnit
+      ou: Groups
+
+- name: Apply base structure LDIF (Passwordless)
+  become: true
+  ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/base_structure.ldif
+  register: ldap_server_ldapadd_result
+  failed_when:
+    - ldap_server_ldapadd_result.rc != 0
+    - "'Already exists' not in ldap_server_ldapadd_result.stderr"
+  changed_when:
+    - ldap_server_ldapadd_result.rc == 0

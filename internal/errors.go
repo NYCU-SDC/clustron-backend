@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 )
 
@@ -25,6 +26,11 @@ var (
 
 	// Database Errors
 	ErrDatabaseConflict = errors.New("database conflict")
+
+	// Ansible Errors
+	ErrServerAlreadyExists            = errors.New("server already exists")
+	ErrAllowedLoginGroupsUnsupported  = errors.New("allowed login groups can only be configured on compute nodes")
+	ErrAllowedLoginGroupsRoleConflict = errors.New("clear allowed login groups before changing the server to a head node")
 
 	// Setting Errors
 	ErrInvalidPublicKey     = errors.New("invalid public key")
@@ -50,6 +56,15 @@ func NewConflictProblem(reason string) problem.Problem {
 		Title:  "Conflict",
 		Status: http.StatusConflict,
 		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+		Detail: reason,
+	}
+}
+
+func NewUnprocessableEntityProblem(reason string) problem.Problem {
+	return problem.Problem{
+		Title:  "Unprocessable Content",
+		Status: http.StatusUnprocessableEntity,
+		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
 		Detail: reason,
 	}
 }
@@ -96,6 +111,19 @@ func ErrorHandler(err error) problem.Problem {
 	// Database Errors
 	case errors.Is(err, ErrDatabaseConflict):
 		return NewConflictProblem("database conflict")
+	case errors.Is(err, databaseutil.ErrUniqueViolation):
+		return NewConflictProblem("database unique constraint conflict")
+	case errors.Is(err, databaseutil.ErrForeignKeyViolation):
+		return NewConflictProblem("database foreign key conflict")
+	case errors.Is(err, databaseutil.ErrDeadlockDetected):
+		return NewConflictProblem("database transaction could not be completed")
+	// Ansible Errors
+	case errors.Is(err, ErrServerAlreadyExists):
+		return problem.NewBadRequestProblem(err.Error())
+	case errors.Is(err, ErrAllowedLoginGroupsUnsupported):
+		return NewUnprocessableEntityProblem(err.Error())
+	case errors.Is(err, ErrAllowedLoginGroupsRoleConflict):
+		return NewConflictProblem(err.Error())
 	// Validation Errors
 	case errors.Is(err, strconv.ErrSyntax):
 		return problem.NewValidateProblem("invalid syntax")

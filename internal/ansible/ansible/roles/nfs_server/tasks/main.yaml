@@ -1,0 +1,19 @@
+- name: Install NFS Server
+  become: true
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+
+- name: Ensure exported directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /home
+    - /opt
+    - /etc/slurm
+
+- name: Configure NFS exports for compute nodes
+  ansible.builtin.import_tasks: update_roles.yaml
