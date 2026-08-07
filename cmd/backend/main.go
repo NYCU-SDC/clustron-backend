@@ -162,7 +162,7 @@ func main() {
 	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient, slurmService)
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
-	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
+	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP, ldapGroupService)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)

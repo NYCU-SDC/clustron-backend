@@ -20,7 +20,6 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,7 +33,7 @@ import (
 )
 
 const (
-	ExecuteFolder		= "internal/ansible/ansible"
+	ExecuteFolder       = "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
@@ -47,12 +46,17 @@ const (
 )
 
 type Service struct {
-	db         *pgxpool.Pool
-	queries    *Queries
-	logger     *zap.Logger
-	tracer     trace.Tracer
-	ldapConfig ldap.Config
-	ansibleMu  sync.Mutex
+	db             *pgxpool.Pool
+	queries        *Queries
+	logger         *zap.Logger
+	tracer         trace.Tracer
+	ldapConfig     ldap.Config
+	ldapGroupStore LDAPGroupStore
+	ansibleMu      sync.Mutex
+}
+
+type LDAPGroupStore interface {
+	GetLDAPGroupCNByID(ctx context.Context, ldapGroupID uuid.UUID) (string, error)
 }
 
 type ServiceInterface interface {
@@ -61,13 +65,14 @@ type ServiceInterface interface {
 	AddNodes(ctx context.Context, params []CreateParams) ([]Server, error)
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapConfig ldap.Config) *Service {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapConfig ldap.Config, ldapGroupStore LDAPGroupStore) *Service {
 	return &Service{
-		db:         db,
-		queries:    New(db),
-		logger:     logger,
-		tracer:     otel.Tracer("ansible/service"),
-		ldapConfig: ldapConfig,
+		db:             db,
+		queries:        New(db),
+		logger:         logger,
+		tracer:         otel.Tracer("ansible/service"),
+		ldapConfig:     ldapConfig,
+		ldapGroupStore: ldapGroupStore,
 	}
 }
 
@@ -628,8 +633,8 @@ func (s *Service) SetupAllNodes(ctx context.Context) error {
 	return nil
 }
 
-// ListAllowedLoginGroups returns the Clustron groups whose members are allowed to log in
-// to a server (rendered into that server's SSSD simple_allow_groups).
+// ListAllowedLoginGroups returns the LDAP groups whose members are allowed to log in to a
+// server. Each LDAP group ID maps to the ldap_cn rendered in SSSD simple_allow_groups.
 func (s *Service) ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListAllowedLoginGroups")
 	defer span.End()
@@ -647,18 +652,17 @@ func (s *Service) ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID
 	result := make([]AllowedLoginGroupDetail, 0, len(rows))
 	for _, row := range rows {
 		result = append(result, AllowedLoginGroupDetail{
-			GroupID: row.GroupID,
-			Title:   row.Title,
-			LdapCN:  row.LdapCn.String,
+			LDAPGroupID: row.LdapGroupID,
+			Title:       row.Title,
+			LdapCN:      row.LdapCn.String,
 		})
 	}
 	return result, nil
 }
 
-// SetAllowedLoginGroups replaces a server's allowed-login-group list with the given groups,
-// then re-renders that server's sssd.conf in the background. Each group must already have a
-// BASE LDAP group (i.e. a usable ldap_cn), otherwise the update is rejected.
-func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error {
+// SetAllowedLoginGroups replaces a server's allowed-login-group list with the given LDAP
+// groups, then re-renders that server's sssd.conf in the background.
+func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, ldapGroupIDs []uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetAllowedLoginGroups")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -667,18 +671,12 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	if err != nil {
 		return databaseutil.WrapDBError(err, logger, "get server by id")
 	}
-	if err = validateAllowedLoginGroupTarget(server.AnsibleRole, groupIDs); err != nil {
+	if err = validateAllowedLoginGroupTarget(server.AnsibleRole, ldapGroupIDs); err != nil {
 		return err
 	}
 
-	for _, id := range groupIDs {
-		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
-		if err != nil {
-			return databaseutil.WrapDBError(err, logger, "check base ldap group exists")
-		}
-		if !exist {
-			return databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "ldap_groups", "group_id", id.String(), logger, "find base ldap group for allowed login group")
-		}
+	if _, err = s.resolveLDAPGroupCNs(traceCtx, ldapGroupIDs); err != nil {
+		return err
 	}
 
 	tx, err := s.db.Begin(traceCtx)
@@ -691,10 +689,10 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	if err = qtx.ClearServerAllowedLoginGroups(traceCtx, serverID); err != nil {
 		return databaseutil.WrapDBError(err, logger, "clear allowed login groups")
 	}
-	for _, id := range groupIDs {
+	for _, id := range ldapGroupIDs {
 		if err = qtx.AddServerAllowedLoginGroup(traceCtx, AddServerAllowedLoginGroupParams{
-			ServerID: serverID,
-			GroupID:  id,
+			ServerID:    serverID,
+			LdapGroupID: id,
 		}); err != nil {
 			return mapAllowedLoginGroupError(err, serverID, id, logger)
 		}
@@ -716,19 +714,31 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	return nil
 }
 
-func mapAllowedLoginGroupError(err error, serverID, groupID uuid.UUID, logger *zap.Logger) error {
+func mapAllowedLoginGroupError(err error, serverID, ldapGroupID uuid.UUID, logger *zap.Logger) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
 		if pgErr.ConstraintName == "allowed_login_groups_server_id_fkey" {
 			return handlerutil.NewNotFoundError("servers", "id", serverID.String(), "")
 		}
-		return handlerutil.NewNotFoundError("groups", "id", groupID.String(), "")
+		return handlerutil.NewNotFoundError("ldap_groups", "id", ldapGroupID.String(), "")
 	}
 	return databaseutil.WrapDBError(err, logger, "add allowed login group")
 }
 
-func validateAllowedLoginGroupTarget(role string, groupIDs []uuid.UUID) error {
-	if role != computeNodeRole && len(groupIDs) > 0 {
+func (s *Service) resolveLDAPGroupCNs(ctx context.Context, ldapGroupIDs []uuid.UUID) ([]string, error) {
+	cns := make([]string, 0, len(ldapGroupIDs))
+	for _, id := range ldapGroupIDs {
+		cn, err := s.ldapGroupStore.GetLDAPGroupCNByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		cns = append(cns, cn)
+	}
+	return cns, nil
+}
+
+func validateAllowedLoginGroupTarget(role string, ldapGroupIDs []uuid.UUID) error {
+	if role != computeNodeRole && len(ldapGroupIDs) > 0 {
 		return internal.ErrAllowedLoginGroupsUnsupported
 	}
 	return nil
@@ -783,8 +793,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 
 		hostVars := HostVars{
 			UserName: srv.SshUser.String,
-			CPUCores:    srv.CpuCores.Int32,
-			MemoryMB:    srv.MemoryMb.Int32,
+			CPUCores: srv.CpuCores.Int32,
+			MemoryMB: srv.MemoryMb.Int32,
 		}
 
 		if srv.IpAddress.Valid {
@@ -804,15 +814,13 @@ func (s *Service) generateInventory(ctx context.Context) error {
 			hostVars.SlurmPartition = srv.SlurmPartition.String
 		}
 
-		allowedCNs, err := s.queries.ListAllowedLoginGroupCNsByServerID(ctx, srv.ID)
+		ldapGroupIDs, err := s.queries.ListAllowedLoginGroupIDsByServerID(ctx, srv.ID)
 		if err != nil {
-			return databaseutil.WrapDBError(err, s.logger, "list allowed login group cns")
+			return databaseutil.WrapDBError(err, s.logger, "list allowed LDAP group IDs")
 		}
-		cns := make([]string, 0, len(allowedCNs))
-		for _, cn := range allowedCNs {
-			if cn.Valid && cn.String != "" {
-				cns = append(cns, cn.String)
-			}
+		cns, err := s.resolveLDAPGroupCNs(ctx, ldapGroupIDs)
+		if err != nil {
+			return err
 		}
 		hostVars.LDAPSimpleAllowGroups = strings.Join(cns, ", ")
 

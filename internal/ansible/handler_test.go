@@ -20,6 +20,24 @@ type addNodesStore struct {
 	gotParams []CreateParams
 }
 
+type allowedLoginGroupsStore struct {
+	Store
+	gotServerID     uuid.UUID
+	gotLDAPGroupIDs []uuid.UUID
+	groups          []AllowedLoginGroupDetail
+}
+
+func (s *allowedLoginGroupsStore) SetAllowedLoginGroups(_ context.Context, serverID uuid.UUID, ldapGroupIDs []uuid.UUID) error {
+	s.gotServerID = serverID
+	s.gotLDAPGroupIDs = ldapGroupIDs
+	return nil
+}
+
+func (s *allowedLoginGroupsStore) ListAllowedLoginGroups(_ context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error) {
+	s.gotServerID = serverID
+	return s.groups, nil
+}
+
 func (s *addNodesStore) AddNodes(_ context.Context, params []CreateParams) ([]Server, error) {
 	s.gotParams = params
 	servers := make([]Server, len(params))
@@ -85,5 +103,71 @@ func TestHandlerAddNodes(t *testing.T) {
 		if server.Status != "provisioning" {
 			t.Errorf("server %q status = %q, want provisioning", server.AnsibleName, server.Status)
 		}
+	}
+}
+
+func TestHandlerUpdateAllowedLoginGroupsUsesLDAPGroupIDs(t *testing.T) {
+	serverID := uuid.New()
+	ldapGroupIDs := []uuid.UUID{uuid.New(), uuid.New()}
+	store := &allowedLoginGroupsStore{}
+	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
+	body, err := json.Marshal(UpdateAllowedLoginGroupsRequest{
+		LDAPGroupIDs: []string{ldapGroupIDs[0].String(), ldapGroupIDs[1].String()},
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
+	req.SetPathValue("server_id", serverID.String())
+	recorder := httptest.NewRecorder()
+
+	handler.UpdateAllowedLoginGroups(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusNoContent, recorder.Body.String())
+	}
+	if store.gotServerID != serverID {
+		t.Fatalf("server ID = %s, want %s", store.gotServerID, serverID)
+	}
+	if len(store.gotLDAPGroupIDs) != len(ldapGroupIDs) {
+		t.Fatalf("LDAP group IDs length = %d, want %d", len(store.gotLDAPGroupIDs), len(ldapGroupIDs))
+	}
+	for i := range ldapGroupIDs {
+		if store.gotLDAPGroupIDs[i] != ldapGroupIDs[i] {
+			t.Errorf("LDAP group ID %d = %s, want %s", i, store.gotLDAPGroupIDs[i], ldapGroupIDs[i])
+		}
+	}
+}
+
+func TestHandlerGetAllowedLoginGroupsReturnsLDAPGroupID(t *testing.T) {
+	serverID := uuid.New()
+	ldapGroupID := uuid.New()
+	store := &allowedLoginGroupsStore{groups: []AllowedLoginGroupDetail{{
+		LDAPGroupID: ldapGroupID,
+		Title:       "Research",
+		LdapCN:      "research-base",
+	}}}
+	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
+	req := httptest.NewRequest(http.MethodGet, "/api/servers/"+serverID.String()+"/allowedLoginGroups", nil)
+	req.SetPathValue("server_id", serverID.String())
+	recorder := httptest.NewRecorder()
+
+	handler.GetAllowedLoginGroups(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := response[0]["ldapGroupId"]; got != ldapGroupID.String() {
+		t.Errorf("ldapGroupId = %v, want %s", got, ldapGroupID)
+	}
+	if _, exists := response[0]["groupId"]; exists {
+		t.Error("legacy groupId field is still present")
+	}
+	if got := response[0]["ldapCn"]; got != "research-base" {
+		t.Errorf("ldapCn = %v, want research-base", got)
 	}
 }

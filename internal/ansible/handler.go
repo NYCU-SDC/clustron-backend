@@ -66,17 +66,17 @@ type Store interface {
 	ResetNode(ctx context.Context, id uuid.UUID) (Server, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error)
 	ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error)
-	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error
+	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, ldapGroupIDs []uuid.UUID) error
 }
 
 type UpdateAllowedLoginGroupsRequest struct {
-	GroupIDs []string `json:"groupIds" validate:"required,dive,uuid"`
+	LDAPGroupIDs []string `json:"ldapGroupIds" validate:"required,dive,uuid"`
 }
 
 type AllowedLoginGroupResponse struct {
-	GroupID string `json:"groupId"`
-	Title   string `json:"title"`
-	LdapCN  string `json:"ldapCn"`
+	LDAPGroupID string `json:"ldapGroupId"`
+	Title       string `json:"title"`
+	LDAPCN      string `json:"ldapCn"`
 }
 
 type Handler struct {
@@ -247,9 +247,9 @@ func (h *Handler) GetAllowedLoginGroups(w http.ResponseWriter, r *http.Request) 
 	responses := make([]AllowedLoginGroupResponse, len(groups))
 	for i, g := range groups {
 		responses[i] = AllowedLoginGroupResponse{
-			GroupID: g.GroupID.String(),
-			Title:   g.Title,
-			LdapCN:  g.LdapCN,
+			LDAPGroupID: g.LDAPGroupID.String(),
+			Title:       g.Title,
+			LDAPCN:      g.LdapCN,
 		}
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
@@ -271,17 +271,17 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	groupIDs := make([]uuid.UUID, len(req.GroupIDs))
-	for i, raw := range req.GroupIDs {
+	ldapGroupIDs := make([]uuid.UUID, len(req.LDAPGroupIDs))
+	for i, raw := range req.LDAPGroupIDs {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		groupIDs[i] = id
+		ldapGroupIDs[i] = id
 	}
 
-	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groupIDs); err != nil {
+	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, ldapGroupIDs); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

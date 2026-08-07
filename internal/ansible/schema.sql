@@ -52,8 +52,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS servers_private_ip_key ON servers(private_ip) 
 -- rendered into SSSD's simple_allow_groups
 CREATE TABLE IF NOT EXISTS allowed_login_groups
 (
-    server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    server_id      UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    ldap_group_id  UUID NOT NULL REFERENCES ldap_groups(id) ON DELETE CASCADE,
 
-    PRIMARY KEY (server_id, group_id)
+    PRIMARY KEY (server_id, ldap_group_id)
 );

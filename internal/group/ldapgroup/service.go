@@ -57,3 +57,19 @@ func (s *Service) GetLDAPAdminGroupCNByGroupID(ctx context.Context, groupID uuid
 
 	return cn.String, nil
 }
+
+func (s *Service) GetLDAPGroupCNByID(ctx context.Context, ldapGroupID uuid.UUID) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetLDAPGroupCNByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	cn, err := s.queries.GetLDAPGroupCNByID(traceCtx, ldapGroupID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "ldap_groups", "id", ldapGroupID.String(), logger, "get LDAP group CN by ID")
+		logger.Error("failed to get LDAP group CN by ID", zap.String("ldap_group_id", ldapGroupID.String()), zap.Error(err))
+		span.RecordError(err)
+		return "", err
+	}
+
+	return cn.String, nil
+}

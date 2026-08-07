@@ -1,6 +1,7 @@
 package ansible
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -47,19 +48,19 @@ func TestDuplicateServerField(t *testing.T) {
 
 func TestMapAllowedLoginGroupError(t *testing.T) {
 	serverID := uuid.New()
-	groupID := uuid.New()
+	ldapGroupID := uuid.New()
 	tests := []struct {
 		name       string
 		constraint string
 		wantValue  string
 	}{
 		{name: "server removed", constraint: "allowed_login_groups_server_id_fkey", wantValue: serverID.String()},
-		{name: "group removed", constraint: "allowed_login_groups_group_id_fkey", wantValue: groupID.String()},
+		{name: "LDAP group removed", constraint: "allowed_login_groups_ldap_group_id_fkey", wantValue: ldapGroupID.String()},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, groupID, zap.NewNop())
+			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, ldapGroupID, zap.NewNop())
 			if !errors.Is(err, handlerutil.ErrNotFound) {
 				t.Fatalf("mapAllowedLoginGroupError() error = %v, want ErrNotFound", err)
 			}
@@ -67,6 +68,39 @@ func TestMapAllowedLoginGroupError(t *testing.T) {
 				t.Fatalf("mapAllowedLoginGroupError() error = %q, want value %q", err, tt.wantValue)
 			}
 		})
+	}
+}
+
+type ldapGroupStoreStub struct {
+	cns map[uuid.UUID]string
+	got []uuid.UUID
+}
+
+func (s *ldapGroupStoreStub) GetLDAPGroupCNByID(_ context.Context, ldapGroupID uuid.UUID) (string, error) {
+	s.got = append(s.got, ldapGroupID)
+	return s.cns[ldapGroupID], nil
+}
+
+func TestResolveLDAPGroupCNs(t *testing.T) {
+	ldapGroupIDs := []uuid.UUID{uuid.New(), uuid.New()}
+	store := &ldapGroupStoreStub{cns: map[uuid.UUID]string{
+		ldapGroupIDs[0]: "research-base",
+		ldapGroupIDs[1]: "cluster-admin",
+	}}
+	service := &Service{ldapGroupStore: store}
+
+	cns, err := service.resolveLDAPGroupCNs(context.Background(), ldapGroupIDs)
+	if err != nil {
+		t.Fatalf("resolveLDAPGroupCNs() error = %v", err)
+	}
+	want := []string{"research-base", "cluster-admin"}
+	if len(cns) != len(want) {
+		t.Fatalf("CNs length = %d, want %d", len(cns), len(want))
+	}
+	for i := range want {
+		if cns[i] != want[i] {
+			t.Errorf("CN %d = %q, want %q", i, cns[i], want[i])
+		}
 	}
 }
 
