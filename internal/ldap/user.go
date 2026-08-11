@@ -54,7 +54,9 @@ func (c *Client) CreateUser(uid string, cn string, sn string, sshPublicKey strin
 	addRequest.Attribute("homeDirectory", []string{fmt.Sprintf("/home/%s", uid)})
 	addRequest.Attribute("loginShell", []string{"/bin/bash"})
 
-	err = c.Conn.Add(addRequest)
+	err = c.withConn(func(conn *ldap.Conn) error {
+		return conn.Add(addRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) {
@@ -197,7 +199,9 @@ func (c *Client) UpdateUser(uid string, cn string, sn string) error {
 	modifyRequest.Replace("cn", []string{cn})
 	modifyRequest.Replace("sn", []string{sn})
 
-	err := c.Conn.Modify(modifyRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
@@ -216,7 +220,9 @@ func (c *Client) DeleteUser(uid string) error {
 	dn := fmt.Sprintf("uid=%s,%s", uid, c.LDAPUserDN)
 	deleteRequest := ldap.NewDelRequest(dn, nil)
 
-	err := c.Conn.Del(deleteRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Del(deleteRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
@@ -271,7 +277,9 @@ func (c *Client) AddSSHPublicKey(uid string, publicKey string) error {
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Add("sshPublicKey", []string{publicKey})
 
-	err := c.Conn.Modify(modifyRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) {
@@ -296,7 +304,9 @@ func (c *Client) DeleteSSHPublicKey(uid string, publicKey string) error {
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Delete("sshPublicKey", []string{publicKey})
 
-	err := c.Conn.Modify(modifyRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 
 	if err != nil {
 		var ldapErr *ldap.Error
@@ -343,7 +353,9 @@ func (c *Client) UpdateUserPassword(uid string, password string) error {
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Replace("userPassword", []string{password})
 
-	err := c.Conn.Modify(modifyRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
