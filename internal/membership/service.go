@@ -502,6 +502,10 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Action: func(ctx context.Context) error {
 				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user already in ldap admin group, treating add as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
 					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
@@ -511,10 +515,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 			Compensate: func(ctx context.Context) error {
 				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, treating removal as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
 					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
-				logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+				logger.Debug("remove user from ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 				return nil
 			},
 		})
@@ -525,6 +533,10 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		Action: func(ctx context.Context) error {
 			err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
 			if err != nil {
+				if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+					logger.Warn("user already in ldap base group, treating add as done", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
 				logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
@@ -533,10 +545,14 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 		Compensate: func(ctx context.Context) error {
 			err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
 			if err != nil {
+				if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+					logger.Warn("user not in ldap base group, treating removal as done", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
 				logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
-			logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+			logger.Debug("remove user from ldap base group succeeded", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
 			return nil
 		},
 	})
