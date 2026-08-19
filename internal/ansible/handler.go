@@ -56,6 +56,7 @@ type UpdateRoleRequest struct {
 	AnsibleRole string `json:"ansible_role" validate:"required,oneof=head_nodes compute_nodes"`
 }
 
+//mockery:generate: true
 type Store interface {
 	ListAll(ctx context.Context) ([]Server, error)
 	AddNode(ctx context.Context, params CreateParams) (Server, error)

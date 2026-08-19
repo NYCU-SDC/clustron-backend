@@ -1,18 +1,19 @@
 package ansible
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
 	"clustron-backend/internal"
+	"fmt"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -38,9 +39,7 @@ func TestDuplicateServerField(t *testing.T) {
 		t.Run(tt.constraint, func(t *testing.T) {
 			field, value := duplicateServerField(tt.constraint, params)
 			detail := fmt.Sprintf(`%s %q`, field, value)
-			if detail != tt.wantDetail {
-				t.Fatalf("duplicateServerField() detail = %q, want %q", detail, tt.wantDetail)
-			}
+			assert.Equal(t, tt.wantDetail, detail)
 		})
 	}
 }
@@ -60,12 +59,8 @@ func TestMapAllowedLoginGroupError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, groupID, zap.NewNop())
-			if !errors.Is(err, handlerutil.ErrNotFound) {
-				t.Fatalf("mapAllowedLoginGroupError() error = %v, want ErrNotFound", err)
-			}
-			if !strings.Contains(err.Error(), tt.wantValue) {
-				t.Fatalf("mapAllowedLoginGroupError() error = %q, want value %q", err, tt.wantValue)
-			}
+			assert.ErrorIs(t, err, handlerutil.ErrNotFound)
+			assert.Contains(t, err.Error(), tt.wantValue)
 		})
 	}
 }
@@ -105,8 +100,10 @@ func TestAddNodeRequestAnsibleNameValidation(t *testing.T) {
 			}
 
 			err := validate.Struct(req)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -142,8 +139,10 @@ func TestAddNodeRequestSshUserValidation(t *testing.T) {
 			}
 
 			err := validate.Struct(req)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -200,8 +199,10 @@ func TestAddNodeRequestIPValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validate.Struct(tt.req)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -224,9 +225,7 @@ func TestServerRequestStringValidation(t *testing.T) {
 	validate := validator.New()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := validate.Struct(tt.req); err == nil {
-				t.Fatal("validator.Struct() error = nil, want validation error")
-			}
+			assert.Error(t, validate.Struct(tt.req))
 		})
 	}
 }
@@ -258,8 +257,10 @@ func TestAddNodeRequestHardwareValidation(t *testing.T) {
 			req.MemoryMb = tt.memoryMB
 
 			err := validate.Struct(req)
-			if (err != nil) != tt.wantError {
-				t.Fatalf("validator.Struct() error = %v, wantError %v", err, tt.wantError)
+			if tt.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -268,13 +269,9 @@ func TestAddNodeRequestHardwareValidation(t *testing.T) {
 func TestUpdateRoleRequestValidation(t *testing.T) {
 	validate := validator.New()
 	for _, role := range []string{headNodeRole, computeNodeRole} {
-		if err := validate.Struct(UpdateRoleRequest{AnsibleRole: role}); err != nil {
-			t.Errorf("validator.Struct(%q) error = %v", role, err)
-		}
+		assert.NoError(t, validate.Struct(UpdateRoleRequest{AnsibleRole: role}))
 	}
-	if err := validate.Struct(UpdateRoleRequest{AnsibleRole: "worker"}); err == nil {
-		t.Fatal("validator.Struct(unknown role) error = nil, want validation error")
-	}
+	assert.Error(t, validate.Struct(UpdateRoleRequest{AnsibleRole: "worker"}))
 }
 
 func TestAddNodesRequestValidation(t *testing.T) {
@@ -299,8 +296,10 @@ func TestAddNodesRequestValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validate.Struct(tt.req)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validator.Struct() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -334,9 +333,7 @@ func TestToCreateParams(t *testing.T) {
 		MemoryMb:       pgtype.Int4{Int32: memoryMB, Valid: true},
 	}
 
-	if got != want {
-		t.Fatalf("toCreateParams() = %#v, want %#v", got, want)
-	}
+	assert.Equal(t, want, got)
 }
 
 func TestHostVarsAnsibleUserYAML(t *testing.T) {
@@ -352,14 +349,8 @@ func TestHostVarsAnsibleUserYAML(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := yaml.Marshal(HostVars{UserName: tt.ansibleUser})
-			if err != nil {
-				t.Fatalf("yaml.Marshal() error = %v", err)
-			}
-
-			hasAnsibleUser := strings.Contains(string(data), "ansible_user:")
-			if hasAnsibleUser != tt.wantAnsibleUser {
-				t.Fatalf("yaml.Marshal() = %q, want ansible_user field %v", data, tt.wantAnsibleUser)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantAnsibleUser, strings.Contains(string(data), "ansible_user:"))
 		})
 	}
 }
@@ -380,9 +371,7 @@ func TestValidateAllowedLoginGroupTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateAllowedLoginGroupTarget(tt.role, tt.groupIDs)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("validateAllowedLoginGroupTarget() error = %v, want %v", err, tt.wantErr)
-			}
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
@@ -402,9 +391,7 @@ func TestValidateAllowedLoginGroupRoleChange(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateAllowedLoginGroupRoleChange(tt.role, tt.hasAllowedLoginGroups)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("validateAllowedLoginGroupRoleChange() error = %v, want %v", err, tt.wantErr)
-			}
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
@@ -422,11 +409,7 @@ func TestParseAnsibleError(t *testing.T) {
 				"fatal: [compute-01]: FAILED! => {\"msg\": \"package not found\"}\n" +
 				"PLAY RECAP ****\n" +
 				"compute-01 : ok=1 changed=0 unreachable=0 failed=1\n",
-			want: []string{
-				"Stage: Install package",
-				"fatal: [compute-01]: FAILED!",
-				"PLAY RECAP:",
-			},
+			want:       []string{"Stage: Install package", "fatal: [compute-01]: FAILED!", "PLAY RECAP:"},
 			wantAbsent: []string{"Output tail:"},
 		},
 		{
@@ -437,29 +420,19 @@ func TestParseAnsibleError(t *testing.T) {
 				"compute-01 : ok=0 changed=0 unreachable=0 failed=1\n" +
 				"TASKS RECAP ****\n" +
 				"Validate configuration ----------------------------- 0.14s\n",
-			want: []string{
-				"Stage: Validate configuration",
-				"[ERROR]: Task failed: configuration is invalid",
-				"compute-01 : ok=0 changed=0 unreachable=0 failed=1",
-			},
+			want:       []string{"Stage: Validate configuration", "[ERROR]: Task failed: configuration is invalid", "compute-01 : ok=0 changed=0 unreachable=0 failed=1"},
 			wantAbsent: []string{"Output tail:", "TASKS RECAP", "0.14s"},
 		},
 		{
 			name:   "unknown output falls back to raw tail",
 			output: "unexpected callback output\nconnection closed by remote host\n",
-			want: []string{
-				"Output tail:",
-				"unexpected callback output",
-				"connection closed by remote host",
-			},
+			want:   []string{"Output tail:", "unexpected callback output", "connection closed by remote host"},
 		},
 		{
-			name:   "raw tail is bounded",
-			output: "oldest line\n" + strings.Repeat("middle line\n", maxAnsibleErrorOutputLines-1) + "newest line",
-			want:   []string{"middle line", "newest line"},
-			wantAbsent: []string{
-				"oldest line",
-			},
+			name:       "raw tail is bounded",
+			output:     "oldest line\n" + strings.Repeat("middle line\n", maxAnsibleErrorOutputLines-1) + "newest line",
+			want:       []string{"middle line", "newest line"},
+			wantAbsent: []string{"oldest line"},
 		},
 	}
 
@@ -467,14 +440,10 @@ func TestParseAnsibleError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseAnsibleError(tt.output)
 			for _, want := range tt.want {
-				if !strings.Contains(got, want) {
-					t.Errorf("parseAnsibleError() = %q, want substring %q", got, want)
-				}
+				assert.Contains(t, got, want)
 			}
 			for _, unwanted := range tt.wantAbsent {
-				if strings.Contains(got, unwanted) {
-					t.Errorf("parseAnsibleError() = %q, unwanted substring %q", got, unwanted)
-				}
+				assert.NotContains(t, got, unwanted)
 			}
 		})
 	}
@@ -489,17 +458,8 @@ func TestParseAnsibleRecap(t *testing.T) {
 		"common : configure host -------------------------------- 1.00s\n"
 
 	got := parseAnsibleRecap(output)
-	want := map[string]bool{
-		"compute-01": true,
-		"compute-02": false,
-		"compute-03": false,
-	}
-	if len(got) != len(want) {
-		t.Fatalf("parseAnsibleRecap() = %#v, want %#v", got, want)
-	}
-	for host, wantSuccess := range want {
-		if got[host] != wantSuccess {
-			t.Errorf("parseAnsibleRecap()[%q] = %v, want %v", host, got[host], wantSuccess)
-		}
-	}
+	assert.Len(t, got, 3)
+	assert.True(t, got["compute-01"])
+	assert.False(t, got["compute-02"])
+	assert.False(t, got["compute-03"])
 }
