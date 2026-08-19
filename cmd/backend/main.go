@@ -272,6 +272,8 @@ func main() {
 	mux.HandleFunc("PATCH /api/servers/{server_id}/role", authMiddleware.HandlerFunc(ansibleHandler.UpdateRole))
 	mux.HandleFunc("GET /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.GetAllowedLoginGroups))
 	mux.HandleFunc("PUT /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.UpdateAllowedLoginGroups))
+	mux.HandleFunc("GET /api/partitions/{partition_name}/allowedGroups", authMiddleware.HandlerFunc(ansibleHandler.GetPartitionAllowedGroups))
+	mux.HandleFunc("PUT /api/partitions/{partition_name}/allowedGroups", authMiddleware.HandlerFunc(ansibleHandler.UpdatePartitionAllowedGroups))
 
 	// Modules
 	mux.HandleFunc("GET /api/modules", authMiddleware.HandlerFunc(moduleHandler.List))

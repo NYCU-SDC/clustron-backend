@@ -1,11 +1,12 @@
 package ansible
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"clustron-backend/internal"
-	"fmt"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/go-playground/validator/v10"
@@ -462,4 +463,105 @@ func TestParseAnsibleRecap(t *testing.T) {
 	assert.True(t, got["compute-01"])
 	assert.False(t, got["compute-02"])
 	assert.False(t, got["compute-03"])
+}
+
+func TestKnownPartitionNames(t *testing.T) {
+	tests := []struct {
+		name string
+		rows []pgtype.Text
+		want []string
+	}{
+		{name: "no compute nodes", rows: nil, want: []string{}},
+		{
+			name: "named partitions only",
+			rows: []pgtype.Text{{String: "gpu", Valid: true}, {String: "normal", Valid: true}},
+			want: []string{"gpu", "normal"},
+		},
+		{
+			name: "unset partition collapses into the template default",
+			rows: []pgtype.Text{{Valid: false}, {String: "gpu", Valid: true}},
+			want: []string{"gpu", defaultPartitionName},
+		},
+		{
+			name: "empty string is treated as unset",
+			rows: []pgtype.Text{{String: "", Valid: true}},
+			want: []string{defaultPartitionName},
+		},
+		{
+			name: "unset and an explicit normal do not duplicate the entry meaningfully",
+			rows: []pgtype.Text{{Valid: false}, {String: "normal", Valid: true}},
+			want: []string{"normal", defaultPartitionName},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := knownPartitionNames(tt.rows)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestValidatePartitionExists(t *testing.T) {
+	known := []string{"gpu", "normal"}
+	tests := []struct {
+		name          string
+		partitionName string
+		wantErr       bool
+	}{
+		{name: "known partition", partitionName: "gpu"},
+		{name: "default partition", partitionName: "normal"},
+		{name: "unknown partition", partitionName: "cpu", wantErr: true},
+		{name: "empty name", partitionName: "", wantErr: true},
+		{name: "case mismatch", partitionName: "GPU", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePartitionExists(tt.partitionName, known)
+			if tt.wantErr {
+				assert.ErrorIs(t, err, handlerutil.ErrNotFound)
+				assert.Contains(t, err.Error(), tt.partitionName)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMapPartitionAllowedGroupError(t *testing.T) {
+	groupID := uuid.New()
+
+	err := mapPartitionAllowedGroupError(&pgconn.PgError{Code: "23503", ConstraintName: "partition_allowed_groups_group_id_fkey"}, groupID, zap.NewNop())
+	assert.ErrorIs(t, err, handlerutil.ErrNotFound)
+	assert.Contains(t, err.Error(), groupID.String())
+
+	other := mapPartitionAllowedGroupError(errors.New("connection reset"), groupID, zap.NewNop())
+	assert.NotErrorIs(t, other, handlerutil.ErrNotFound)
+}
+
+func TestUpdatePartitionAllowedGroupsRequestValidation(t *testing.T) {
+	v := validator.New()
+
+	tests := []struct {
+		name    string
+		req     UpdatePartitionAllowedGroupsRequest
+		wantErr bool
+	}{
+		{name: "group ids", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{uuid.NewString()}}},
+		{name: "empty list re-opens the partition", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{}}},
+		{name: "omitted list re-opens the partition", req: UpdatePartitionAllowedGroupsRequest{}},
+		{name: "non-uuid group id", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{"not-a-uuid"}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(tt.req)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
