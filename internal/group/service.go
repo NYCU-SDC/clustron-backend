@@ -1051,6 +1051,68 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		})
 	}
 
+	slurmBaseAccount := slurm.BaseAccountName(baseCN)
+
+	saga.AddStep(internal.SagaStep{
+		Name: "DeleteSlurmAdminAccount",
+		Action: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAccount(ctx, adminCN)
+			if err != nil {
+				logger.Error("failed to delete admin account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{adminCN}, nil, baseCN)
+			if err != nil {
+				logger.Error("failed to compensate for creating admin account in Slurm", zap.Error(err))
+			}
+			return err
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "DeleteSlurmBaseAccount",
+		Action: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAccount(ctx, slurmBaseAccount)
+			if err != nil {
+				logger.Error("failed to delete base account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{slurmBaseAccount}, nil, baseCN)
+			if err != nil {
+				logger.Error("failed to compensate for creating base account in Slurm", zap.Error(err))
+			}
+			return err
+		},
+	})
+
+	saga.AddStep(internal.SagaStep{
+		Name: "DeleteSlurmTopAccount",
+		Action: func(ctx context.Context) error {
+			err := s.slurmStore.DeleteAccount(ctx, baseCN)
+			if err != nil {
+				logger.Error("failed to delete top-level account in Slurm", zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		},
+		Compensate: func(ctx context.Context) error {
+			_, err := s.slurmStore.CreateAccountAssociation(ctx, []string{baseCN}, nil, "")
+			if err != nil {
+				logger.Error("failed to compensate for creating top-level account in Slurm", zap.Error(err))
+			}
+			return err
+		},
+	})
+
 	err = saga.Execute(traceCtx)
 	if err != nil {
 		s.logger.Error("saga execution failed", zap.Error(err))
