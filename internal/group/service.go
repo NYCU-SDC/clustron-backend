@@ -1051,6 +1051,8 @@ func (s *Service) Archive(ctx context.Context, groupID uuid.UUID) (Group, error)
 		})
 	}
 
+	// Tear down the group's Slurm account tree children-first — slurmdbd
+	// refuses to delete an account that still has child associations.
 	slurmBaseAccount := slurm.BaseAccountName(baseCN)
 
 	saga.AddStep(internal.SagaStep{
