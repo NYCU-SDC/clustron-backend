@@ -794,10 +794,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	requestPath := fmt.Sprintf(
-		"%s/accounts_association/",
-		strings.TrimRight(s.slurmDatabaseBaseURL, "/"),
-	)
+	requestPath := fmt.Sprintf("%s/accounts_association", s.slurmDatabaseBaseURL)
 
 	request := AccountAssociationRequest{
 		AssociationCondition: AccountAddCondition{
@@ -831,18 +828,6 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 		span.RecordError(err)
 		return ParsedAccountAssociationResponse{}, err
 	}
-
-	logger.Info(
-		"slurm REST response",
-		zap.String("original_method", httpRequest.Method),
-		zap.String("original_url", httpRequest.URL.String()),
-		zap.String("final_method", response.Request.Method),
-		zap.String("final_url", response.Request.URL.String()),
-		zap.Int("status_code", response.StatusCode),
-		zap.String("status", response.Status),
-		zap.String("location", response.Header.Get("Location")),
-	)
-
 	defer func() {
 		if cerr := response.Body.Close(); cerr != nil {
 			logger.Error("failed to close response body", zap.Error(cerr))
