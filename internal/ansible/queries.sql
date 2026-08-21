@@ -50,28 +50,25 @@ SELECT * FROM servers WHERE status = $1 ORDER BY ansible_name;
 -- name: ListAllowedLoginGroupCNsByServerID :many
 SELECT lg.ldap_cn
 FROM allowed_login_groups alg
-JOIN ldap_groups lg ON lg.group_id = alg.group_id AND lg.type = 'BASE'
+JOIN ldap_groups lg ON lg.id = alg.ldap_group_id
 WHERE alg.server_id = $1 AND lg.ldap_cn IS NOT NULL
 ORDER BY lg.ldap_cn;
 
 -- name: ListServerAllowedLoginGroups :many
-SELECT alg.group_id, g.title, lg.ldap_cn
+SELECT lg.group_id, lg.type, g.title, lg.ldap_cn
 FROM allowed_login_groups alg
-JOIN groups g ON g.id = alg.group_id
-JOIN ldap_groups lg ON lg.group_id = alg.group_id AND lg.type = 'BASE'
+JOIN ldap_groups lg ON lg.id = alg.ldap_group_id
+JOIN groups g ON g.id = lg.group_id
 WHERE alg.server_id = $1
-ORDER BY g.title;
+ORDER BY g.title, lg.type;
 
 -- name: ClearServerAllowedLoginGroups :exec
 DELETE FROM allowed_login_groups WHERE server_id = $1;
 
 -- name: AddServerAllowedLoginGroup :exec
-INSERT INTO allowed_login_groups (server_id, group_id)
+INSERT INTO allowed_login_groups (server_id, ldap_group_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: ExistServerAllowedLoginGroup :one
 SELECT EXISTS (SELECT 1 FROM allowed_login_groups WHERE server_id = $1) AS exists;
-
--- name: ExistBaseLdapGroup :one
-SELECT EXISTS (SELECT 1 FROM ldap_groups WHERE group_id = $1 AND type = 'BASE') AS exists;

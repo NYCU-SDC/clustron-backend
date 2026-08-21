@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
+	"clustron-backend/internal/group/ldapgroup"
 	"clustron-backend/internal/ldap"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	ExecuteFolder		= "internal/ansible/ansible"
+	ExecuteFolder       = "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
@@ -47,12 +47,13 @@ const (
 )
 
 type Service struct {
-	db         *pgxpool.Pool
-	queries    *Queries
-	logger     *zap.Logger
-	tracer     trace.Tracer
-	ldapConfig ldap.Config
-	ansibleMu  sync.Mutex
+	db          *pgxpool.Pool
+	queries     *Queries
+	logger      *zap.Logger
+	tracer      trace.Tracer
+	ldapConfig  ldap.Config
+	ldapQueries ldapgroup.Queries
+	ansibleMu   sync.Mutex
 }
 
 type ServiceInterface interface {
@@ -63,11 +64,12 @@ type ServiceInterface interface {
 
 func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapConfig ldap.Config) *Service {
 	return &Service{
-		db:         db,
-		queries:    New(db),
-		logger:     logger,
-		tracer:     otel.Tracer("ansible/service"),
-		ldapConfig: ldapConfig,
+		db:          db,
+		queries:     New(db),
+		logger:      logger,
+		tracer:      otel.Tracer("ansible/service"),
+		ldapConfig:  ldapConfig,
+		ldapQueries: *ldapgroup.New(db),
 	}
 }
 
@@ -648,6 +650,7 @@ func (s *Service) ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID
 	for _, row := range rows {
 		result = append(result, AllowedLoginGroupDetail{
 			GroupID: row.GroupID,
+			Type:    row.Type,
 			Title:   row.Title,
 			LdapCN:  row.LdapCn.String,
 		})
@@ -655,10 +658,9 @@ func (s *Service) ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID
 	return result, nil
 }
 
-// SetAllowedLoginGroups replaces a server's allowed-login-group list with the given groups,
-// then re-renders that server's sssd.conf in the background. Each group must already have a
-// BASE LDAP group (i.e. a usable ldap_cn), otherwise the update is rejected.
-func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error {
+// SetAllowedLoginGroups replaces a server's allowed-login-group list with the selected LDAP
+// variants, then re-renders that server's sssd.conf in the background.
+func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetAllowedLoginGroups")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -667,18 +669,21 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	if err != nil {
 		return databaseutil.WrapDBError(err, logger, "get server by id")
 	}
-	if err = validateAllowedLoginGroupTarget(server.AnsibleRole, groupIDs); err != nil {
+	if err = validateAllowedLoginGroupTarget(server.AnsibleRole, groups); err != nil {
 		return err
 	}
 
-	for _, id := range groupIDs {
-		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
+	ldapGroupIDs := make([]uuid.UUID, len(groups))
+	for i, group := range groups {
+		ldapGroupID, err := s.ldapQueries.GetLDAPGroupIDByGroupIDAndType(traceCtx, ldapgroup.GetLDAPGroupIDByGroupIDAndTypeParams{
+			GroupID: group.GroupID,
+			Type:    ldapgroup.GroupType(group.Type),
+		})
 		if err != nil {
-			return databaseutil.WrapDBError(err, logger, "check base ldap group exists")
+			value := fmt.Sprintf("%s/%s", group.GroupID, group.Type)
+			return databaseutil.WrapDBErrorWithKeyValue(err, "ldap_groups", "group_id/type", value, logger, "find LDAP group for allowed login group")
 		}
-		if !exist {
-			return databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "ldap_groups", "group_id", id.String(), logger, "find base ldap group for allowed login group")
-		}
+		ldapGroupIDs[i] = ldapGroupID
 	}
 
 	tx, err := s.db.Begin(traceCtx)
@@ -691,10 +696,10 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	if err = qtx.ClearServerAllowedLoginGroups(traceCtx, serverID); err != nil {
 		return databaseutil.WrapDBError(err, logger, "clear allowed login groups")
 	}
-	for _, id := range groupIDs {
+	for _, id := range ldapGroupIDs {
 		if err = qtx.AddServerAllowedLoginGroup(traceCtx, AddServerAllowedLoginGroupParams{
-			ServerID: serverID,
-			GroupID:  id,
+			ServerID:    serverID,
+			LdapGroupID: id,
 		}); err != nil {
 			return mapAllowedLoginGroupError(err, serverID, id, logger)
 		}
@@ -716,19 +721,19 @@ func (s *Service) SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID,
 	return nil
 }
 
-func mapAllowedLoginGroupError(err error, serverID, groupID uuid.UUID, logger *zap.Logger) error {
+func mapAllowedLoginGroupError(err error, serverID, ldapGroupID uuid.UUID, logger *zap.Logger) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
 		if pgErr.ConstraintName == "allowed_login_groups_server_id_fkey" {
 			return handlerutil.NewNotFoundError("servers", "id", serverID.String(), "")
 		}
-		return handlerutil.NewNotFoundError("groups", "id", groupID.String(), "")
+		return handlerutil.NewNotFoundError("ldap_groups", "id", ldapGroupID.String(), "")
 	}
 	return databaseutil.WrapDBError(err, logger, "add allowed login group")
 }
 
-func validateAllowedLoginGroupTarget(role string, groupIDs []uuid.UUID) error {
-	if role != computeNodeRole && len(groupIDs) > 0 {
+func validateAllowedLoginGroupTarget(role string, groups []AllowedLoginGroupSelection) error {
+	if role != computeNodeRole && len(groups) > 0 {
 		return internal.ErrAllowedLoginGroupsUnsupported
 	}
 	return nil
@@ -783,8 +788,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 
 		hostVars := HostVars{
 			UserName: srv.SshUser.String,
-			CPUCores:    srv.CpuCores.Int32,
-			MemoryMB:    srv.MemoryMb.Int32,
+			CPUCores: srv.CpuCores.Int32,
+			MemoryMB: srv.MemoryMb.Int32,
 		}
 
 		if srv.IpAddress.Valid {

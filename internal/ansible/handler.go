@@ -66,15 +66,21 @@ type Store interface {
 	ResetNode(ctx context.Context, id uuid.UUID) (Server, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error)
 	ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error)
-	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groupIDs []uuid.UUID) error
+	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error
 }
 
 type UpdateAllowedLoginGroupsRequest struct {
-	GroupIDs []string `json:"groupIds" validate:"required,dive,uuid"`
+	Groups []AllowedLoginGroupRequest `json:"groups" validate:"required,dive"`
+}
+
+type AllowedLoginGroupRequest struct {
+	GroupID string    `json:"groupId" validate:"required,uuid"`
+	Type    GroupType `json:"type"    validate:"required,oneof=BASE ADMIN"`
 }
 
 type AllowedLoginGroupResponse struct {
 	GroupID string `json:"groupId"`
+	Type    string `json:"type"`
 	Title   string `json:"title"`
 	LdapCN  string `json:"ldapCn"`
 }
@@ -248,6 +254,7 @@ func (h *Handler) GetAllowedLoginGroups(w http.ResponseWriter, r *http.Request) 
 	for i, g := range groups {
 		responses[i] = AllowedLoginGroupResponse{
 			GroupID: g.GroupID.String(),
+			Type:    string(g.Type),
 			Title:   g.Title,
 			LdapCN:  g.LdapCN,
 		}
@@ -271,17 +278,17 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	groupIDs := make([]uuid.UUID, len(req.GroupIDs))
-	for i, raw := range req.GroupIDs {
-		id, err := uuid.Parse(raw)
+	groups := make([]AllowedLoginGroupSelection, len(req.Groups))
+	for i, group := range req.Groups {
+		id, err := uuid.Parse(group.GroupID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		groupIDs[i] = id
+		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.Type}
 	}
 
-	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groupIDs); err != nil {
+	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groups); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

@@ -20,6 +20,24 @@ type addNodesStore struct {
 	gotParams []CreateParams
 }
 
+type allowedLoginGroupsStore struct {
+	Store
+	gotServerID uuid.UUID
+	gotGroups   []AllowedLoginGroupSelection
+	groups      []AllowedLoginGroupDetail
+}
+
+func (s *allowedLoginGroupsStore) SetAllowedLoginGroups(_ context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error {
+	s.gotServerID = serverID
+	s.gotGroups = groups
+	return nil
+}
+
+func (s *allowedLoginGroupsStore) ListAllowedLoginGroups(_ context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error) {
+	s.gotServerID = serverID
+	return s.groups, nil
+}
+
 func (s *addNodesStore) AddNodes(_ context.Context, params []CreateParams) ([]Server, error) {
 	s.gotParams = params
 	servers := make([]Server, len(params))
@@ -85,5 +103,93 @@ func TestHandlerAddNodes(t *testing.T) {
 		if server.Status != "provisioning" {
 			t.Errorf("server %q status = %q, want provisioning", server.AnsibleName, server.Status)
 		}
+	}
+}
+
+func TestHandlerUpdateAllowedLoginGroupsUsesGroupIDAndType(t *testing.T) {
+	serverID := uuid.New()
+	baseGroupID := uuid.New()
+	adminGroupID := uuid.New()
+	store := &allowedLoginGroupsStore{}
+	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
+	body := []byte(`{
+		"groups": [
+			{"groupId": "` + baseGroupID.String() + `", "type": "BASE"},
+			{"groupId": "` + adminGroupID.String() + `", "type": "ADMIN"}
+		]
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
+	req.SetPathValue("server_id", serverID.String())
+	recorder := httptest.NewRecorder()
+
+	handler.UpdateAllowedLoginGroups(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusNoContent, recorder.Body.String())
+	}
+	if store.gotServerID != serverID {
+		t.Fatalf("server ID = %s, want %s", store.gotServerID, serverID)
+	}
+	want := []AllowedLoginGroupSelection{
+		{GroupID: baseGroupID, Type: GroupTypeBASE},
+		{GroupID: adminGroupID, Type: GroupTypeADMIN},
+	}
+	if len(store.gotGroups) != len(want) {
+		t.Fatalf("groups length = %d, want %d", len(store.gotGroups), len(want))
+	}
+	for i := range want {
+		if store.gotGroups[i] != want[i] {
+			t.Errorf("group %d = %#v, want %#v", i, store.gotGroups[i], want[i])
+		}
+	}
+}
+
+func TestHandlerUpdateAllowedLoginGroupsRejectsInvalidType(t *testing.T) {
+	serverID := uuid.New()
+	store := &allowedLoginGroupsStore{}
+	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
+	body := []byte(`{"groups":[{"groupId":"` + uuid.NewString() + `","type":"OWNER"}]}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
+	req.SetPathValue("server_id", serverID.String())
+	recorder := httptest.NewRecorder()
+
+	handler.UpdateAllowedLoginGroups(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	if store.gotGroups != nil {
+		t.Fatal("store was called for an invalid group type")
+	}
+}
+
+func TestHandlerGetAllowedLoginGroupsReturnsGroupType(t *testing.T) {
+	serverID := uuid.New()
+	groupID := uuid.New()
+	store := &allowedLoginGroupsStore{groups: []AllowedLoginGroupDetail{{
+		GroupID: groupID,
+		Type:    GroupTypeADMIN,
+		Title:   "Research",
+		LdapCN:  "research-admin",
+	}}}
+	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
+	req := httptest.NewRequest(http.MethodGet, "/api/servers/"+serverID.String()+"/allowedLoginGroups", nil)
+	req.SetPathValue("server_id", serverID.String())
+	recorder := httptest.NewRecorder()
+
+	handler.GetAllowedLoginGroups(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response []AllowedLoginGroupResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response) != 1 {
+		t.Fatalf("response length = %d, want 1", len(response))
+	}
+	if response[0].GroupID != groupID.String() || response[0].Type != "ADMIN" || response[0].LdapCN != "research-admin" {
+		t.Fatalf("response = %#v, want group ID %s with ADMIN type and research-admin CN", response[0], groupID)
 	}
 }
