@@ -2,6 +2,7 @@ package ansible
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -69,13 +70,11 @@ type Store interface {
 	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error
 }
 
-type UpdateAllowedLoginGroupsRequest struct {
-	Groups []AllowedLoginGroupRequest `json:"groups" validate:"required,dive"`
-}
+type UpdateAllowedLoginGroupsRequest []AllowedLoginGroupRequest
 
 type AllowedLoginGroupRequest struct {
-	GroupID string    `json:"groupId" validate:"required,uuid"`
-	Type    GroupType `json:"type"    validate:"required,oneof=BASE ADMIN"`
+	GroupID   string    `json:"groupId" validate:"required,uuid"`
+	GroupType GroupType `json:"groupType" validate:"required,oneof=BASE ADMIN"`
 }
 
 type AllowedLoginGroupResponse struct {
@@ -273,19 +272,34 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req UpdateAllowedLoginGroupsRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.problemWriter.WriteError(
+			traceCtx,
+			w,
+			handlerutil.NewValidationErrorWithErrors(
+				"invalid JSON payload",
+				[]string{err.Error()},
+			),
+			logger,
+		)
 		return
 	}
 
-	groups := make([]AllowedLoginGroupSelection, len(req.Groups))
-	for i, group := range req.Groups {
+	for _, group := range req {
+		if err := h.validator.Struct(group); err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+	}
+
+	groups := make([]AllowedLoginGroupSelection, len(req))
+	for i, group := range req {
 		id, err := uuid.Parse(group.GroupID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
-		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.Type}
+		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.GroupType}
 	}
 
 	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groups); err != nil {
