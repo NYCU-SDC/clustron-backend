@@ -112,12 +112,10 @@ func TestHandlerUpdateAllowedLoginGroupsUsesGroupIDAndType(t *testing.T) {
 	adminGroupID := uuid.New()
 	store := &allowedLoginGroupsStore{}
 	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`{
-		"groups": [
-			{"groupId": "` + baseGroupID.String() + `", "type": "BASE"},
-			{"groupId": "` + adminGroupID.String() + `", "type": "ADMIN"}
-		]
-	}`)
+	body := []byte(`[
+			{"groupId": "` + baseGroupID.String() + `", "groupType": "BASE"},
+			{"groupId": "` + adminGroupID.String() + `", "groupType": "ADMIN"}
+	]`)
 	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
 	req.SetPathValue("server_id", serverID.String())
 	recorder := httptest.NewRecorder()
