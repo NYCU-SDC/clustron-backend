@@ -50,7 +50,9 @@ NodeName={{ host }} NodeAddr={{ node_addr }} CPUs={{ hostvars[host].cpu_cores | 
     {% endif %}
 {% endfor %}
 
+{% set allowed_accounts = slurm_partition_allowed_accounts | default({}) %}
 {% for p_name, nodes in partitions.items() %}
-PartitionName={{ p_name }} Nodes={{ nodes }} Default={% if loop.first %}YES{% else %}NO{% endif %} MaxTime=INFINITE State=UP
+PartitionName={{ p_name }} Nodes={{ nodes }} Default={% if loop.first %}YES{% else %}NO{% endif %} MaxTime=INFINITE State=UP{% if allowed_accounts.get(p_name) %} AllowAccounts={{ allowed_accounts[p_name] | join(',') }}{% endif %}
+
 {% endfor %}
 {% endif %}

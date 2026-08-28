@@ -57,3 +57,12 @@ CREATE TABLE IF NOT EXISTS allowed_login_groups
 
     PRIMARY KEY (server_id, group_id)
 );
+
+-- rendered into slurm.conf as PartitionName=... AllowAccounts=...
+CREATE TABLE IF NOT EXISTS partition_allowed_groups
+(
+    partition_name VARCHAR(255) NOT NULL,
+    group_id       UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+
+    PRIMARY KEY (partition_name, group_id)
+);

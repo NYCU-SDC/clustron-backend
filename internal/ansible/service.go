@@ -43,7 +43,12 @@ const (
 	headNodeRole            = "head_nodes"
 	computeNodeRole         = "compute_nodes"
 	sssdTag                 = "sssd"
+	slurmConfigTag          = "slurm_config"
 	computePrerequisiteTags = "nfs_exports,slurm_config"
+
+	// defaultPartitionName is the partition a compute node falls into when it has no
+	// slurm_partition set, matching the default applied by slurm.conf.j2.
+	defaultPartitionName = "normal"
 )
 
 type Service struct {
@@ -741,6 +746,159 @@ func validateAllowedLoginGroupRoleChange(role string, hasAllowedLoginGroups bool
 	return nil
 }
 
+// ListPartitionAllowedGroups returns the Clustron groups allowed to submit jobs to a Slurm
+// partition (rendered into that partition's slurm.conf AllowAccounts list).
+func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName string) ([]PartitionAllowedGroupDetail, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListPartitionAllowedGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if err := s.ensurePartitionExists(traceCtx, partitionName); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.queries.ListPartitionAllowedGroups(traceCtx, partitionName)
+	if err != nil {
+		return nil, databaseutil.WrapDBError(err, logger, "list partition allowed groups")
+	}
+
+	result := make([]PartitionAllowedGroupDetail, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, PartitionAllowedGroupDetail{
+			GroupID: row.GroupID,
+			Title:   row.Title,
+			LdapCN:  row.LdapCn.String,
+		})
+	}
+	return result, nil
+}
+
+// SetPartitionAllowedGroups replaces a partition's allowed-group list with the given groups,
+// then re-renders slurm.conf in the background. Each group must already have a BASE LDAP
+// group, since its ldap_cn is the name of the group's top-level Slurm account. An empty list
+// leaves the partition unrestricted.
+func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName string, groupIDs []uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "SetPartitionAllowedGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if err := s.ensurePartitionExists(traceCtx, partitionName); err != nil {
+		return err
+	}
+
+	for _, id := range groupIDs {
+		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
+		if err != nil {
+			return databaseutil.WrapDBError(err, logger, "check base ldap group exists")
+		}
+		if !exist {
+			return databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "ldap_groups", "group_id", id.String(), logger, "find base ldap group for partition allowed group")
+		}
+	}
+
+	tx, err := s.db.Begin(traceCtx)
+	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "begin tx for set partition allowed groups")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
+	if err = qtx.ClearPartitionAllowedGroups(traceCtx, partitionName); err != nil {
+		return databaseutil.WrapDBError(err, logger, "clear partition allowed groups")
+	}
+	for _, id := range groupIDs {
+		if err = qtx.AddPartitionAllowedGroup(traceCtx, AddPartitionAllowedGroupParams{
+			PartitionName: partitionName,
+			GroupID:       id,
+		}); err != nil {
+			return mapPartitionAllowedGroupError(err, id, logger)
+		}
+	}
+	if err = tx.Commit(traceCtx); err != nil {
+		return databaseutil.WrapDBError(err, logger, "commit partition allowed groups")
+	}
+
+	bgCtx := context.WithoutCancel(traceCtx)
+	bgCtx, cancel := context.WithTimeout(bgCtx, time.Hour)
+
+	go func() {
+		defer cancel()
+		s.runSlurmConfigInBackground(bgCtx)
+	}()
+
+	return nil
+}
+
+// ensurePartitionExists rejects partition names that slurm.conf will not contain. Partitions
+// are not an entity: they exist only as the slurm_partition label on compute nodes.
+func (s *Service) ensurePartitionExists(ctx context.Context, partitionName string) error {
+	logger := logutil.WithContext(ctx, s.logger)
+
+	rows, err := s.queries.ListDistinctPartitionNames(ctx)
+	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "list distinct partition names")
+	}
+
+	return validatePartitionExists(partitionName, knownPartitionNames(rows))
+}
+
+// knownPartitionNames maps the distinct slurm_partition values of the compute nodes onto the
+// partitions slurm.conf.j2 will emit: unset values collapse into defaultPartitionName.
+func knownPartitionNames(rows []pgtype.Text) []string {
+	names := make([]string, 0, len(rows))
+	hasUnset := false
+	for _, row := range rows {
+		if row.Valid && row.String != "" {
+			names = append(names, row.String)
+			continue
+		}
+		hasUnset = true
+	}
+	if hasUnset {
+		names = append(names, defaultPartitionName)
+	}
+	return names
+}
+
+func validatePartitionExists(partitionName string, known []string) error {
+	for _, name := range known {
+		if name == partitionName {
+			return nil
+		}
+	}
+	return handlerutil.NewNotFoundError("partitions", "name", partitionName, "")
+}
+
+func mapPartitionAllowedGroupError(err error, groupID uuid.UUID, logger *zap.Logger) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
+		return handlerutil.NewNotFoundError("groups", "id", groupID.String(), "")
+	}
+	return databaseutil.WrapDBError(err, logger, "add partition allowed group")
+}
+
+// runSlurmConfigInBackground re-renders the inventory and reapplies only the head node's
+// Slurm configuration. Unlike runAnsibleInBackground it provisions nothing and never touches
+// server status, because a partition access change is a config edit, not a deployment.
+func (s *Service) runSlurmConfigInBackground(ctx context.Context) {
+	s.ansibleMu.Lock()
+	defer s.ansibleMu.Unlock()
+
+	logger := logutil.WithContext(ctx, s.logger)
+
+	if err := s.generateInventory(ctx); err != nil {
+		logger.Error("fail to generate inventory for slurm config update", zap.Error(err))
+		return
+	}
+
+	logger.Info("[background] re-rendering slurm.conf")
+	if err := s.runUpdateRoles(ctx, os.Stdout, slurmConfigTag); err != nil {
+		logger.Error("fail to re-render slurm.conf", zap.Error(err))
+		return
+	}
+	logger.Info("slurm.conf re-rendered")
+}
+
 func (s *Service) generateInventory(ctx context.Context) error {
 	servers, err := s.queries.ListAll(ctx)
 	if err != nil {
@@ -817,6 +975,24 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		hostVars.LDAPSimpleAllowGroups = strings.Join(cns, ", ")
 
 		inventory.All.Children[roleGroup].Hosts[srv.AnsibleName] = hostVars
+	}
+
+	// Partition access is a property of the partition, not of any single node, so it goes in
+	// the play-wide vars. slurm.conf.j2 turns each entry into AllowAccounts= on that
+	// partition; partitions absent here stay unrestricted.
+	allowedRows, err := s.queries.ListAllPartitionAllowedAccounts(ctx)
+	if err != nil {
+		return databaseutil.WrapDBError(err, s.logger, "list partition allowed accounts")
+	}
+	allowedAccounts := make(map[string][]string)
+	for _, row := range allowedRows {
+		if !row.LdapCn.Valid || row.LdapCn.String == "" {
+			continue
+		}
+		allowedAccounts[row.PartitionName] = append(allowedAccounts[row.PartitionName], row.LdapCn.String)
+	}
+	if len(allowedAccounts) > 0 {
+		inventory.All.Vars["slurm_partition_allowed_accounts"] = allowedAccounts
 	}
 
 	yamlData, err := yaml.Marshal(&inventory)

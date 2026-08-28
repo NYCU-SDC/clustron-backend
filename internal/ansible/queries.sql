@@ -75,3 +75,32 @@ SELECT EXISTS (SELECT 1 FROM allowed_login_groups WHERE server_id = $1) AS exist
 
 -- name: ExistBaseLdapGroup :one
 SELECT EXISTS (SELECT 1 FROM ldap_groups WHERE group_id = $1 AND type = 'BASE') AS exists;
+
+-- name: ListDistinctPartitionNames :many
+SELECT DISTINCT slurm_partition
+FROM servers
+WHERE ansible_role = 'compute_nodes'
+ORDER BY slurm_partition;
+
+-- name: ListPartitionAllowedGroups :many
+SELECT pag.group_id, g.title, lg.ldap_cn
+FROM partition_allowed_groups pag
+JOIN groups g ON g.id = pag.group_id
+JOIN ldap_groups lg ON lg.group_id = pag.group_id AND lg.type = 'BASE'
+WHERE pag.partition_name = $1
+ORDER BY g.title;
+
+-- name: ListAllPartitionAllowedAccounts :many
+SELECT pag.partition_name, lg.ldap_cn
+FROM partition_allowed_groups pag
+JOIN ldap_groups lg ON lg.group_id = pag.group_id AND lg.type = 'BASE'
+WHERE lg.ldap_cn IS NOT NULL
+ORDER BY pag.partition_name, lg.ldap_cn;
+
+-- name: ClearPartitionAllowedGroups :exec
+DELETE FROM partition_allowed_groups WHERE partition_name = $1;
+
+-- name: AddPartitionAllowedGroup :exec
+INSERT INTO partition_allowed_groups (partition_name, group_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
