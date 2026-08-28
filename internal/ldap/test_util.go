@@ -78,7 +78,9 @@ func newTestClient(t *testing.T) *Client {
 	client, err := NewClient(cfg, logger)
 	require.NoError(t, err)
 
-	require.NoError(t, setupBaseDIT(client.Conn, cfg.LDAPBaseDN, cfg.LDAPGroupOUName, cfg.LDAPUserOUName))
+	require.NoError(t, client.withConn(func(conn *ldap.Conn) error {
+		return setupBaseDIT(conn, cfg.LDAPBaseDN, cfg.LDAPGroupOUName, cfg.LDAPUserOUName)
+	}))
 
 	return client
 }
