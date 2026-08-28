@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"clustron-backend/internal"
@@ -146,7 +147,7 @@ func TestHandlerUpdateAllowedLoginGroupsRejectsInvalidType(t *testing.T) {
 	serverID := uuid.New()
 	store := &allowedLoginGroupsStore{}
 	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`[{"groupId":"` + uuid.NewString() + `","type":"OWNER"}]`)
+	body := []byte(`[{"groupId":"` + uuid.NewString() + `","groupType":"OWNER"}]`)
 	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
 	req.SetPathValue("server_id", serverID.String())
 	recorder := httptest.NewRecorder()
@@ -155,6 +156,9 @@ func TestHandlerUpdateAllowedLoginGroupsRejectsInvalidType(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "oneof") {
+		t.Fatalf("expected a oneof validation failure on groupType, got %s", recorder.Body.String())
 	}
 	if store.gotGroups != nil {
 		t.Fatal("store was called for an invalid group type")
