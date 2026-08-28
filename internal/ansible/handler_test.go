@@ -146,7 +146,7 @@ func TestHandlerUpdateAllowedLoginGroupsRejectsInvalidType(t *testing.T) {
 	serverID := uuid.New()
 	store := &allowedLoginGroupsStore{}
 	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`{"groups":[{"groupId":"` + uuid.NewString() + `","type":"OWNER"}]}`)
+	body := []byte(`[{"groupId":"` + uuid.NewString() + `","type":"OWNER"}]`)
 	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
 	req.SetPathValue("server_id", serverID.String())
 	recorder := httptest.NewRecorder()
