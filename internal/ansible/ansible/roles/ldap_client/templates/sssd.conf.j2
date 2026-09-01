@@ -6,7 +6,7 @@ domains = default
 id_provider = ldap
 auth_provider = ldap
 
-ldap_uri = ldap://{{ head_node_ip }}
+ldap_uri = ldap://{{ ldap_external_host }}:{{ ldap_external_port }}
 
 ldap_search_base = {{ ldap_base_dn }}
 
@@ -24,5 +24,5 @@ cache_credentials = false
 access_provider = simple
 simple_allow_groups = {{ ldap_simple_allow_groups }}
 {% else %}
-access_provider = permit
+access_provider = deny
 {% endif %}

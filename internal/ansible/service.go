@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	ExecuteFolder		= "internal/ansible/ansible"
+	ExecuteFolder       = "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
@@ -747,13 +747,24 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		return databaseutil.WrapDBError(err, s.logger, "list all servers from db")
 	}
 
+	ldapServerHost, ldapServerPort := s.ldapConfig.LDAPExternalHost, s.ldapConfig.LDAPExternalPort
+	if ldapServerHost == "" {
+		ldapServerHost = s.ldapConfig.LDAPHost
+	}
+
+	if ldapServerPort == "" {
+		ldapServerPort = s.ldapConfig.LDAPPort
+	}
+
 	inventory := InventoryFiles{
 		All: ServerGroup{
 			Vars: map[string]interface{}{
-				"slurm_version": "25.11.4-1",
-				"ldap_base_dn":  s.ldapConfig.LDAPBaseDN,
-				"ldap_bind_dn":  s.ldapConfig.LDAPBindDN,
-				"ldap_bind_pwd": s.ldapConfig.LDAPBindPwd,
+				"slurm_version":      "25.11.4-1",
+				"ldap_external_host": ldapServerHost,
+				"ldap_external_port": ldapServerPort,
+				"ldap_base_dn":       s.ldapConfig.LDAPBaseDN,
+				"ldap_bind_dn":       s.ldapConfig.LDAPBindDN,
+				"ldap_bind_pwd":      s.ldapConfig.LDAPBindPwd,
 			},
 			Children: make(map[string]ChildNode),
 		},
@@ -783,8 +794,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 
 		hostVars := HostVars{
 			UserName: srv.SshUser.String,
-			CPUCores:    srv.CpuCores.Int32,
-			MemoryMB:    srv.MemoryMb.Int32,
+			CPUCores: srv.CpuCores.Int32,
+			MemoryMB: srv.MemoryMb.Int32,
 		}
 
 		if srv.IpAddress.Valid {

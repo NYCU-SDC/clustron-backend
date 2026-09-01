@@ -100,7 +100,9 @@ services:
       - ALLOW_ORIGINS=* # change as needed
       - LDAP_DEBUG=true
       - LDAP_HOST=ldap # change as needed
+      - LDAP_EXTERNAL_HOST=ldap.example.com # change as needed
       - LDAP_PORT=389 # change as needed
+      - LDAP_EXTERNAL_PORT=389 # change as needed
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_PWD=password # change as needed
@@ -150,26 +152,30 @@ We recommend to configure with environment variables.
 
 ### LDAP
 
-| Variable           | Description                                                                                            | Required |
-|--------------------|--------------------------------------------------------------------------------------------------------| -------- |
-| LDAP_DEBUG         | Enable LDAP debug logging (`true` / `false`)                                                           | No       |
-| LDAP_HOST          | Hostname of the LDAP server                                                                            | Yes      |
-| LDAP_PORT          | Port of the LDAP server (default: `389`)                                                               | Yes      |
-| LDAP_BASE_DN       | Base Distinguished Name for LDAP queries                                                               | Yes      |
-| LDAP_USER_OU_NAME  | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes      |
-| LDAP_GROUP_OU_NAME | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes      |
-| LDAP_BIND_DN       | Distinguished Name used to bind to the LDAP server                                                     | Yes      |
-| LDAP_BIND_PWD      | Password for the LDAP bind DN                                                                          | Yes      |
+| Variable           | Description                                                                                            | Required        |
+| ------------------ | ------------------------------------------------------------------------------------------------------ | --------------- |
+| LDAP_DEBUG         | Enable LDAP debug logging (`true` / `false`)                                                           | No              |
+| LDAP_HOST          | Hostname of the LDAP server                                                                            | Yes             |
+| LDAP_EXTERNAL_HOST | Externally reachable hostname or IP of the LDAP server, used by managed nodes (SSSD) to connect.       | No<sup>\*</sup> |
+| LDAP_PORT          | Port of the LDAP server (default: `389`)                                                               | Yes             |
+| LDAP_EXTERNAL_PORT | Externally reachable port of the LDAP server, used by managed nodes (SSSD) to connect.                 | No<sup>\*</sup> |
+| LDAP_BASE_DN       | Base Distinguished Name for LDAP queries                                                               | Yes             |
+| LDAP_USER_OU_NAME  | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes             |
+| LDAP_GROUP_OU_NAME | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes             |
+| LDAP_BIND_DN       | Distinguished Name used to bind to the LDAP server                                                     | Yes             |
+| LDAP_BIND_PWD      | Password for the LDAP bind DN                                                                          | Yes             |
+
+> \* Provision cluster feature will fallback using LDAP_HOST/LDAP_PORT if not supplied.
 
 ### Slurm
 
-| Variable                   | Description                                         | Required |
-|----------------------------|-----------------------------------------------------| -------- |
-| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service               | Yes      |
-| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service       | Yes      |
-| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node              | Yes      |
-| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`)  | Yes      |
-| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                  | Yes      |
+| Variable                   | Description                                        | Required |
+| -------------------------- | -------------------------------------------------- | -------- |
+| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service              | Yes      |
+| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service      | Yes      |
+| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node             | Yes      |
+| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
+| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                 | Yes      |
 
 **Slurm Token Helper** is a service that retrieves a Slurm JWT token for Slurm RESTful API access.
 
