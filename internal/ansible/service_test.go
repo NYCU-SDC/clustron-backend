@@ -47,19 +47,19 @@ func TestDuplicateServerField(t *testing.T) {
 
 func TestMapAllowedLoginGroupError(t *testing.T) {
 	serverID := uuid.New()
-	groupID := uuid.New()
+	ldapGroupID := uuid.New()
 	tests := []struct {
 		name       string
 		constraint string
 		wantValue  string
 	}{
 		{name: "server removed", constraint: "allowed_login_groups_server_id_fkey", wantValue: serverID.String()},
-		{name: "group removed", constraint: "allowed_login_groups_group_id_fkey", wantValue: groupID.String()},
+		{name: "LDAP group removed", constraint: "allowed_login_groups_ldap_group_id_fkey", wantValue: ldapGroupID.String()},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, groupID, zap.NewNop())
+			err := mapAllowedLoginGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, serverID, ldapGroupID, zap.NewNop())
 			if !errors.Is(err, handlerutil.ErrNotFound) {
 				t.Fatalf("mapAllowedLoginGroupError() error = %v, want ErrNotFound", err)
 			}
@@ -366,20 +366,20 @@ func TestHostVarsAnsibleUserYAML(t *testing.T) {
 
 func TestValidateAllowedLoginGroupTarget(t *testing.T) {
 	tests := []struct {
-		name     string
-		role     string
-		groupIDs []uuid.UUID
-		wantErr  error
+		name    string
+		role    string
+		groups  []AllowedLoginGroupSelection
+		wantErr error
 	}{
-		{name: "compute node with groups", role: computeNodeRole, groupIDs: []uuid.UUID{uuid.New()}},
-		{name: "compute node without groups", role: computeNodeRole, groupIDs: []uuid.UUID{}},
-		{name: "head node cleanup", role: headNodeRole, groupIDs: []uuid.UUID{}},
-		{name: "head node with groups", role: headNodeRole, groupIDs: []uuid.UUID{uuid.New()}, wantErr: internal.ErrAllowedLoginGroupsUnsupported},
+		{name: "compute node with groups", role: computeNodeRole, groups: []AllowedLoginGroupSelection{{GroupID: uuid.New(), Type: GroupTypeBASE}}},
+		{name: "compute node without groups", role: computeNodeRole, groups: []AllowedLoginGroupSelection{}},
+		{name: "head node cleanup", role: headNodeRole, groups: []AllowedLoginGroupSelection{}},
+		{name: "head node with groups", role: headNodeRole, groups: []AllowedLoginGroupSelection{{GroupID: uuid.New(), Type: GroupTypeADMIN}}, wantErr: internal.ErrAllowedLoginGroupsUnsupported},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateAllowedLoginGroupTarget(tt.role, tt.groupIDs)
+			err := validateAllowedLoginGroupTarget(tt.role, tt.groups)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("validateAllowedLoginGroupTarget() error = %v, want %v", err, tt.wantErr)
 			}
