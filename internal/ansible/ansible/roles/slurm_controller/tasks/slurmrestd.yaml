@@ -1,0 +1,21 @@
+- name: Create slurmrestd systemd override directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/slurmrestd.service.d
+    state: directory
+    mode: '0755'
+
+- name: Deploy slurmrestd systemd override
+  become: true
+  ansible.builtin.template:
+    src: slurmrestd-override.conf.j2
+    dest: /etc/systemd/system/slurmrestd.service.d/override.conf
+    mode: '0644'
+  notify: Restart Slurmrestd
+
+- name: Ensure slurmrestd is running and enabled
+  become: true
+  ansible.builtin.service:
+    name: slurmrestd
+    state: started
+    enabled: true
