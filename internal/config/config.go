@@ -236,16 +236,18 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		NYCUOauthClientID:       os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 		NYCUOauthClientSecret:   os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		LDAP: ldap.Config{
-			Debug:            os.Getenv("LDAP_DEBUG") == "true",
-			LDAPHost:         os.Getenv("LDAP_HOST"),
-			LDAPExternalHost: os.Getenv("LDAP_EXTERNAL_HOST"),
-			LDAPPort:         os.Getenv("LDAP_PORT"),
-			LDAPExternalPort: os.Getenv("LDAP_EXTERNAL_PORT"),
-			LDAPBaseDN:       os.Getenv("LDAP_BASE_DN"),
-			LDAPUserOUName:   os.Getenv("LDAP_USER_OU_NAME"),
-			LDAPGroupOUName:  os.Getenv("LDAP_GROUP_OU_NAME"),
-			LDAPBindDN:       os.Getenv("LDAP_BIND_DN"),
-			LDAPBindPwd:      os.Getenv("LDAP_BIND_PWD"),
+			Debug:              os.Getenv("LDAP_DEBUG") == "true",
+			LDAPHost:           os.Getenv("LDAP_HOST"),
+			LDAPExternalHost:   os.Getenv("LDAP_EXTERNAL_HOST"),
+			LDAPPort:           os.Getenv("LDAP_PORT"),
+			LDAPExternalPort:   os.Getenv("LDAP_EXTERNAL_PORT"),
+			LDAPExternalScheme: os.Getenv("LDAP_EXTERNAL_SCHEME"),
+			LDAPCACertFile:     os.Getenv("LDAP_CA_CERT_FILE"),
+			LDAPBaseDN:         os.Getenv("LDAP_BASE_DN"),
+			LDAPUserOUName:     os.Getenv("LDAP_USER_OU_NAME"),
+			LDAPGroupOUName:    os.Getenv("LDAP_GROUP_OU_NAME"),
+			LDAPBindDN:         os.Getenv("LDAP_BIND_DN"),
+			LDAPBindPwd:        os.Getenv("LDAP_BIND_PWD"),
 		},
 		EnableInternalLogin: os.Getenv("ENABLE_INTERNAL_LOGIN") == "true",
 	}
@@ -285,6 +287,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.LDAP.LDAPExternalHost, "ldap_external_host", "", "LDAP external host")
 	flag.StringVar(&flagConfig.LDAP.LDAPPort, "ldap_port", "", "LDAP port")
 	flag.StringVar(&flagConfig.LDAP.LDAPExternalPort, "ldap_external_port", "", "LDAP external port")
+	flag.StringVar(&flagConfig.LDAP.LDAPExternalScheme, "ldap_external_scheme", "", "LDAP external URI scheme (ldap or ldaps)")
+	flag.StringVar(&flagConfig.LDAP.LDAPCACertFile, "ldap_ca_cert_file", "", "CA certificate managed nodes use to verify the LDAP server")
 	flag.StringVar(&flagConfig.LDAP.LDAPBaseDN, "ldap_base_dn", "", "LDAP base DN")
 	flag.StringVar(&flagConfig.LDAP.LDAPUserOUName, "ldap_user_ou_name", "", "LDAP user DN")
 	flag.StringVar(&flagConfig.LDAP.LDAPGroupOUName, "ldap_group_ou_name", "", "LDAP group DN")

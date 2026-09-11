@@ -1,6 +1,31 @@
+- name: Wait for dpkg/apt lock to be released
+  become: true
+  ansible.builtin.shell: |
+    command -v fuser >/dev/null 2>&1 || { echo "fuser not available, skipping lock wait" >&2; exit 0; }
+    end=$(( $(date +%s) + 600 ))
+    waited=0
+    while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; do
+      if [ "$(date +%s)" -ge "$end" ]; then
+        echo "timed out after ${waited}s waiting for the apt/dpkg lock" >&2
+        exit 1
+      fi
+      sleep 5
+      waited=$(( waited + 5 ))
+    done
+    [ "$waited" -gt 0 ] && echo "waited ${waited}s for the apt/dpkg lock to be released"
+    exit 0
+  register: common_apt_lock_wait
+  changed_when: false
+
+- name: Report how long we waited for the apt/dpkg lock
+  ansible.builtin.debug:
+    msg: "{{ common_apt_lock_wait.stdout }}"
+  when: common_apt_lock_wait.stdout | length > 0
+
 - name: Update apt cache
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     update_cache: true
     cache_valid_time: 3600
 

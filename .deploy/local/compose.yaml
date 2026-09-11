@@ -29,11 +29,21 @@ services:
       LDAP_ADMIN_PASSWORD: "password"
       LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
       KEEP_EXISTING_CONFIG: "false"
+      # slapd serves 389 and 636 from the same process; osixia demands a
+      # client certificate by default, which SSSD does not present.
+      LDAP_TLS_VERIFY_CLIENT: "try"
+      # Signed by scripts/create_ldap_certs.sh. If ./certs is empty the image
+      # falls back to generating its own self-signed pair under these names.
+      LDAP_TLS_CRT_FILENAME: "ldap.crt"
+      LDAP_TLS_KEY_FILENAME: "ldap.key"
+      LDAP_TLS_CA_CRT_FILENAME: "ca.crt"
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
+      - ./certs:/container/service/slapd/assets/certs
     command: --copy-service --loglevel debug
     ports:
       - "389:389"
+      - "636:636"
 
   redis:
     image: redis:8.6.4

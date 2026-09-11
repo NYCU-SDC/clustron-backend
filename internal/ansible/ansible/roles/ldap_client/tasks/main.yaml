@@ -1,6 +1,7 @@
 - name: Install SSSD and required dependencies
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name:
       - sssd
       - sssd-ldap
@@ -19,6 +20,34 @@
     regexp: '^((passwd|group|shadow|netgroup|services):.*(?<!\ssss))$'
     replace: '\1 sss'
     backup: true
+
+- name: Install the LDAP CA certificate
+  become: true
+  tags: [sssd]
+  when: ldap_tls_cacert_src is defined and ldap_tls_cacert_src | length > 0
+  ansible.builtin.copy:
+    src: "{{ ldap_tls_cacert_src }}"
+    dest: /usr/local/share/ca-certificates/clustron-ldap-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  register: ldap_client_ca_cert
+  notify: Restart SSSD
+
+- name: Refresh the system CA bundle
+  become: true
+  tags: [sssd]
+  when: ldap_client_ca_cert is changed
+  ansible.builtin.command: update-ca-certificates
+  changed_when: true
+
+# Only set when a CA is available; otherwise the template leaves SSSD on
+# ldap_tls_reqcert = allow, which encrypts without verifying the server.
+- name: Point SSSD at the installed CA certificate
+  tags: [sssd]
+  when: ldap_tls_cacert_src is defined and ldap_tls_cacert_src | length > 0
+  ansible.builtin.set_fact:
+    ldap_tls_cacert: /usr/local/share/ca-certificates/clustron-ldap-ca.crt
 
 - name: Create SSSD config file from template
   become: true
@@ -49,6 +78,25 @@
       AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys
       AuthorizedKeysCommandUser root
   notify: Restart SSH
+
+- name: Enable password authentication for LDAP users
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-clustron-auth.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # ANSIBLE MANAGED - clustron ldap_client role
+      PasswordAuthentication yes
+      KbdInteractiveAuthentication no
+      UsePAM yes
+  notify: Restart SSH
+
+- name: Validate sshd configuration
+  become: true
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
 
 - name: Ensure SSSD is running and enabled on boot
   become: true

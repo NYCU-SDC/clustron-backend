@@ -102,7 +102,8 @@ services:
       - LDAP_HOST=ldap # change as needed
       - LDAP_EXTERNAL_HOST=ldap.example.com # change as needed
       - LDAP_PORT=389 # change as needed
-      - LDAP_EXTERNAL_PORT=389 # change as needed
+      - LDAP_EXTERNAL_PORT=636 # change as needed
+      - LDAP_EXTERNAL_SCHEME=ldaps # recommended, or password login could be broken
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_PWD=password # change as needed
@@ -152,20 +153,61 @@ We recommend to configure with environment variables.
 
 ### LDAP
 
-| Variable           | Description                                                                                            | Required        |
-| ------------------ | ------------------------------------------------------------------------------------------------------ | --------------- |
-| LDAP_DEBUG         | Enable LDAP debug logging (`true` / `false`)                                                           | No              |
-| LDAP_HOST          | Hostname of the LDAP server                                                                            | Yes             |
-| LDAP_EXTERNAL_HOST | Externally reachable hostname or IP of the LDAP server, used by managed nodes (SSSD) to connect.       | No<sup>\*</sup> |
-| LDAP_PORT          | Port of the LDAP server (default: `389`)                                                               | Yes             |
-| LDAP_EXTERNAL_PORT | Externally reachable port of the LDAP server, used by managed nodes (SSSD) to connect.                 | No<sup>\*</sup> |
-| LDAP_BASE_DN       | Base Distinguished Name for LDAP queries                                                               | Yes             |
-| LDAP_USER_OU_NAME  | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes             |
-| LDAP_GROUP_OU_NAME | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes             |
-| LDAP_BIND_DN       | Distinguished Name used to bind to the LDAP server                                                     | Yes             |
-| LDAP_BIND_PWD      | Password for the LDAP bind DN                                                                          | Yes             |
+| Variable             | Description                                                                                            | Required        |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | --------------- |
+| LDAP_DEBUG           | Enable LDAP debug logging (`true` / `false`)                                                           | No              |
+| LDAP_HOST            | Hostname of the LDAP server                                                                            | Yes             |
+| LDAP_EXTERNAL_HOST   | Externally reachable hostname or IP of the LDAP server, used by managed nodes (SSSD) to connect.       | No<sup>\*</sup> |
+| LDAP_PORT            | Port of the LDAP server (default: `389`)                                                               | Yes             |
+| LDAP_EXTERNAL_PORT   | Externally reachable port of the LDAP server, used by managed nodes (SSSD) to connect.                 | No<sup>\*</sup> |
+| LDAP_EXTERNAL_SCHEME | URI scheme managed nodes (SSSD) use to reach LDAP: `ldaps` (default) or `ldap`.                        | No<sup>\*</sup> |
+| LDAP_BASE_DN         | Base Distinguished Name for LDAP queries                                                               | Yes             |
+| LDAP_USER_OU_NAME    | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes             |
+| LDAP_GROUP_OU_NAME   | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes             |
+| LDAP_BIND_DN         | Distinguished Name used to bind to the LDAP server                                                     | Yes             |
+| LDAP_BIND_PWD        | Password for the LDAP bind DN                                                                          | Yes             |
+| LDAP_CA_CERT_FILE    | CA certificate the backend hands to managed nodes so they can verify the LDAP server.                  | No              |
 
-> \* Provision cluster feature will fallback using LDAP_HOST/LDAP_PORT if not supplied.
+> \* Provision cluster feature will fallback using LDAP_HOST if not supplied.
+> When LDAP_EXTERNAL_SCHEME is `ldaps` (the default), the external ldap port falls back to `636`, else it will fallback to LDAP_PORT.
+
+The same `slapd` serves both schemes, so the backend can keep talking plain `ldap://` over the
+internal network while managed nodes use `ldaps://`. Two things the LDAP server must provide:
+port `636` has to be reachable from the nodes, and — with the `osixia/openldap` image —
+`LDAP_TLS_VERIFY_CLIENT` must be set to `try`, because its default (`demand`) asks SSSD for a
+client certificate that SSSD does not have.
+
+#### TLS certificates
+
+Without `LDAP_CA_CERT_FILE`, nodes run with `ldap_tls_reqcert = allow`: the connection is
+encrypted, but the server is not authenticated, so a machine in the path can impersonate it.
+Point that variable at a CA and the node provisioning installs it and switches SSSD to
+`ldap_tls_reqcert = demand`.
+
+The image generates a self-signed certificate on first start, but its name is the container's,
+while nodes usually dial an IP. Verification needs a certificate that actually covers the address
+in `LDAP_EXTERNAL_HOST`, which `scripts/create_ldap_certs.sh` signs:
+
+```bash
+# Every name or address nodes use to reach LDAP has to be listed.
+./scripts/create_ldap_certs.sh .deploy/stage/certs ldap ldap.example.com 10.1.253.28
+```
+
+`make gen_ldaps_ca` wraps the same script, defaulting to `.deploy/local/certs` with the SANs
+`ldap localhost`. Override `LDAP_CERT_DIR` and `LDAP_CERT_SANS` to sign for another environment:
+
+```bash
+make gen_ldaps_ca LDAP_CERT_DIR=.deploy/stage/certs LDAP_CERT_SANS="ldap ldap.example.com 10.1.253.28"
+```
+
+It writes `ca.crt`, `ca.key`, `ldap.crt` and `ldap.key` into `.deploy/<env>/certs/`, which is
+mounted into both containers: the LDAP server serves `ldap.crt`, and the backend reads `ca.crt`
+to hand to the nodes. After generating them, uncomment `LDAP_CA_CERT_FILE` in the compose file
+and re-run the cluster setup — the SSSD role installs the CA into the node's trust store at
+`/usr/local/share/ca-certificates/clustron-ldap-ca.crt`.
+
+Regenerating certificates replaces the server identity, so nodes that still trust the previous CA
+will refuse to connect until the setup runs again.
 
 ### Slurm
 
