@@ -6,7 +6,21 @@ import (
 	"testing"
 
 	results "github.com/apenella/go-ansible/v2/pkg/execute/result/json"
+	"github.com/google/uuid"
 )
+
+func TestDiscoveryTargets(t *testing.T) {
+	okCompute := Server{ID: uuid.New(), AnsibleName: "node01", AnsibleRole: computeNodeRole}
+	failedCompute := Server{ID: uuid.New(), AnsibleName: "node02", AnsibleRole: computeNodeRole}
+	okHead := Server{ID: uuid.New(), AnsibleName: "head", AnsibleRole: headNodeRole}
+	successful := map[uuid.UUID]bool{okCompute.ID: true, failedCompute.ID: false, okHead.ID: true}
+
+	got := discoveryTargets([]Server{okCompute, failedCompute, okHead}, successful)
+
+	if len(got) != 1 || got[0].ID != okCompute.ID {
+		t.Fatalf("discoveryTargets() = %v, want only node01", got)
+	}
+}
 
 func TestParseGetentGroup(t *testing.T) {
 	output := "root:x:0:\ndocker:x:999:alice,bob\nbroken\nbad:x:notanumber:\ndocker:x:998:\n\n"
