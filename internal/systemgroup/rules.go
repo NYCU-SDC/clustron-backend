@@ -13,8 +13,11 @@ import (
 // MaxSystemGID is the highest gid treated as a system group; higher gids are user private groups.
 const MaxSystemGID = 999
 
-// DefaultDenylist applies when system_group_denylist is not configured.
-var DefaultDenylist = []string{"root", "sudo", "admin", "wheel", "adm", "shadow", "disk", "kmem", "sys", "staff"}
+// DefaultDenylist is always applied; system_group_denylist only adds to it.
+var DefaultDenylist = []string{
+	"root", "sudo", "admin", "wheel", "adm", "shadow", "disk", "kmem", "sys", "staff",
+	"lxd", "libvirt", "systemd-journal", "tty",
+}
 
 var namePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 
@@ -49,14 +52,17 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// NewDenylist builds the denylist set, falling back to DefaultDenylist when names is empty.
+// NewDenylist builds the denylist set: DefaultDenylist plus the configured names,
+// trimmed, with empty entries ignored.
 func NewDenylist(names []string) map[string]struct{} {
-	if len(names) == 0 {
-		names = DefaultDenylist
-	}
-	set := make(map[string]struct{}, len(names))
-	for _, name := range names {
+	set := make(map[string]struct{}, len(DefaultDenylist)+len(names))
+	for _, name := range DefaultDenylist {
 		set[name] = struct{}{}
+	}
+	for _, name := range names {
+		if name = strings.TrimSpace(name); name != "" {
+			set[name] = struct{}{}
+		}
 	}
 	return set
 }

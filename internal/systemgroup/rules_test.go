@@ -20,11 +20,27 @@ func TestValidateName(t *testing.T) {
 	}
 }
 
-func TestNewDenylistDefaultsWhenEmpty(t *testing.T) {
-	assert.Contains(t, systemgroup.NewDenylist(nil), "sudo")
-	custom := systemgroup.NewDenylist([]string{"docker"})
-	assert.Contains(t, custom, "docker")
-	assert.NotContains(t, custom, "sudo")
+func TestNewDenylist_DefaultsIncludeRootEquivalentGroups(t *testing.T) {
+	denylist := systemgroup.NewDenylist(nil)
+
+	for _, name := range []string{"root", "sudo", "wheel", "shadow", "disk", "lxd", "libvirt", "systemd-journal", "tty"} {
+		assert.Contains(t, denylist, name)
+	}
+}
+
+func TestNewDenylist_ConfiguredNamesExtendDefaults(t *testing.T) {
+	denylist := systemgroup.NewDenylist([]string{"docker"})
+
+	assert.Contains(t, denylist, "docker")
+	assert.Contains(t, denylist, "sudo", "configuring a denylist must not drop the defaults")
+}
+
+func TestNewDenylist_TrimsEntries(t *testing.T) {
+	denylist := systemgroup.NewDenylist([]string{" render ", "", "  "})
+
+	assert.Contains(t, denylist, "render")
+	assert.NotContains(t, denylist, " render ")
+	assert.NotContains(t, denylist, "")
 }
 
 var discovered = []ansible.LocalGroup{

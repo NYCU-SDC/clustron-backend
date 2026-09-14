@@ -29,7 +29,8 @@ linux_username_blacklist:
   - blacklist1
   - blacklist2
 # Server-local group names that can never be registered as system groups.
-# Empty uses the built-in default: root, sudo, admin, wheel, adm, shadow, disk, kmem, sys, staff
+# Always added to the built-in list: root, sudo, admin, wheel, adm, shadow, disk, kmem, sys, staff,
+# lxd, libvirt, systemd-journal, tty
 system_group_denylist: []
 ldap:
   ldap_debug: true
