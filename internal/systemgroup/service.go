@@ -13,8 +13,8 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -28,19 +28,28 @@ type LDAPClient interface {
 	RemoveUserFromGroup(groupName string, memberUid string) error
 }
 
+//mockery:generate: true
 type SettingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
+//mockery:generate: true
 type LocalGroupStore interface {
 	ListLocalGroups(ctx context.Context) ([]ansible.LocalGroup, error)
 	DiscoverLocalGroupsInBackground(ctx context.Context)
 }
 
+// DB is what the service needs from *pgxpool.Pool. pgx.Tx satisfies it too, so
+// integration tests can run the service inside a rolled-back transaction.
+type DB interface {
+	DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 type Service struct {
 	logger          *zap.Logger
 	tracer          trace.Tracer
-	db              *pgxpool.Pool
+	db              DB
 	queries         *Queries
 	ldapClient      LDAPClient
 	settingStore    SettingStore
@@ -48,7 +57,7 @@ type Service struct {
 	denylist        map[string]struct{}
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, ldapClient LDAPClient, settingStore SettingStore, localGroupStore LocalGroupStore, denylist []string) *Service {
+func NewService(logger *zap.Logger, db DB, ldapClient LDAPClient, settingStore SettingStore, localGroupStore LocalGroupStore, denylist []string) *Service {
 	return &Service{
 		logger:          logger,
 		tracer:          otel.Tracer("systemgroup/service"),
@@ -186,7 +195,11 @@ func (s *Service) AddMember(ctx context.Context, id, userID uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, uid, err := s.groupAndUID(traceCtx, id, userID)
+	group, err := s.queries.GetByID(traceCtx, id)
+	if err != nil {
+		return databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
+	}
+	uid, err := s.lookupUID(traceCtx, userID)
 	if err != nil {
 		return err
 	}
@@ -216,9 +229,9 @@ func (s *Service) RemoveMember(ctx context.Context, id, userID uuid.UUID) error 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, uid, err := s.groupAndUID(traceCtx, id, userID)
+	group, err := s.queries.GetByID(traceCtx, id)
 	if err != nil {
-		return err
+		return databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
 	}
 
 	tx, err := s.db.Begin(traceCtx)
@@ -236,7 +249,16 @@ func (s *Service) RemoveMember(ctx context.Context, id, userID uuid.UUID) error 
 	}
 
 	saga := internal.NewSaga(logger)
-	saga.AddStep(RemoveLDAPMemberStep(s.ldapClient, group.Name, uid))
+	uid, err := s.lookupUID(traceCtx, userID)
+	switch {
+	case errors.Is(err, internal.ErrUserHasNoLDAPAccount):
+		// Without an LDAP account there is no memberUid left to remove.
+		logger.Warn("system group member has no LDAP account, removing membership row only", zap.String("user_id", userID.String()))
+	case err != nil:
+		return err
+	default:
+		saga.AddStep(RemoveLDAPMemberStep(s.ldapClient, group.Name, uid))
+	}
 	saga.AddStep(commitStep(tx))
 	if err = saga.Execute(traceCtx); err != nil {
 		span.RecordError(err)
@@ -245,21 +267,16 @@ func (s *Service) RemoveMember(ctx context.Context, id, userID uuid.UUID) error 
 	return nil
 }
 
-// groupAndUID loads the system group and the user's LDAP uid. A user without an
-// LDAP account (including an unknown user id) yields ErrUserHasNoLDAPAccount.
-func (s *Service) groupAndUID(ctx context.Context, id, userID uuid.UUID) (SystemGroup, string, error) {
-	logger := logutil.WithContext(ctx, s.logger)
-
-	group, err := s.queries.GetByID(ctx, id)
-	if err != nil {
-		return SystemGroup{}, "", databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
-	}
+// lookupUID returns the user's LDAP uid. A user without an LDAP account (no
+// ldap_user row, a missing LDAP entry, or an unknown user id) yields
+// ErrUserHasNoLDAPAccount.
+func (s *Service) lookupUID(ctx context.Context, userID uuid.UUID) (string, error) {
 	info, err := s.settingStore.GetLDAPUserInfoByUserID(ctx, userID)
-	if errors.Is(err, handlerutil.ErrNotFound) {
-		return SystemGroup{}, "", internal.ErrUserHasNoLDAPAccount
+	if errors.Is(err, handlerutil.ErrNotFound) || errors.Is(err, ldap.ErrUserNotFound) {
+		return "", internal.ErrUserHasNoLDAPAccount
 	}
 	if err != nil {
-		return SystemGroup{}, "", err
+		return "", err
 	}
-	return group, info.Username, nil
+	return info.Username, nil
 }
