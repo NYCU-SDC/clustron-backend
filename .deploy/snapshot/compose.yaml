@@ -41,14 +41,9 @@ services:
       - LDAP_USER_OU_NAME=People
       - LDAP_GROUP_OU_NAME=Groups
       - LDAP_BIND_PWD=password
-      # Uncomment once ./certs holds a CA that covers the address nodes dial;
-      # managed nodes then verify the LDAP server instead of trusting any cert.
-      # - LDAP_CA_CERT_FILE=/app/certs/ca.crt
       - OTEL_COLLECTOR_URL=10.140.0.3:4317
       - REDIS_URL=redis:6379
       - PRESET_USER=Wwp7InVzZXIiOiJreWxlOTQxMDEwQGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiJiZW5kb3JpczA1MDlAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJoMjM3azc3Nzc3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFubmllMTA3MzEzMDNAZ21haWwuY29tIiwgInJvbGUiOiJhZG1pbiJ9LAp7InVzZXIiOiAiMXA0MXA0amVqb0BnbWFpbC5jb20iLCAicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJueWFuMjIyNzI3QGdtYWlsLmNvbSIsICJyb2xlIjoiYWRtaW4ifSwKeyJ1c2VyIjogImFuMTEyNTUwMDA3LmNzMTJAbnljdS5lZHUudHciLCAicm9sZSI6ImFkbWluIn0sCnsidXNlciI6ICJrb3Jlbi5saW5AZ2FwcC5udGh1LmVkdS50dyIsICJyb2xlIjoiYWRtaW4ifQpd
-    volumes:
-      - ./certs:/app/certs:ro
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
@@ -87,20 +82,9 @@ services:
       LDAP_ADMIN_PASSWORD: "password"
       LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
       KEEP_EXISTING_CONFIG: "false"
-      # slapd serves 389 and 636 from the same process; osixia demands a
-      # client certificate by default, which SSSD does not present.
-      LDAP_TLS_VERIFY_CLIENT: "try"
-      # Signed by scripts/create_ldap_certs.sh. If ./certs is empty the image
-      # falls back to generating its own self-signed pair under these names.
-      LDAP_TLS_CRT_FILENAME: "ldap.crt"
-      LDAP_TLS_KEY_FILENAME: "ldap.key"
-      LDAP_TLS_CA_CRT_FILENAME: "ca.crt"
     volumes:
       - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
-      - ./certs:/container/service/slapd/assets/certs
     command: --copy-service --loglevel debug
-    ports:
-      - "636:636"
     networks:
       - internal
 
