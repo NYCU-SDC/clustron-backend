@@ -16,8 +16,18 @@
   become: true
   ansible.builtin.replace:
     path: /etc/nsswitch.conf
-    regexp: '^((passwd|group|shadow|netgroup|services):.*(?<!\ssss))$'
+    regexp: '^((passwd|shadow|netgroup|services):.*(?<!\ssss))$'
     replace: '\1 sss'
+    backup: true
+
+# sss must directly follow the merge action; otherwise the merge happens with
+# systemd and LDAP members of same-gid system groups are not listed.
+- name: Merge local and SSSD group entries in nsswitch.conf
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^group:'
+    line: 'group:          files [SUCCESS=merge] sss systemd'
     backup: true
 
 - name: Create SSSD config file from template
