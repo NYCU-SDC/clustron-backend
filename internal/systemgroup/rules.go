@@ -1,8 +1,10 @@
 package systemgroup
 
 import (
+	"cmp"
 	"regexp"
 	"slices"
+	"strings"
 
 	"clustron-backend/internal"
 	"clustron-backend/internal/ansible"
@@ -22,6 +24,13 @@ type GIDServers struct {
 	Servers   []string
 }
 
+// GIDConflict is a different local group using one of a candidate's gids on a compute node.
+type GIDConflict struct {
+	Server    string
+	Name      string
+	GIDNumber int64
+}
+
 // Candidate is a discovered local group that may be registered as a system group.
 type Candidate struct {
 	Name           string
@@ -29,6 +38,7 @@ type Candidate struct {
 	GIDNumber      int64 // set only when Consistent
 	GIDs           []GIDServers
 	MissingServers []string
+	Conflicts      []GIDConflict // nil when no other group shares the gid
 	Registered     bool
 }
 
@@ -73,6 +83,24 @@ func isDenied(name string, gids map[int64][]string, denylist map[string]struct{}
 		}
 	}
 	return false
+}
+
+// gidConflicts lists local groups with a different name that use one of gids on
+// any compute node, sorted by server then name.
+func gidConflicts(groups []ansible.LocalGroup, name string, gids map[int64][]string) []GIDConflict {
+	var conflicts []GIDConflict
+	for _, group := range groups {
+		if group.Name == name {
+			continue
+		}
+		if _, ok := gids[group.GIDNumber]; ok {
+			conflicts = append(conflicts, GIDConflict{Server: group.ServerName, Name: group.Name, GIDNumber: group.GIDNumber})
+		}
+	}
+	slices.SortFunc(conflicts, func(a, b GIDConflict) int {
+		return cmp.Or(strings.Compare(a.Server, b.Server), strings.Compare(a.Name, b.Name))
+	})
+	return conflicts
 }
 
 // BuildCandidates returns registrable local groups sorted by name.
@@ -121,6 +149,7 @@ func BuildCandidates(groups []ansible.LocalGroup, denylist, registered map[strin
 			}
 		}
 		slices.Sort(candidate.MissingServers)
+		candidate.Conflicts = gidConflicts(groups, name, gids)
 
 		candidates = append(candidates, candidate)
 	}
@@ -144,6 +173,13 @@ func ResolveGID(groups []ansible.LocalGroup, name string, denylist map[string]st
 			slices.Sort(gids[gid])
 		}
 		return 0, internal.ErrSystemGroupGIDInconsistent{Name: name, GIDs: gids}
+	}
+	if conflicts := gidConflicts(groups, name, gids); len(conflicts) > 0 {
+		usedBy := make(map[string]string, len(conflicts))
+		for _, c := range conflicts {
+			usedBy[c.Server] = c.Name
+		}
+		return 0, internal.ErrSystemGroupGIDConflict{Name: name, GIDNumber: conflicts[0].GIDNumber, UsedBy: usedBy}
 	}
 	for gid := range gids {
 		return gid, nil

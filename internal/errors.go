@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -109,6 +110,23 @@ func (e ErrSystemGroupGIDInconsistent) Error() string {
 	return fmt.Sprintf("group %q has different gids across compute nodes: %s", e.Name, strings.Join(parts, "; "))
 }
 
+// ErrSystemGroupGIDConflict reports a gid that a different local group uses on some
+// compute node; registering it would grant that other group there.
+type ErrSystemGroupGIDConflict struct {
+	Name      string
+	GIDNumber int64
+	UsedBy    map[string]string // server -> other group name
+}
+
+func (e ErrSystemGroupGIDConflict) Error() string {
+	servers := slices.Sorted(maps.Keys(e.UsedBy))
+	parts := make([]string, len(servers))
+	for i, server := range servers {
+		parts[i] = fmt.Sprintf("%s on %s", e.UsedBy[server], server)
+	}
+	return fmt.Sprintf("gid %d of group %q is used by another group: %s", e.GIDNumber, e.Name, strings.Join(parts, ", "))
+}
+
 func NewProblemWriter() *problem.HttpWriter {
 	return problem.NewWithMapping(ErrorHandler)
 }
@@ -190,6 +208,8 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrUserHasNoLDAPAccount):
 		return problem.NewBadRequestProblem(err.Error())
 	case errors.As(err, &ErrSystemGroupGIDInconsistent{}):
+		return NewConflictProblem(err.Error())
+	case errors.As(err, &ErrSystemGroupGIDConflict{}):
 		return NewConflictProblem(err.Error())
 	// LDAP Client Errors
 	case errors.Is(err, ldap.ErrGIDNumberInUse):

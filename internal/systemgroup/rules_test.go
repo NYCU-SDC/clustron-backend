@@ -85,3 +85,30 @@ func TestResolveGID(t *testing.T) {
 	require.ErrorAs(t, err, &inconsistent)
 	assert.Equal(t, map[int64][]string{44: {"node01"}, 45: {"node02"}}, inconsistent.GIDs)
 }
+
+// A node without the group may use the same gid for a different local group;
+// the LDAP group would silently grant that other group there.
+var gidReusedByOtherName = []ansible.LocalGroup{
+	{ServerName: "gpu01", Name: "docker", GIDNumber: 999},
+	{ServerName: "cpu01", Name: "video", GIDNumber: 999},
+}
+
+func TestResolveGID_RejectsGIDUsedByAnotherName(t *testing.T) {
+	_, err := systemgroup.ResolveGID(gidReusedByOtherName, "docker", systemgroup.NewDenylist(nil))
+
+	var conflict internal.ErrSystemGroupGIDConflict
+	require.ErrorAs(t, err, &conflict)
+	assert.Equal(t, "docker", conflict.Name)
+	assert.Equal(t, int64(999), conflict.GIDNumber)
+	assert.Equal(t, map[string]string{"cpu01": "video"}, conflict.UsedBy)
+}
+
+func TestBuildCandidates_ReportsGIDConflicts(t *testing.T) {
+	got := systemgroup.BuildCandidates(gidReusedByOtherName, systemgroup.NewDenylist(nil), map[string]struct{}{})
+
+	require.Len(t, got, 2)
+	assert.Equal(t, "docker", got[0].Name)
+	assert.Equal(t, []systemgroup.GIDConflict{{Server: "cpu01", Name: "video", GIDNumber: 999}}, got[0].Conflicts)
+	assert.Equal(t, "video", got[1].Name)
+	assert.Equal(t, []systemgroup.GIDConflict{{Server: "gpu01", Name: "docker", GIDNumber: 999}}, got[1].Conflicts)
+}

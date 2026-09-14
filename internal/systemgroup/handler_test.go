@@ -153,6 +153,7 @@ func TestHandler_ListCandidatesHandler(t *testing.T) {
 		Name: "docker", Consistent: true, GIDNumber: 999,
 		GIDs:           []systemgroup.GIDServers{{GIDNumber: 999, Servers: []string{"node01"}}},
 		MissingServers: []string{},
+		Conflicts:      []systemgroup.GIDConflict{{Server: "cpu01", Name: "systemd-journal", GIDNumber: 999}},
 	}}, nil)
 	w := httptest.NewRecorder()
 
@@ -165,4 +166,5 @@ func TestHandler_ListCandidatesHandler(t *testing.T) {
 	assert.Equal(t, "docker", got[0]["name"])
 	assert.Equal(t, float64(999), got[0]["gidNumber"])
 	assert.Equal(t, []any{}, got[0]["missingServers"])
+	assert.Equal(t, []any{map[string]any{"server": "cpu01", "name": "systemd-journal", "gidNumber": float64(999)}}, got[0]["conflicts"])
 }

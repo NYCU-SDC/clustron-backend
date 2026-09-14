@@ -17,6 +17,7 @@ func TestErrorHandlerSystemGroupErrors(t *testing.T) {
 		{"not discovered", ErrSystemGroupNotDiscovered, http.StatusNotFound},
 		{"no ldap account", ErrUserHasNoLDAPAccount, http.StatusBadRequest},
 		{"inconsistent gid", ErrSystemGroupGIDInconsistent{Name: "video", GIDs: map[int64][]string{44: {"node01"}, 45: {"node02"}}}, http.StatusConflict},
+		{"gid used by another group", ErrSystemGroupGIDConflict{Name: "docker", GIDNumber: 999, UsedBy: map[string]string{"cpu01": "systemd-journal"}}, http.StatusConflict},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

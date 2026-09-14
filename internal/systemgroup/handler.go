@@ -41,13 +41,20 @@ type GIDServersResponse struct {
 	Servers   []string `json:"servers"`
 }
 
+type GIDConflictResponse struct {
+	Server    string `json:"server"`
+	Name      string `json:"name"`
+	GIDNumber int64  `json:"gidNumber"`
+}
+
 type CandidateResponse struct {
-	Name           string               `json:"name"`
-	Consistent     bool                 `json:"consistent"`
-	GIDNumber      *int64               `json:"gidNumber,omitempty"`
-	GIDs           []GIDServersResponse `json:"gids"`
-	MissingServers []string             `json:"missingServers"`
-	Registered     bool                 `json:"registered"`
+	Name           string                `json:"name"`
+	Consistent     bool                  `json:"consistent"`
+	GIDNumber      *int64                `json:"gidNumber,omitempty"`
+	GIDs           []GIDServersResponse  `json:"gids"`
+	MissingServers []string              `json:"missingServers"`
+	Conflicts      []GIDConflictResponse `json:"conflicts"`
+	Registered     bool                  `json:"registered"`
 }
 
 type SystemGroupResponse struct {
@@ -100,11 +107,16 @@ func (h *Handler) ListCandidatesHandler(w http.ResponseWriter, r *http.Request) 
 		for j, g := range c.GIDs {
 			gids[j] = GIDServersResponse(g)
 		}
+		conflicts := make([]GIDConflictResponse, len(c.Conflicts))
+		for j, conflict := range c.Conflicts {
+			conflicts[j] = GIDConflictResponse(conflict)
+		}
 		responses[i] = CandidateResponse{
 			Name:           c.Name,
 			Consistent:     c.Consistent,
 			GIDs:           gids,
 			MissingServers: c.MissingServers,
+			Conflicts:      conflicts,
 			Registered:     c.Registered,
 		}
 		if c.Consistent {
