@@ -7,8 +7,6 @@ import (
 
 	"clustron-backend/internal"
 	"clustron-backend/internal/ldap"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // CreateLDAPGroupStep creates the same-name, same-gid LDAP posixGroup.
@@ -80,17 +78,6 @@ func RemoveLDAPMemberStep(client LDAPClient, groupName, uid string) internal.Sag
 				return nil
 			}
 			return err
-		},
-	}
-}
-
-// commitStep commits tx as the final saga step, so a failed commit compensates
-// the LDAP steps before it.
-func commitStep(tx pgx.Tx) internal.SagaStep {
-	return internal.SagaStep{
-		Name: "CommitTransaction",
-		Action: func(ctx context.Context) error {
-			return tx.Commit(ctx)
 		},
 	}
 }

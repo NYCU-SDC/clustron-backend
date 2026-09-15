@@ -13,12 +13,23 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+//mockery:generate: true
+type Querier interface {
+	Create(ctx context.Context, arg CreateParams) (SystemGroup, error)
+	GetByID(ctx context.Context, id uuid.UUID) (SystemGroup, error)
+	ListAll(ctx context.Context) ([]SystemGroup, error)
+	ListNames(ctx context.Context) ([]string, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	AddMember(ctx context.Context, arg AddMemberParams) error
+	RemoveMember(ctx context.Context, arg RemoveMemberParams) (int64, error)
+	ListMembers(ctx context.Context, systemGroupID uuid.UUID) ([]ListMembersRow, error)
+}
 
 //mockery:generate: true
 type LDAPClient interface {
@@ -39,30 +50,21 @@ type LocalGroupStore interface {
 	DiscoverLocalGroupsInBackground(ctx context.Context)
 }
 
-// DB is what the service needs from *pgxpool.Pool. pgx.Tx satisfies it too, so
-// integration tests can run the service inside a rolled-back transaction.
-type DB interface {
-	DBTX
-	Begin(ctx context.Context) (pgx.Tx, error)
-}
-
 type Service struct {
 	logger          *zap.Logger
 	tracer          trace.Tracer
-	db              DB
-	queries         *Queries
+	query           Querier
 	ldapClient      LDAPClient
 	settingStore    SettingStore
 	localGroupStore LocalGroupStore
 	denylist        map[string]struct{}
 }
 
-func NewService(logger *zap.Logger, db DB, ldapClient LDAPClient, settingStore SettingStore, localGroupStore LocalGroupStore, denylist []string) *Service {
+func NewService(logger *zap.Logger, querier Querier, ldapClient LDAPClient, settingStore SettingStore, localGroupStore LocalGroupStore, denylist []string) *Service {
 	return &Service{
 		logger:          logger,
 		tracer:          otel.Tracer("systemgroup/service"),
-		db:              db,
-		queries:         New(db),
+		query:           querier,
 		ldapClient:      ldapClient,
 		settingStore:    settingStore,
 		localGroupStore: localGroupStore,
@@ -80,7 +82,7 @@ func (s *Service) ListCandidates(ctx context.Context) ([]Candidate, error) {
 		span.RecordError(err)
 		return nil, err
 	}
-	names, err := s.queries.ListNames(traceCtx)
+	names, err := s.query.ListNames(traceCtx)
 	if err != nil {
 		return nil, databaseutil.WrapDBError(err, logger, "list system group names")
 	}
@@ -95,6 +97,8 @@ func (s *Service) Discover(ctx context.Context) {
 	s.localGroupStore.DiscoverLocalGroupsInBackground(ctx)
 }
 
+// Register creates the LDAP group first and inserts the row as the last saga
+// step, so a failed insert deletes the LDAP group again.
 func (s *Service) Register(ctx context.Context, name, description string) (SystemGroup, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Register")
 	defer span.End()
@@ -113,24 +117,23 @@ func (s *Service) Register(ctx context.Context, name, description string) (Syste
 		return SystemGroup{}, err
 	}
 
-	tx, err := s.db.Begin(traceCtx)
-	if err != nil {
-		return SystemGroup{}, databaseutil.WrapDBError(err, logger, "begin tx for register system group")
-	}
-	defer func() { _ = tx.Rollback(traceCtx) }()
-
-	created, err := s.queries.WithTx(tx).Create(traceCtx, CreateParams{
-		Name:        name,
-		GidNumber:   gid,
-		Description: pgtype.Text{String: description, Valid: description != ""},
-	})
-	if err != nil {
-		return SystemGroup{}, databaseutil.WrapDBError(err, logger, "create system group")
-	}
-
+	var created SystemGroup
 	saga := internal.NewSaga(logger)
 	saga.AddStep(CreateLDAPGroupStep(s.ldapClient, name, gid))
-	saga.AddStep(commitStep(tx))
+	saga.AddStep(internal.SagaStep{
+		Name: "InsertSystemGroup",
+		Action: func(ctx context.Context) error {
+			created, err = s.query.Create(ctx, CreateParams{
+				Name:        name,
+				GidNumber:   gid,
+				Description: pgtype.Text{String: description, Valid: description != ""},
+			})
+			if err != nil {
+				return databaseutil.WrapDBError(err, logger, "create system group")
+			}
+			return nil
+		},
+	})
 	if err = saga.Execute(traceCtx); err != nil {
 		span.RecordError(err)
 		return SystemGroup{}, err
@@ -143,7 +146,7 @@ func (s *Service) List(ctx context.Context) ([]SystemGroup, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	groups, err := s.queries.ListAll(traceCtx)
+	groups, err := s.query.ListAll(traceCtx)
 	if err != nil {
 		return nil, databaseutil.WrapDBError(err, logger, "list system groups")
 	}
@@ -157,7 +160,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.GetByID(traceCtx, id)
+	group, err := s.query.GetByID(traceCtx, id)
 	if err != nil {
 		return databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
 	}
@@ -165,7 +168,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		span.RecordError(err)
 		return err
 	}
-	if err = s.queries.Delete(traceCtx, id); err != nil {
+	if err = s.query.Delete(traceCtx, id); err != nil {
 		return databaseutil.WrapDBError(err, logger, "delete system group")
 	}
 	return nil
@@ -176,10 +179,10 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]Member, erro
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if _, err := s.queries.GetByID(traceCtx, id); err != nil {
+	if _, err := s.query.GetByID(traceCtx, id); err != nil {
 		return nil, databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
 	}
-	rows, err := s.queries.ListMembers(traceCtx, id)
+	rows, err := s.query.ListMembers(traceCtx, id)
 	if err != nil {
 		return nil, databaseutil.WrapDBError(err, logger, "list system group members")
 	}
@@ -190,12 +193,14 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]Member, erro
 	return members, nil
 }
 
+// AddMember adds the LDAP memberUid first and inserts the row as the last saga
+// step, so a failed insert removes a memberUid this call added.
 func (s *Service) AddMember(ctx context.Context, id, userID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "AddMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.GetByID(traceCtx, id)
+	group, err := s.query.GetByID(traceCtx, id)
 	if err != nil {
 		return databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
 	}
@@ -204,19 +209,17 @@ func (s *Service) AddMember(ctx context.Context, id, userID uuid.UUID) error {
 		return err
 	}
 
-	tx, err := s.db.Begin(traceCtx)
-	if err != nil {
-		return databaseutil.WrapDBError(err, logger, "begin tx for add system group member")
-	}
-	defer func() { _ = tx.Rollback(traceCtx) }()
-
-	if err = s.queries.WithTx(tx).AddMember(traceCtx, AddMemberParams{SystemGroupID: id, UserID: userID}); err != nil {
-		return databaseutil.WrapDBError(err, logger, "add system group member")
-	}
-
 	saga := internal.NewSaga(logger)
 	saga.AddStep(AddLDAPMemberStep(s.ldapClient, group.Name, uid))
-	saga.AddStep(commitStep(tx))
+	saga.AddStep(internal.SagaStep{
+		Name: "InsertSystemGroupMember",
+		Action: func(ctx context.Context) error {
+			if err := s.query.AddMember(ctx, AddMemberParams{SystemGroupID: id, UserID: userID}); err != nil {
+				return databaseutil.WrapDBError(err, logger, "add system group member")
+			}
+			return nil
+		},
+	})
 	if err = saga.Execute(traceCtx); err != nil {
 		span.RecordError(err)
 		return err
@@ -224,23 +227,21 @@ func (s *Service) AddMember(ctx context.Context, id, userID uuid.UUID) error {
 	return nil
 }
 
+// RemoveMember deletes the row first, so a non-member gets 404 before any LDAP
+// lookup and a member without an LDAP account can still be removed. If the LDAP
+// removal fails, the row is restored so DB and LDAP stay consistent.
 func (s *Service) RemoveMember(ctx context.Context, id, userID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "RemoveMember")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	group, err := s.queries.GetByID(traceCtx, id)
+	group, err := s.query.GetByID(traceCtx, id)
 	if err != nil {
 		return databaseutil.WrapDBErrorWithKeyValue(err, "system_groups", "id", id.String(), logger, "get system group")
 	}
 
-	tx, err := s.db.Begin(traceCtx)
-	if err != nil {
-		return databaseutil.WrapDBError(err, logger, "begin tx for remove system group member")
-	}
-	defer func() { _ = tx.Rollback(traceCtx) }()
-
-	deleted, err := s.queries.WithTx(tx).RemoveMember(traceCtx, RemoveMemberParams{SystemGroupID: id, UserID: userID})
+	params := RemoveMemberParams{SystemGroupID: id, UserID: userID}
+	deleted, err := s.query.RemoveMember(traceCtx, params)
 	if err != nil {
 		return databaseutil.WrapDBError(err, logger, "remove system group member")
 	}
@@ -248,23 +249,28 @@ func (s *Service) RemoveMember(ctx context.Context, id, userID uuid.UUID) error 
 		return handlerutil.NewNotFoundError("system_group_members", "user_id", userID.String(), "user is not a member of this system group")
 	}
 
-	saga := internal.NewSaga(logger)
 	uid, err := s.lookupUID(traceCtx, userID)
-	switch {
-	case errors.Is(err, internal.ErrUserHasNoLDAPAccount):
+	if errors.Is(err, internal.ErrUserHasNoLDAPAccount) {
 		// Without an LDAP account there is no memberUid left to remove.
-		logger.Warn("system group member has no LDAP account, removing membership row only", zap.String("user_id", userID.String()))
-	case err != nil:
-		return err
-	default:
-		saga.AddStep(RemoveLDAPMemberStep(s.ldapClient, group.Name, uid))
+		logger.Warn("system group member has no LDAP account, removed membership row only", zap.String("user_id", userID.String()))
+		return nil
 	}
-	saga.AddStep(commitStep(tx))
-	if err = saga.Execute(traceCtx); err != nil {
+	if err == nil {
+		err = RemoveLDAPMemberStep(s.ldapClient, group.Name, uid).Action(traceCtx)
+	}
+	if err != nil {
+		s.restoreMember(traceCtx, params, logger)
 		span.RecordError(err)
 		return err
 	}
 	return nil
+}
+
+// restoreMember re-inserts a membership row deleted before a failed LDAP step.
+func (s *Service) restoreMember(ctx context.Context, params RemoveMemberParams, logger *zap.Logger) {
+	if err := s.query.AddMember(ctx, AddMemberParams(params)); err != nil {
+		logger.Error("failed to restore system group member after LDAP failure", zap.String("user_id", params.UserID.String()), zap.Error(err))
+	}
 }
 
 // lookupUID returns the user's LDAP uid. A user without an LDAP account (no

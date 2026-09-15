@@ -32,14 +32,14 @@ type fixture struct {
 	settings *mocks.SettingStore
 }
 
-func newFixture(db sg.DB, logger *zap.Logger) fixture {
+func newFixture(db sg.DBTX, logger *zap.Logger) fixture {
 	ldapClient := new(mocks.LDAPClient)
 	settings := new(mocks.SettingStore)
 	localGroups := new(mocks.LocalGroupStore)
 	localGroups.On("ListLocalGroups", mock.Anything).Return(dockerOnAllNodes, nil)
 
 	return fixture{
-		service:  sg.NewService(logger, db, ldapClient, settings, localGroups, nil),
+		service:  sg.NewService(logger, sg.New(db), ldapClient, settings, localGroups, nil),
 		ldap:     ldapClient,
 		settings: settings,
 	}

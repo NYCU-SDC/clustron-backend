@@ -164,7 +164,7 @@ func main() {
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
 	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
-	systemGroupService := systemgroup.NewService(logger, dbPool, ldapClient, settingService, ansibleService, cfg.SystemGroupDenylist)
+	systemGroupService := systemgroup.NewService(logger, systemgroup.New(dbPool), ldapClient, settingService, ansibleService, cfg.SystemGroupDenylist)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
