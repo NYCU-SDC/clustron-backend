@@ -27,6 +27,8 @@ type AddNodeRequest struct {
 	SlurmPartition string `json:"slurm_partition"  validate:"max=255"`
 	CpuCores       *int32 `json:"cpu_cores"       validate:"omitempty,min=1"`
 	MemoryMb       *int32 `json:"memory_mb"       validate:"omitempty,min=1"`
+	EnableSlurm    *bool  `json:"enable_slurm"`
+	MountNfsHome   *bool  `json:"mount_nfs_home"`
 }
 
 type AddNodesRequest struct {
@@ -51,6 +53,8 @@ type ServerResponse struct {
 	ProvisionDetail *string `json:"provision_detail,omitempty"`
 	CpuCores        *int32  `json:"cpu_cores,omitempty"`
 	MemoryMb        *int32  `json:"memory_mb,omitempty"`
+	EnableSlurm     bool    `json:"enable_slurm"`
+	MountNfsHome    bool    `json:"mount_nfs_home"`
 }
 
 type UpdateRoleRequest struct {
@@ -344,11 +348,13 @@ func (h *Handler) parseServerID(ctx context.Context, w http.ResponseWriter, r *h
 
 func toResponse(s Server) ServerResponse {
 	resp := ServerResponse{
-		ID:          s.ID.String(),
-		AnsibleName: s.AnsibleName,
-		SshUser:     s.SshUser.String,
-		AnsibleRole: s.AnsibleRole,
-		Status:      s.Status,
+		ID:           s.ID.String(),
+		AnsibleName:  s.AnsibleName,
+		SshUser:      s.SshUser.String,
+		AnsibleRole:  s.AnsibleRole,
+		Status:       s.Status,
+		EnableSlurm:  s.EnableSlurm,
+		MountNfsHome: s.MountNfsHome,
 	}
 	if s.IpAddress.Valid {
 		resp.IpAddress = s.IpAddress.String
@@ -389,6 +395,8 @@ func toCreateParams(req AddNodeRequest) CreateParams {
 		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
 		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
 		AnsibleRole:   req.AnsibleRole,
+		EnableSlurm:   req.EnableSlurm == nil || *req.EnableSlurm,
+		MountNfsHome:  req.MountNfsHome == nil || *req.MountNfsHome,
 	}
 	if req.SlurmPartition != "" {
 		params.SlurmPartition = pgtype.Text{String: req.SlurmPartition, Valid: true}

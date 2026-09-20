@@ -51,6 +51,8 @@ func (s *addNodesStore) AddNodes(_ context.Context, params []CreateParams) ([]Se
 			SshUser:       param.SshUser,
 			AnsibleRole:   param.AnsibleRole,
 			Status:        "provisioning",
+			EnableSlurm:   param.EnableSlurm,
+			MountNfsHome:  param.MountNfsHome,
 		}
 	}
 	return servers, nil
@@ -71,7 +73,9 @@ func TestHandlerAddNodes(t *testing.T) {
 				"ansible_name": "compute-02",
 				"ssh_config_host": "compute-02",
 				"private_ip": "10.0.0.2",
-				"ansible_role": "compute_nodes"
+				"ansible_role": "compute_nodes",
+				"enable_slurm": false,
+				"mount_nfs_home": false
 			}
 		]
 	}`)
@@ -92,6 +96,12 @@ func TestHandlerAddNodes(t *testing.T) {
 	if !store.gotParams[1].SshConfigHost.Valid || store.gotParams[1].SshConfigHost.String != "compute-02" {
 		t.Errorf("second server SSH config host = %#v, want compute-02", store.gotParams[1].SshConfigHost)
 	}
+	if !store.gotParams[0].EnableSlurm || !store.gotParams[0].MountNfsHome {
+		t.Errorf("first server features = (%v, %v), want defaults (true, true)", store.gotParams[0].EnableSlurm, store.gotParams[0].MountNfsHome)
+	}
+	if store.gotParams[1].EnableSlurm || store.gotParams[1].MountNfsHome {
+		t.Errorf("second server features = (%v, %v), want (false, false)", store.gotParams[1].EnableSlurm, store.gotParams[1].MountNfsHome)
+	}
 
 	var response AddNodesResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
@@ -101,6 +111,10 @@ func TestHandlerAddNodes(t *testing.T) {
 		t.Fatalf("response servers length = %d, want 2", len(response.Servers))
 	}
 	for _, server := range response.Servers {
+		wantFeatures := server.AnsibleName == "compute-01"
+		if server.EnableSlurm != wantFeatures || server.MountNfsHome != wantFeatures {
+			t.Errorf("server %q response features = (%v, %v), want %v", server.AnsibleName, server.EnableSlurm, server.MountNfsHome, wantFeatures)
+		}
 		if server.Status != "provisioning" {
 			t.Errorf("server %q status = %q, want provisioning", server.AnsibleName, server.Status)
 		}

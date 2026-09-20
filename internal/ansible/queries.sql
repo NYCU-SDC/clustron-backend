@@ -6,9 +6,9 @@ SELECT * FROM servers WHERE ansible_name = $1;
 
 -- name: Create :one
 INSERT INTO servers (
-    ansible_name, ip_address, ssh_config_host, private_ip, ssh_user, ssh_key_name, ansible_role, slurm_partition, memory_mb, cpu_cores, status
+    ansible_name, ip_address, ssh_config_host, private_ip, ssh_user, ssh_key_name, ansible_role, slurm_partition, memory_mb, cpu_cores, status, enable_slurm, mount_nfs_home
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 ) RETURNING *;
 
 -- name: Delete :execrows

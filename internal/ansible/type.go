@@ -36,4 +36,7 @@ type HostVars struct {
 	MemoryMB              int32  `yaml:"memory_mb,omitempty"`
 	SlurmPartition        string `yaml:"slurm_partition,omitempty"`
 	LDAPSimpleAllowGroups string `yaml:"ldap_simple_allow_groups,omitempty"`
+	// No omitempty: false must be rendered, since the playbooks default missing values to true.
+	EnableSlurm  bool `yaml:"enable_slurm"`
+	MountNFSHome bool `yaml:"mount_nfs_home"`
 }

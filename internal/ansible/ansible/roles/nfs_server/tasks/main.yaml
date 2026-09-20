@@ -12,7 +12,7 @@
     mode: '0755'
   loop:
     - /home
-    - /opt
+    - /opt/clustron_share
     - /etc/slurm
 
 - name: Configure NFS exports for compute nodes

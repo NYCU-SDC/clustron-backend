@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS servers
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW(),
 
+    -- optional provisioning features (compute nodes only); appended last to match migration column order
+    enable_slurm    BOOLEAN NOT NULL DEFAULT true,
+    mount_nfs_home  BOOLEAN NOT NULL DEFAULT true,
+
     CONSTRAINT servers_ansible_name_hostname_check CHECK (
         char_length(ansible_name) <= 253
         AND ansible_name ~ '^([a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62}){1}(\.[a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62})*?$'

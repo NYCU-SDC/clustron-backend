@@ -4,16 +4,37 @@
     name: nfs-common
     state: present
 
+- name: Select NFS shares to mount
+  ansible.builtin.set_fact:
+    nfs_client_mounts: >-
+      {{ (['/home'] if (mount_nfs_home | default(true) | bool) else [])
+         + (['/opt/clustron_share', '/etc/slurm'] if (enable_slurm | default(true) | bool) else []) }}
+
+# Older deployments mounted the whole /opt over NFS, hiding the node's local /opt.
+# Only unmount it and drop its fstab entry; ansible.posix.mount state=absent would
+# also delete the local /opt mount point.
+- name: Unmount legacy NFS /opt share
+  become: true
+  ansible.builtin.command: umount /opt
+  when: >-
+    ansible_facts['mounts'] | selectattr('mount', 'equalto', '/opt')
+    | selectattr('device', 'equalto', head_node_ip ~ ':/opt') | list | length > 0
+  changed_when: true
+
+- name: Remove legacy NFS /opt entry from /etc/fstab
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ head_node_ip | regex_escape }}:/opt\\s"
+    state: absent
+
 - name: Ensure mount points exist on compute nodes
   become: true
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     mode: '0755'
-  loop:
-    - /home
-    - /opt
-    - /etc/slurm
+  loop: "{{ nfs_client_mounts }}"
 
 - name: Mount NFS Shares and update /etc/fstab
   become: true
@@ -23,7 +44,4 @@
     fstype: nfs
     opts: defaults,_netdev
     state: mounted
-  loop:
-    - /home
-    - /opt
-    - /etc/slurm
+  loop: "{{ nfs_client_mounts }}"

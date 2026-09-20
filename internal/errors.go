@@ -31,6 +31,8 @@ var (
 	ErrServerAlreadyExists            = errors.New("server already exists")
 	ErrAllowedLoginGroupsUnsupported  = errors.New("allowed login groups can only be configured on compute nodes")
 	ErrAllowedLoginGroupsRoleConflict = errors.New("clear allowed login groups before changing the server to a head node")
+	ErrNodeFeaturesUnsupported        = errors.New("slurm and nfs home can only be disabled on compute nodes")
+	ErrNodeFeaturesRoleConflict       = errors.New("a server with slurm or nfs home disabled cannot become a head node")
 
 	// Setting Errors
 	ErrInvalidPublicKey     = errors.New("invalid public key")
@@ -123,6 +125,10 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrAllowedLoginGroupsUnsupported):
 		return NewUnprocessableEntityProblem(err.Error())
 	case errors.Is(err, ErrAllowedLoginGroupsRoleConflict):
+		return NewConflictProblem(err.Error())
+	case errors.Is(err, ErrNodeFeaturesUnsupported):
+		return NewUnprocessableEntityProblem(err.Error())
+	case errors.Is(err, ErrNodeFeaturesRoleConflict):
 		return NewConflictProblem(err.Error())
 	// Validation Errors
 	case errors.Is(err, strconv.ErrSyntax):
