@@ -144,3 +144,6 @@
     name: slurmctld
     state: started
     enabled: true
+
+- name: Deploy slurmrestd configuration
+  ansible.builtin.import_tasks: slurmrestd.yaml

@@ -16,3 +16,10 @@
     name: slurmctld
     state: restarted
     daemon_reload: true
+
+- name: Restart Slurmrestd
+  become: true
+  ansible.builtin.systemd:
+    name: slurmrestd
+    state: restarted
+    daemon_reload: true
