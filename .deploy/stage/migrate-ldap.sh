@@ -16,12 +16,20 @@
 #   5. docker compose up -d --wait       # start the rest (backend, ...)
 #
 # `export` also tars the old named volumes into backups/ for rollback.
+#
+# Overridable environment variables (must match the compose.yaml of the
+# deployment being migrated):
+#
+#   LDAP_BASE_DN   suffix of the data database
+#                  (default: dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club)
+#   LDAP_BIND_PWD  admin password, for both cn=config and the data admin
+#                  (default: password)
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-BASE_DN="dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+BASE_DN="${LDAP_BASE_DN:-dc=example,dc=com}"
 ADMIN_DN="cn=admin,${BASE_DN}"
 ADMIN_PWD="${LDAP_BIND_PWD:-password}"
 BACKUP_DIR="backups"
@@ -116,5 +124,5 @@ cmd_import() {
 case "${1:-}" in
     export) cmd_export ;;
     import) [ $# -eq 2 ] || die "usage: $0 import <backups/ldap-<timestamp>-data.gz>"; cmd_import "$2" ;;
-    *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
