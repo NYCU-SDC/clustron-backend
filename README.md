@@ -123,6 +123,12 @@ We recommend to configure with environment variables.
 | BASE_URL      | Public base URL of the backend API                                                                       | Yes      |
 | ALLOW_ORIGINS | Comma-separated list of allowed CORS origins (`*` for all)                                               | Yes      |
 
+### System Groups
+
+| Variable              | Description                                                                                                                                                                                   | Required |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| SYSTEM_GROUP_DENYLIST | Comma-separated server-local group names that can never be registered as system groups. Added to the built-in list `root, sudo, admin, wheel, adm, shadow, disk, kmem, sys, staff, lxd, libvirt, systemd-journal, tty` | No       |
+
 ### Authentication (OAuth)
 
 | Variable                   | Description                           | Required                                       |

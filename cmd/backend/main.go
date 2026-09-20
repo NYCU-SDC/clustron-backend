@@ -19,6 +19,7 @@ import (
 	"clustron-backend/internal/setting"
 	"clustron-backend/internal/slurm"
 	"clustron-backend/internal/system"
+	"clustron-backend/internal/systemgroup"
 	"clustron-backend/internal/trace"
 	"clustron-backend/internal/user"
 	"context"
@@ -163,6 +164,7 @@ func main() {
 	jobService := job.NewService(logger, slurmService)
 	moduleService := module.NewService(logger, dbPool)
 	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
+	systemGroupService := systemgroup.NewService(logger, systemgroup.New(dbPool), ldapClient, settingService, ansibleService, cfg.SystemGroupDenylist)
 
 	// Set memberService in settingService after all dependencies are created
 	settingService.SetMembershipService(memberService)
@@ -178,6 +180,7 @@ func main() {
 	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
 	moduleHandler := module.NewHandler(moduleService, validator, logger, problemWriter)
 	ansibleHandler := ansible.NewHandler(ansibleService, validator, logger, problemWriter)
+	systemGroupHandler := systemgroup.NewHandler(logger, validator, problemWriter, systemGroupService)
 	systemStatusHandler := system.NewHandler(logger, userService, problemWriter)
 
 	// Components
@@ -272,6 +275,16 @@ func main() {
 	mux.HandleFunc("PATCH /api/servers/{server_id}/role", authMiddleware.HandlerFunc(ansibleHandler.UpdateRole))
 	mux.HandleFunc("GET /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.GetAllowedLoginGroups))
 	mux.HandleFunc("PUT /api/servers/{server_id}/allowedLoginGroups", authMiddleware.HandlerFunc(ansibleHandler.UpdateAllowedLoginGroups))
+
+	// System Groups
+	mux.HandleFunc("GET /api/systemGroups", authMiddleware.HandlerFunc(systemGroupHandler.ListHandler))
+	mux.HandleFunc("POST /api/systemGroups", authMiddleware.HandlerFunc(systemGroupHandler.RegisterHandler))
+	mux.HandleFunc("POST /api/systemGroups/discover", authMiddleware.HandlerFunc(systemGroupHandler.DiscoverHandler))
+	mux.HandleFunc("GET /api/systemGroups/candidates", authMiddleware.HandlerFunc(systemGroupHandler.ListCandidatesHandler))
+	mux.HandleFunc("DELETE /api/systemGroups/{id}", authMiddleware.HandlerFunc(systemGroupHandler.DeleteHandler))
+	mux.HandleFunc("GET /api/systemGroups/{id}/members", authMiddleware.HandlerFunc(systemGroupHandler.ListMembersHandler))
+	mux.HandleFunc("POST /api/systemGroups/{id}/members", authMiddleware.HandlerFunc(systemGroupHandler.AddMemberHandler))
+	mux.HandleFunc("DELETE /api/systemGroups/{id}/members/{user_id}", authMiddleware.HandlerFunc(systemGroupHandler.RemoveMemberHandler))
 
 	// Modules
 	mux.HandleFunc("GET /api/modules", authMiddleware.HandlerFunc(moduleHandler.List))

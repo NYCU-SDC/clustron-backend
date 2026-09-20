@@ -399,6 +399,10 @@ func (s *Service) runAnsibleInBackground(ctx context.Context, servers []Server, 
 		detail := failureDetails[server.ID]
 		s.updateServerProvisionResult(ctx, server.ID, "failed", pgtype.Text{String: detail, Valid: detail != ""})
 	}
+
+	if err := s.discoverLocalGroups(ctx, discoveryTargets(servers, successful)); err != nil {
+		logger.Error("discover local groups after provisioning", zap.Error(err))
+	}
 }
 
 func (s *Service) executeNodesPlaybook(
