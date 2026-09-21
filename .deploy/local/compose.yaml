@@ -14,7 +14,7 @@ services:
       POSTGRES_DB: clustron
     ports:
       - "5432:5432"
-ldap:
+  ldap:
     image: osixia/openldap:2.6.10-alpha
     healthcheck:
       test: ["CMD", "container", "run", "--", "ldapwhoami", "-x", "-H", "ldap://localhost:3890"]
