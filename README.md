@@ -173,9 +173,11 @@ We recommend to configure with environment variables.
 
 The same `slapd` serves both schemes, so the backend can keep talking plain `ldap://` over the
 internal network while managed nodes use `ldaps://`. Two things the LDAP server must provide:
-port `636` has to be reachable from the nodes, and — with the `osixia/openldap` image —
-`LDAP_TLS_VERIFY_CLIENT` must be set to `try`, because its default (`demand`) asks SSSD for a
-client certificate that SSSD does not have.
+port `636` has to be reachable from the nodes, and `olcTLSVerifyClient` must not be `demand`,
+which would ask SSSD for a client certificate it does not have. With the `osixia/openldap:2.6`
+image the listeners are on `3890`/`6360` inside the container (published as `389`/`636`), TLS is
+enabled with `OPENLDAP_BOOTSTRAP_TLS=true`, and `OPENLDAP_BOOTSTRAP_TLS_VERIFY_CLIENT` already
+defaults to `allow`.
 
 #### TLS certificates
 
@@ -184,9 +186,11 @@ encrypted, but the server is not authenticated, so a machine in the path can imp
 Point that variable at a CA and the node provisioning installs it and switches SSSD to
 `ldap_tls_reqcert = demand`.
 
-The image generates a self-signed certificate on first start, but its name is the container's,
-while nodes usually dial an IP. Verification needs a certificate that actually covers the address
-in `LDAP_EXTERNAL_HOST`, which `scripts/create_ldap_certs.sh` signs:
+The image never generates a certificate of its own, and it only applies TLS settings during
+bootstrap, so the certificates have to exist before the LDAP container starts for the first time
+— otherwise `slapd` fails to start. They also need to cover the address in `LDAP_EXTERNAL_HOST`,
+since nodes usually dial an IP rather than the container name. `scripts/create_ldap_certs.sh`
+signs such a certificate:
 
 ```bash
 # Every name or address nodes use to reach LDAP has to be listed.
