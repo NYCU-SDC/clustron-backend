@@ -10,8 +10,10 @@
 #
 #   scripts/create_ldap_certs.sh .deploy/dev/certs ldap ldap.example.com 10.1.253.28
 #
-# Writes ca.crt, ca.key, ldap.crt and ldap.key into the output directory. The
-# osixia/openldap image picks them up from /container/service/slapd/assets/certs.
+# Writes ca.crt, ca.key, ldap.crt and ldap.key into the output directory, which
+# is mounted at /container/services/openldap/assets/certs in the osixia/openldap
+# 2.6 image. That image has no self-signed fallback and only applies TLS during
+# bootstrap, so these files must exist before the container first starts.
 
 set -euo pipefail
 
@@ -74,9 +76,12 @@ openssl x509 -req -in "$OUT_DIR/ldap.csr" -sha256 -days "$DAYS" \
 
 rm -f "$OUT_DIR/ldap.csr" "$OUT_DIR/ca.srl"
 
-# slapd runs as a non-root user inside the container and reads the key directly.
-chmod 640 "$OUT_DIR/ca.key" "$OUT_DIR/ldap.key"
-chmod 644 "$OUT_DIR/ca.crt" "$OUT_DIR/ldap.crt"
+# slapd reads the server key directly as uid 911 inside the container, and that
+# uid matches no host user under either docker or rootless podman, so the key
+# has to be world-readable for TLS init to succeed. The CA key never enters the
+# container and stays private -- it is the one that could sign new certificates.
+chmod 600 "$OUT_DIR/ca.key"
+chmod 644 "$OUT_DIR/ldap.key" "$OUT_DIR/ca.crt" "$OUT_DIR/ldap.crt"
 
 echo ":: Done. Certificates written to $OUT_DIR"
 openssl x509 -in "$OUT_DIR/ldap.crt" -noout -subject -ext subjectAltName
