@@ -21,3 +21,6 @@ full_schema.sql
 full_policy.csv
 
 internal/ansible/ansible/hosts.yaml
+
+# ldap migration backups
+.deploy/stage/backups/

@@ -35,7 +35,7 @@ services:
       - ALLOW_ORIGINS=*
       - LDAP_DEBUG=true
       - LDAP_HOST=ldap
-      - LDAP_PORT=389
+      - LDAP_PORT=3890
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club
       - LDAP_USER_OU_NAME=People
@@ -69,22 +69,25 @@ services:
       - internal
 
   ldap:
-    image: osixia/openldap:1.5.0
+    image: osixia/openldap:2.6.10-alpha
     healthcheck:
-      test: ["CMD", "cat", "/run/slapd/slapd.pid"]
+      test: ["CMD", "container", "run", "--", "ldapwhoami", "-x", "-H", "ldap://localhost:3890"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
     environment:
-      LDAP_ORGANISATION: "Clustron"
-      LDAP_DOMAIN: "clustron.prj.internal.sdc.nycu.club"
-      LDAP_ADMIN_PASSWORD: "password"
-      LDAP_BASE_DN: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
-      KEEP_EXISTING_CONFIG: "false"
+      OPENLDAP_BOOTSTRAP_ORGANIZATION: "Clustron"
+      OPENLDAP_BOOTSTRAP_SUFFIX: "dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club"
+      # nis.ldif (not the image default rfc2307bis) keeps posixGroup STRUCTURAL,
+      # and openssh-lpk.ldif provides ldapPublicKey/sshPublicKey (overridden
+      # by ./schema so sshPublicKey stays MAY instead of the image's MUST).
+      OPENLDAP_BOOTSTRAP_SCHEMAS: "core.ldif cosine.ldif inetorgperson.ldif nis.ldif openssh-lpk.ldif"
+      OPENLDAP_BOOTSTRAP_DATA_ROOT_PASSWORD_HASHED: "password"
+      OPENLDAP_BOOTSTRAP_CONFIG_ROOT_PASSWORD_HASHED: "password"
     volumes:
-      - ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
-    command: --copy-service --loglevel debug
+      - ./ldif:/container/services/openldap-bootstrap/assets/ldif/data/custom:ro
+      - ./schema/openssh-lpk.ldif:/container/services/openldap/assets/schema/openssh-lpk.ldif:ro
     networks:
       - internal
 

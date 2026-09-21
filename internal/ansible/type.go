@@ -2,10 +2,17 @@ package ansible
 
 import "github.com/google/uuid"
 
-// AllowedLoginGroupDetail is a Clustron group whose members are allowed to log in to compute
-// nodes. It maps to one entry in SSSD's simple_allow_groups (via the group's BASE ldap_cn).
+// AllowedLoginGroupSelection identifies which LDAP-backed variant of a Clustron group is
+// allowed to log in to a compute node.
+type AllowedLoginGroupSelection struct {
+	GroupID uuid.UUID
+	Type    GroupType
+}
+
+// AllowedLoginGroupDetail is an allowed group selection with display information.
 type AllowedLoginGroupDetail struct {
 	GroupID uuid.UUID
+	Type    GroupType
 	Title   string
 	LdapCN  string
 }
