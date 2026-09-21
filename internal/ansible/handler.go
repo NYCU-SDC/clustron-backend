@@ -17,18 +17,38 @@ import (
 )
 
 type AddNodeRequest struct {
-	AnsibleName    string `json:"ansible_name"     validate:"required,max=253,hostname_rfc1123"`
-	IpAddress      string `json:"ip_address"       validate:"required_without=SshConfigHost,omitempty,ip"`
-	SshConfigHost  string `json:"ssh_config_host"  validate:"required_without=IpAddress,max=255"`
-	PrivateIp      string `json:"private_ip"       validate:"required_without=IpAddress,omitempty,ip"`
-	SshUser        string `json:"ssh_user"         validate:"required_with=IpAddress,max=255"`
-	SshKeyName     string `json:"ssh_key_name"     validate:"max=255"`
-	AnsibleRole    string `json:"ansible_role"     validate:"required,oneof=head_nodes compute_nodes"`
-	SlurmPartition string `json:"slurm_partition"  validate:"max=255"`
-	CpuCores       *int32 `json:"cpu_cores"       validate:"omitempty,min=1"`
-	MemoryMb       *int32 `json:"memory_mb"       validate:"omitempty,min=1"`
-	EnableSlurm    *bool  `json:"enable_slurm"`
-	MountNfsHome   *bool  `json:"mount_nfs_home"`
+	AnsibleName    string        `json:"ansible_name"     validate:"required,max=253,hostname_rfc1123"`
+	IpAddress      string        `json:"ip_address"       validate:"required_without=SshConfigHost,omitempty,ip"`
+	SshConfigHost  string        `json:"ssh_config_host"  validate:"required_without=IpAddress,max=255"`
+	PrivateIp      string        `json:"private_ip"       validate:"required_without=IpAddress,omitempty,ip"`
+	SshUser        string        `json:"ssh_user"         validate:"required_with=IpAddress,max=255"`
+	SshKeyName     string        `json:"ssh_key_name"     validate:"max=255"`
+	AnsibleRole    string        `json:"ansible_role"     validate:"required,oneof=head_nodes compute_nodes"`
+	SlurmPartition string        `json:"slurm_partition"  validate:"max=255"`
+	CpuCores       *int32        `json:"cpu_cores"       validate:"omitempty,min=1"`
+	MemoryMb       *int32        `json:"memory_mb"       validate:"omitempty,min=1"`
+	Features       *NodeFeatures `json:"features"`
+}
+
+// NodeFeatures toggles the optional provisioning features of a node.
+// A missing object, or a missing field inside it, means the feature stays enabled.
+type NodeFeatures struct {
+	Slurm   *bool `json:"slurm"`
+	NfsHome *bool `json:"nfs_home"`
+}
+
+func (f *NodeFeatures) slurmEnabled() bool {
+	return f == nil || f.Slurm == nil || *f.Slurm
+}
+
+func (f *NodeFeatures) nfsHomeEnabled() bool {
+	return f == nil || f.NfsHome == nil || *f.NfsHome
+}
+
+// NodeFeaturesResponse always renders both flags, so clients never have to infer a default.
+type NodeFeaturesResponse struct {
+	Slurm   bool `json:"slurm"`
+	NfsHome bool `json:"nfs_home"`
 }
 
 type AddNodesRequest struct {
@@ -40,21 +60,20 @@ type AddNodesResponse struct {
 }
 
 type ServerResponse struct {
-	ID              string  `json:"id"`
-	AnsibleName     string  `json:"ansible_name"`
-	IpAddress       string  `json:"ip_address,omitempty"`
-	SshConfigHost   string  `json:"ssh_config_host,omitempty"`
-	PrivateIp       string  `json:"private_ip,omitempty"`
-	SshUser         string  `json:"ssh_user,omitempty"`
-	SshKeyName      string  `json:"ssh_key_name,omitempty"`
-	AnsibleRole     string  `json:"ansible_role"`
-	SlurmPartition  string  `json:"slurm_partition,omitempty"`
-	Status          string  `json:"status"`
-	ProvisionDetail *string `json:"provision_detail,omitempty"`
-	CpuCores        *int32  `json:"cpu_cores,omitempty"`
-	MemoryMb        *int32  `json:"memory_mb,omitempty"`
-	EnableSlurm     bool    `json:"enable_slurm"`
-	MountNfsHome    bool    `json:"mount_nfs_home"`
+	ID              string               `json:"id"`
+	AnsibleName     string               `json:"ansible_name"`
+	IpAddress       string               `json:"ip_address,omitempty"`
+	SshConfigHost   string               `json:"ssh_config_host,omitempty"`
+	PrivateIp       string               `json:"private_ip,omitempty"`
+	SshUser         string               `json:"ssh_user,omitempty"`
+	SshKeyName      string               `json:"ssh_key_name,omitempty"`
+	AnsibleRole     string               `json:"ansible_role"`
+	SlurmPartition  string               `json:"slurm_partition,omitempty"`
+	Status          string               `json:"status"`
+	ProvisionDetail *string              `json:"provision_detail,omitempty"`
+	CpuCores        *int32               `json:"cpu_cores,omitempty"`
+	MemoryMb        *int32               `json:"memory_mb,omitempty"`
+	Features        NodeFeaturesResponse `json:"features"`
 }
 
 type UpdateRoleRequest struct {
@@ -348,13 +367,15 @@ func (h *Handler) parseServerID(ctx context.Context, w http.ResponseWriter, r *h
 
 func toResponse(s Server) ServerResponse {
 	resp := ServerResponse{
-		ID:           s.ID.String(),
-		AnsibleName:  s.AnsibleName,
-		SshUser:      s.SshUser.String,
-		AnsibleRole:  s.AnsibleRole,
-		Status:       s.Status,
-		EnableSlurm:  s.EnableSlurm,
-		MountNfsHome: s.MountNfsHome,
+		ID:          s.ID.String(),
+		AnsibleName: s.AnsibleName,
+		SshUser:     s.SshUser.String,
+		AnsibleRole: s.AnsibleRole,
+		Status:      s.Status,
+		Features: NodeFeaturesResponse{
+			Slurm:   s.EnableSlurm,
+			NfsHome: s.MountNfsHome,
+		},
 	}
 	if s.IpAddress.Valid {
 		resp.IpAddress = s.IpAddress.String
@@ -395,8 +416,8 @@ func toCreateParams(req AddNodeRequest) CreateParams {
 		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
 		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
 		AnsibleRole:   req.AnsibleRole,
-		EnableSlurm:   req.EnableSlurm == nil || *req.EnableSlurm,
-		MountNfsHome:  req.MountNfsHome == nil || *req.MountNfsHome,
+		EnableSlurm:   req.Features.slurmEnabled(),
+		MountNfsHome:  req.Features.nfsHomeEnabled(),
 	}
 	if req.SlurmPartition != "" {
 		params.SlurmPartition = pgtype.Text{String: req.SlurmPartition, Valid: true}

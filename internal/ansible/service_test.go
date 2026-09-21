@@ -345,20 +345,20 @@ func TestToCreateParamsNodeFeatures(t *testing.T) {
 	enabled, disabled := true, false
 	tests := []struct {
 		name             string
-		enableSlurm      *bool
-		mountNfsHome     *bool
+		features         *NodeFeatures
 		wantEnableSlurm  bool
 		wantMountNfsHome bool
 	}{
-		{name: "omitted defaults to enabled", wantEnableSlurm: true, wantMountNfsHome: true},
-		{name: "explicitly enabled", enableSlurm: &enabled, mountNfsHome: &enabled, wantEnableSlurm: true, wantMountNfsHome: true},
-		{name: "explicitly disabled", enableSlurm: &disabled, mountNfsHome: &disabled},
-		{name: "only slurm disabled", enableSlurm: &disabled, wantMountNfsHome: true},
+		{name: "features object omitted defaults to enabled", wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "empty features object defaults to enabled", features: &NodeFeatures{}, wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "explicitly enabled", features: &NodeFeatures{Slurm: &enabled, NfsHome: &enabled}, wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "explicitly disabled", features: &NodeFeatures{Slurm: &disabled, NfsHome: &disabled}},
+		{name: "only slurm disabled", features: &NodeFeatures{Slurm: &disabled}, wantMountNfsHome: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toCreateParams(AddNodeRequest{EnableSlurm: tt.enableSlurm, MountNfsHome: tt.mountNfsHome})
+			got := toCreateParams(AddNodeRequest{Features: tt.features})
 			if got.EnableSlurm != tt.wantEnableSlurm || got.MountNfsHome != tt.wantMountNfsHome {
 				t.Fatalf("toCreateParams() features = (%v, %v), want (%v, %v)",
 					got.EnableSlurm, got.MountNfsHome, tt.wantEnableSlurm, tt.wantMountNfsHome)

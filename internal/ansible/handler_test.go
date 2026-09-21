@@ -74,8 +74,10 @@ func TestHandlerAddNodes(t *testing.T) {
 				"ssh_config_host": "compute-02",
 				"private_ip": "10.0.0.2",
 				"ansible_role": "compute_nodes",
-				"enable_slurm": false,
-				"mount_nfs_home": false
+				"features": {
+					"slurm": false,
+					"nfs_home": false
+				}
 			}
 		]
 	}`)
@@ -112,8 +114,8 @@ func TestHandlerAddNodes(t *testing.T) {
 	}
 	for _, server := range response.Servers {
 		wantFeatures := server.AnsibleName == "compute-01"
-		if server.EnableSlurm != wantFeatures || server.MountNfsHome != wantFeatures {
-			t.Errorf("server %q response features = (%v, %v), want %v", server.AnsibleName, server.EnableSlurm, server.MountNfsHome, wantFeatures)
+		if server.Features.Slurm != wantFeatures || server.Features.NfsHome != wantFeatures {
+			t.Errorf("server %q response features = (%v, %v), want %v", server.AnsibleName, server.Features.Slurm, server.Features.NfsHome, wantFeatures)
 		}
 		if server.Status != "provisioning" {
 			t.Errorf("server %q status = %q, want provisioning", server.AnsibleName, server.Status)
