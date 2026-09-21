@@ -8,7 +8,7 @@
     - common
     - ntp_server
     - nfs_server
-    - ldap_server
+    - ldap_client
     - slurm_builder
     - slurm_controller
 

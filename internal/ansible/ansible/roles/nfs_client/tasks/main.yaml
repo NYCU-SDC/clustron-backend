@@ -1,6 +1,7 @@
 - name: Install NFS Client
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name: nfs-common
     state: present
 

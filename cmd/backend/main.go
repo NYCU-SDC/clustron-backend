@@ -137,6 +137,15 @@ func main() {
 	}
 	defer ldapClient.Close()
 
+	if ldapClient.Config.ExternalScheme() != ldap.SchemeLDAPS {
+		logger.Warn("ldap_external_scheme is not ldaps, users may not login to nodes using password",
+			zap.String("scheme", ldapClient.Config.ExternalScheme()))
+	}
+
+	if ldapClient.Config.LDAPCACertFile == "" {
+		logger.Warn("ldap_ca_cert_file is not set, nodes will encrypt the LDAP connection without verifying the server")
+	}
+
 	shutdown, err := initOpenTelemetry(AppName, Version, BuildTime, CommitHash, cfg.OtelCollectorUrl)
 	if err != nil {
 		logger.Fatal("Failed to initialize OpenTelemetry", zap.Error(err))

@@ -31,7 +31,14 @@ linux_username_blacklist:
 ldap:
   ldap_debug: true
   ldap_host: "LDAP_HOST"
+  ldap_external_host: "LDAP_EXTERNAL_HOST"
   ldap_port: 389
+  ldap_external_port: 636
+  # Scheme cluster nodes use to reach LDAP (ldap or ldaps). Defaults to ldaps.
+  ldap_external_scheme: "ldaps"
+  # CA that managed nodes use to verify the LDAP server. Leave empty to encrypt
+  # without verifying (see scripts/create_ldap_certs.sh).
+  ldap_ca_cert_file: ""
   ldap_base_dn: "DC=example,DC=com"
   ldap_user_ou_name: "people"
   ldap_group_ou_name: "groups"

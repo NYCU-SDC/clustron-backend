@@ -1,6 +1,7 @@
 - name: Install chrony
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name: chrony
     state: present
 
@@ -38,6 +39,7 @@
 - name: Install iptables-persistent
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name: iptables-persistent
     state: present
 
