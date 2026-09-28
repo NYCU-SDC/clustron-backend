@@ -15,6 +15,12 @@ SlurmdLogFile=/var/log/slurm/slurmd.log
 AccountingStorageType=accounting_storage/slurmdbd
 AccountingStorageHost={{ ansible_facts['nodename'] }}
 AccountingStoragePort=6819
+# Required for partition AllowAccounts to take effect: without association enforcement
+# slurmctld schedules jobs from any account into a restricted partition.
+AccountingStorageEnforce=associations
+# Reject a job at submit time when its account may not use the partition, instead of
+# leaving it pending forever with Reason=PartitionConfig.
+EnforcePartLimits=ALL
 
 # restd
 AuthAltTypes=auth/jwt
