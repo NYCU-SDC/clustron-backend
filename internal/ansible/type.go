@@ -17,10 +17,13 @@ type AllowedLoginGroupDetail struct {
 	LdapCN  string
 }
 
-// PartitionAllowedGroupDetail is a Clustron group allowed to submit jobs to a Slurm
-// partition. Its BASE ldap_cn is rendered into that partition's AllowAccounts list.
+// PartitionAllowedGroupDetail is an LDAP variant of a Clustron group allowed to submit jobs to
+// a Slurm partition. Its ldap_cn is rendered into that partition's AllowAccounts list: the BASE
+// cn is the group's top-level Slurm account (covering its -base and -admin children), the ADMIN
+// cn is the -admin child account alone.
 type PartitionAllowedGroupDetail struct {
 	GroupID uuid.UUID
+	Type    GroupType
 	Title   string
 	LdapCN  string
 }

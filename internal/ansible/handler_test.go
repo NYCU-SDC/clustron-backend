@@ -105,17 +105,21 @@ func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
 		name           string
 		setupMock      func(store *ansiblemocks.Store)
 		expectedStatus int
-		expectedGroups int
+		expectedGroups []ansible.PartitionAllowedGroupResponse
 	}{
 		{
-			name: "returns the allowed groups",
+			name: "returns the allowed groups with their type",
 			setupMock: func(store *ansiblemocks.Store) {
-				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return(
-					[]ansible.PartitionAllowedGroupDetail{{GroupID: groupID, Title: "CS Lab", LdapCN: "cs-lab"}}, nil,
-				)
+				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return([]ansible.PartitionAllowedGroupDetail{
+					{GroupID: groupID, Type: ansible.GroupTypeBASE, Title: "CS Lab", LdapCN: "cs-lab"},
+					{GroupID: groupID, Type: ansible.GroupTypeADMIN, Title: "CS Lab", LdapCN: "cs-lab-admin"},
+				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedGroups: 1,
+			expectedGroups: []ansible.PartitionAllowedGroupResponse{
+				{GroupID: groupID.String(), Type: "BASE", Title: "CS Lab", LdapCN: "cs-lab"},
+				{GroupID: groupID.String(), Type: "ADMIN", Title: "CS Lab", LdapCN: "cs-lab-admin"},
+			},
 		},
 		{
 			name: "unrestricted partition returns an empty list",
@@ -123,7 +127,7 @@ func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
 				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return([]ansible.PartitionAllowedGroupDetail{}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedGroups: 0,
+			expectedGroups: []ansible.PartitionAllowedGroupResponse{},
 		},
 		{
 			name: "unknown partition",
@@ -148,7 +152,7 @@ func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
 			if tc.expectedStatus == http.StatusOK {
 				var got []ansible.PartitionAllowedGroupResponse
 				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-				assert.Len(t, got, tc.expectedGroups)
+				assert.Equal(t, tc.expectedGroups, got)
 			}
 		})
 	}
@@ -156,6 +160,8 @@ func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
 
 func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 	groupID := uuid.New()
+	base := []ansible.AllowedLoginGroupSelection{{GroupID: groupID, Type: ansible.GroupTypeBASE}}
+	baseBody := `[{"groupId":"` + groupID.String() + `","groupType":"BASE"}]`
 
 	testCases := []struct {
 		name           string
@@ -164,32 +170,53 @@ func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name: "assigns groups to a partition",
-			body: `{"groupIds":["` + groupID.String() + `"]}`,
+			name: "assigns a group's BASE account to a partition",
+			body: baseBody,
 			setupMock: func(store *ansiblemocks.Store) {
-				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []uuid.UUID{groupID}).Return(nil)
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+		},
+		{
+			name: "assigns a group's ADMIN account to a partition",
+			body: `[{"groupId":"` + groupID.String() + `","groupType":"ADMIN"}]`,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu",
+					[]ansible.AllowedLoginGroupSelection{{GroupID: groupID, Type: ansible.GroupTypeADMIN}}).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
 		{
 			name: "empty list re-opens the partition",
-			body: `{"groupIds":[]}`,
+			body: `[]`,
 			setupMock: func(store *ansiblemocks.Store) {
-				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []uuid.UUID{}).Return(nil)
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []ansible.AllowedLoginGroupSelection{}).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
 		{
 			name:           "non-uuid group id is rejected before reaching the store",
-			body:           `{"groupIds":["not-a-uuid"]}`,
+			body:           `[{"groupId":"not-a-uuid","groupType":"BASE"}]`,
+			setupMock:      func(store *ansiblemocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "unknown group type is rejected before reaching the store",
+			body:           `[{"groupId":"` + groupID.String() + `","groupType":"OWNER"}]`,
+			setupMock:      func(store *ansiblemocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "old object body is rejected",
+			body:           `{"groupIds":["` + groupID.String() + `"]}`,
 			setupMock:      func(store *ansiblemocks.Store) {},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
 			name: "unknown partition",
-			body: `{"groupIds":["` + groupID.String() + `"]}`,
+			body: baseBody,
 			setupMock: func(store *ansiblemocks.Store) {
-				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []uuid.UUID{groupID}).Return(
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(
 					handlerutil.NewNotFoundError("partitions", "name", "gpu", ""),
 				)
 			},
@@ -197,9 +224,9 @@ func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 		},
 		{
 			name: "store failure",
-			body: `{"groupIds":["` + groupID.String() + `"]}`,
+			body: baseBody,
 			setupMock: func(store *ansiblemocks.Store) {
-				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []uuid.UUID{groupID}).Return(errors.New("db error"))
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(errors.New("db error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -213,7 +240,7 @@ func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 			w := httptest.NewRecorder()
 			newTestHandler(store).UpdatePartitionAllowedGroups(w, newPartitionRequest(http.MethodPut, "gpu", []byte(tc.body)))
 
-			assert.Equal(t, tc.expectedStatus, w.Code)
+			assert.Equal(t, tc.expectedStatus, w.Code, w.Body.String())
 		})
 	}
 }

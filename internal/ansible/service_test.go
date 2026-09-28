@@ -553,29 +553,3 @@ func TestMapPartitionAllowedGroupError(t *testing.T) {
 	other := mapPartitionAllowedGroupError(errors.New("connection reset"), "gpu", ldapGroupID, zap.NewNop())
 	assert.NotErrorIs(t, other, handlerutil.ErrNotFound)
 }
-
-func TestUpdatePartitionAllowedGroupsRequestValidation(t *testing.T) {
-	v := validator.New()
-
-	tests := []struct {
-		name    string
-		req     UpdatePartitionAllowedGroupsRequest
-		wantErr bool
-	}{
-		{name: "group ids", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{uuid.NewString()}}},
-		{name: "empty list re-opens the partition", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{}}},
-		{name: "omitted list re-opens the partition", req: UpdatePartitionAllowedGroupsRequest{}},
-		{name: "non-uuid group id", req: UpdatePartitionAllowedGroupsRequest{GroupIDs: []string{"not-a-uuid"}}, wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := v.Struct(tt.req)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}

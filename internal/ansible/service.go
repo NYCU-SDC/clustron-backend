@@ -776,6 +776,7 @@ func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName 
 	for _, row := range rows {
 		result = append(result, PartitionAllowedGroupDetail{
 			GroupID: row.GroupID,
+			Type:    row.Type,
 			Title:   row.Title,
 			LdapCN:  row.LdapCn.String,
 		})
@@ -783,11 +784,10 @@ func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName 
 	return result, nil
 }
 
-// SetPartitionAllowedGroups replaces a partition's allowed-group list with the given groups,
-// then re-renders slurm.conf in the background. Each group is stored as its BASE LDAP group,
-// whose ldap_cn is the name of the group's top-level Slurm account; a group without one is
-// rejected. An empty list leaves the partition unrestricted.
-func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName string, groupIDs []uuid.UUID) error {
+// SetPartitionAllowedGroups replaces a partition's allowed-group list with the selected LDAP
+// variants, then re-renders slurm.conf in the background. A selected variant without an
+// ldap_cn is rejected. An empty list leaves the partition unrestricted.
+func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName string, groups []AllowedLoginGroupSelection) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetPartitionAllowedGroups")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -796,15 +796,15 @@ func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName s
 		return err
 	}
 
-	ldapGroupIDs := make([]uuid.UUID, len(groupIDs))
-	for i, id := range groupIDs {
+	ldapGroupIDs := make([]uuid.UUID, len(groups))
+	for i, group := range groups {
 		ldapGroupID, err := s.ldapQueries.GetLDAPGroupIDByGroupIDAndType(traceCtx, ldapgroup.GetLDAPGroupIDByGroupIDAndTypeParams{
-			GroupID: id,
-			Type:    ldapgroup.GroupTypeBASE,
+			GroupID: group.GroupID,
+			Type:    ldapgroup.GroupType(group.Type),
 		})
 		if err != nil {
-			value := fmt.Sprintf("%s/%s", id, ldapgroup.GroupTypeBASE)
-			return databaseutil.WrapDBErrorWithKeyValue(err, "ldap_groups", "group_id/type", value, logger, "find BASE LDAP group for partition allowed group")
+			value := fmt.Sprintf("%s/%s", group.GroupID, group.Type)
+			return databaseutil.WrapDBErrorWithKeyValue(err, "ldap_groups", "group_id/type", value, logger, "find LDAP group for partition allowed group")
 		}
 		ldapGroupIDs[i] = ldapGroupID
 	}

@@ -35,25 +35,28 @@ func TestPartitionAllowedGroupQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer resourceManager.Cleanup(t.Context())
 
-	t.Run("lists allowed groups with BASE cn", func(t *testing.T) {
+	t.Run("lists allowed groups with their type and cn", func(t *testing.T) {
 		db := resourceManager.SetupPostgres(t)
 		q := ansible.New(db)
 		grp := dbtestdata.NewBuilder(t, db).Group().Create(dbtestdata.GroupWithTitle("CS Lab"))
 		baseID := insertLdapGroup(t, db, grp.ID, ptr("cslab"), "BASE", 90001)
-		insertLdapGroup(t, db, grp.ID, ptr("cslab-admin"), "ADMIN", 90002)
+		adminID := insertLdapGroup(t, db, grp.ID, ptr("cslab-admin"), "ADMIN", 90002)
 		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
+		require.NoError(t, q.UpsertPartition(t.Context(), "debug"))
 
 		require.NoError(t, q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "gpu", LdapGroupID: baseID}))
+		require.NoError(t, q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "debug", LdapGroupID: adminID}))
 
 		groups, err := q.ListPartitionAllowedGroups(t.Context(), "gpu")
 		require.NoError(t, err)
 		assert.Equal(t, []ansible.ListPartitionAllowedGroupsRow{
-			{GroupID: grp.ID, Title: "CS Lab", LdapCn: pgtype.Text{String: "cslab", Valid: true}},
+			{GroupID: grp.ID, Type: ansible.GroupTypeBASE, Title: "CS Lab", LdapCn: pgtype.Text{String: "cslab", Valid: true}},
 		}, groups)
 
 		accounts, err := q.ListAllPartitionAllowedAccounts(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, []ansible.ListAllPartitionAllowedAccountsRow{
+			{PartitionName: "debug", LdapCn: pgtype.Text{String: "cslab-admin", Valid: true}},
 			{PartitionName: "gpu", LdapCn: pgtype.Text{String: "cslab", Valid: true}},
 		}, accounts)
 	})

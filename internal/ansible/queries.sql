@@ -86,12 +86,12 @@ WHERE ansible_role = 'compute_nodes'
 ORDER BY slurm_partition;
 
 -- name: ListPartitionAllowedGroups :many
-SELECT lg.group_id, g.title, lg.ldap_cn
+SELECT lg.group_id, lg.type, g.title, lg.ldap_cn
 FROM partition_allowed_groups pag
 JOIN ldap_groups lg ON lg.id = pag.ldap_group_id
 JOIN groups g ON g.id = lg.group_id
 WHERE pag.partition_name = $1
-ORDER BY g.title;
+ORDER BY g.title, lg.type;
 
 -- name: ListAllPartitionAllowedAccounts :many
 SELECT pag.partition_name, lg.ldap_cn

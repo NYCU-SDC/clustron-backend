@@ -70,7 +70,7 @@ type Store interface {
 	ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error)
 	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error
 	ListPartitionAllowedGroups(ctx context.Context, partitionName string) ([]PartitionAllowedGroupDetail, error)
-	SetPartitionAllowedGroups(ctx context.Context, partitionName string, groupIDs []uuid.UUID) error
+	SetPartitionAllowedGroups(ctx context.Context, partitionName string, groups []AllowedLoginGroupSelection) error
 }
 
 type UpdateAllowedLoginGroupsRequest []AllowedLoginGroupRequest
@@ -78,12 +78,6 @@ type UpdateAllowedLoginGroupsRequest []AllowedLoginGroupRequest
 type AllowedLoginGroupRequest struct {
 	GroupID   string    `json:"groupId" validate:"required,uuid"`
 	GroupType GroupType `json:"groupType" validate:"required,oneof=BASE ADMIN"`
-}
-
-// UpdatePartitionAllowedGroupsRequest omits `required` so that an empty list is a valid way to
-// re-open a partition to every group.
-type UpdatePartitionAllowedGroupsRequest struct {
-	GroupIDs []string `json:"groupIds" validate:"dive,uuid"`
 }
 
 type AllowedLoginGroupResponse struct {
@@ -95,6 +89,7 @@ type AllowedLoginGroupResponse struct {
 
 type PartitionAllowedGroupResponse struct {
 	GroupID string `json:"groupId"`
+	Type    string `json:"type"`
 	Title   string `json:"title"`
 	LdapCN  string `json:"ldapCn"`
 }
@@ -286,35 +281,10 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req UpdateAllowedLoginGroupsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.problemWriter.WriteError(
-			traceCtx,
-			w,
-			handlerutil.NewValidationErrorWithErrors(
-				"invalid JSON payload",
-				[]string{err.Error()},
-			),
-			logger,
-		)
+	groups, err := h.decodeGroupSelections(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	for _, group := range req {
-		if err := h.validator.Struct(group); err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-	}
-
-	groups := make([]AllowedLoginGroupSelection, len(req))
-	for i, group := range req {
-		id, err := uuid.Parse(group.GroupID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.GroupType}
 	}
 
 	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groups); err != nil {
@@ -322,6 +292,29 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// decodeGroupSelections parses a JSON array of {groupId, groupType} entries, the request body of
+// both the allowed-login-group and the partition-allowed-group endpoints, and validates each one.
+// An empty array is valid.
+func (h *Handler) decodeGroupSelections(r *http.Request) ([]AllowedLoginGroupSelection, error) {
+	var req UpdateAllowedLoginGroupsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, handlerutil.NewValidationErrorWithErrors("invalid JSON payload", []string{err.Error()})
+	}
+
+	groups := make([]AllowedLoginGroupSelection, len(req))
+	for i, group := range req {
+		if err := h.validator.Struct(group); err != nil {
+			return nil, err
+		}
+		id, err := uuid.Parse(group.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.GroupType}
+	}
+	return groups, nil
 }
 
 func (h *Handler) GetPartitionAllowedGroups(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +334,7 @@ func (h *Handler) GetPartitionAllowedGroups(w http.ResponseWriter, r *http.Reque
 	for i, g := range groups {
 		responses[i] = PartitionAllowedGroupResponse{
 			GroupID: g.GroupID.String(),
+			Type:    string(g.Type),
 			Title:   g.Title,
 			LdapCN:  g.LdapCN,
 		}
@@ -355,23 +349,14 @@ func (h *Handler) UpdatePartitionAllowedGroups(w http.ResponseWriter, r *http.Re
 
 	partitionName := r.PathValue("partition_name")
 
-	var req UpdatePartitionAllowedGroupsRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	// An empty array re-opens the partition to every group.
+	groups, err := h.decodeGroupSelections(r)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	groupIDs := make([]uuid.UUID, len(req.GroupIDs))
-	for i, raw := range req.GroupIDs {
-		id, err := uuid.Parse(raw)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		groupIDs[i] = id
-	}
-
-	if err := h.store.SetPartitionAllowedGroups(traceCtx, partitionName, groupIDs); err != nil {
+	if err := h.store.SetPartitionAllowedGroups(traceCtx, partitionName, groups); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
