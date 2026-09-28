@@ -324,14 +324,19 @@ func (s *Service) ListUsers(ctx context.Context, params ListUsersServiceParams) 
 
 	var res = make([]ListUsersRowWithLinuxUsername, len(items))
 	for i, item := range items {
-		ldapInfo, err := s.ldapClient.GetUserInfoByUIDNumber(item.UidNumber)
-		if err != nil {
-			logger.Warn("Failed to get LDAP info for user", zap.String("userID", item.ID.String()), zap.Int64("uidNumber", item.UidNumber), zap.Error(err))
-			continue
-		}
 		res[i] = ListUsersRowWithLinuxUsername{
 			ListUsersRow:  item,
-			LinuxUsername: ldapInfo.GetAttributeValue("uid"),
+			LinuxUsername: "not_setup",
+		}
+
+		if item.UidNumber.Valid {
+			ldapInfo, err := s.ldapClient.GetUserInfoByUIDNumber(item.UidNumber.Int64)
+			if err != nil {
+				logger.Warn("Failed to get LDAP info for user", zap.String("userID", item.ID.String()), zap.Int64("uidNumber", item.UidNumber.Int64), zap.Error(err))
+				continue
+			}
+
+			res[i].LinuxUsername = ldapInfo.GetAttributeValue("uid")
 		}
 	}
 

@@ -18,7 +18,12 @@ func (c *Client) SearchByFilter(baseDN string, filter string, attributes []strin
 		nil,
 	)
 
-	result, err := c.Conn.Search(searchReq)
+	var result *ldap.SearchResult
+	err := c.withConn(func(conn *ldap.Conn) error {
+		var err error
+		result, err = conn.Search(searchReq)
+		return err
+	})
 	if err != nil {
 		c.Logger.Error("failed to search by filter",
 			zap.String("baseDN", baseDN),

@@ -16,4 +16,6 @@ var (
 	ErrUserConstraintViolation  = errors.New("user constraint violation (uid or uidNumber conflict)")
 	ErrPublicKeyNotFound        = errors.New("public key not found")
 	ErrPublicKeyExists          = errors.New("public key already exists")
+	ErrConnNotEstablished       = errors.New("ldap connection is not established")
+	ErrReconnectBackoff         = errors.New("ldap reconnect suppressed by backoff")
 )

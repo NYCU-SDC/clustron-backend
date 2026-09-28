@@ -194,7 +194,7 @@ func (h *Handler) ListUserHandler(w http.ResponseWriter, r *http.Request) {
 	for i, item := range items {
 		responseItems[i] = Response{
 			ID:            item.ID,
-			FullName:      item.FullName.String,
+			FullName:      item.FullName,
 			Email:         item.Email,
 			StudentID:     item.StudentID.String,
 			LinuxUsername: item.LinuxUsername,

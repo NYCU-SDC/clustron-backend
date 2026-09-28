@@ -497,46 +497,77 @@ func (s *Service) Join(ctx context.Context, userId uuid.UUID, groupId uuid.UUID,
 	// Add user to LDAP admin group
 	accessLevel := grouprole.AccessLevel(roleInfo.AccessLevel)
 	if accessLevel == grouprole.AccessLevelOwner || accessLevel == grouprole.AccessLevelAdmin {
+		// Only the membership this step actually created may be compensated: if
+		// the user was already in the group beforehand, that membership is not
+		// ours to undo.
+		var addedToAdminGroup bool
 		saga.AddStep(internal.SagaStep{
 			Name: "AddUserToLDAPAdminGroup",
 			Action: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+				err := s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+						logger.Warn("user already in ldap admin group, treating add as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
 					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
+				addedToAdminGroup = true
 				logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+				if !addedToAdminGroup {
+					logger.Debug("skip compensation, user was already in ldap admin group before this transaction", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
+				err := s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
+					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+						logger.Warn("user not in ldap admin group, treating removal as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						return nil
+					}
 					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
-				logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+				logger.Debug("remove user from ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 				return nil
 			},
 		})
 	}
 
+	var addedToBaseGroup bool
 	saga.AddStep(internal.SagaStep{
 		Name: "AddUserToLDAPBaseGroup",
 		Action: func(ctx context.Context) error {
-			err = s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
+			err := s.ldapClient.AddUserToGroup(baseCN, ldapUserInfo.Username)
 			if err != nil {
+				if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
+					logger.Warn("user already in ldap base group, treating add as done", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
 				logger.Error("add user to ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
+			addedToBaseGroup = true
 			return nil
 		},
 		Compensate: func(ctx context.Context) error {
-			err = s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
+			if !addedToBaseGroup {
+				logger.Debug("skip compensation, user was already in ldap base group before this transaction", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
+				return nil
+			}
+			err := s.ldapClient.RemoveUserFromGroup(baseCN, ldapUserInfo.Username)
 			if err != nil {
+				if errors.Is(err, ldaputil.ErrUserNotInGroup) {
+					logger.Warn("user not in ldap base group, treating removal as done", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
 				logger.Error("remove user from ldap base group failed", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 				return err
 			}
-			logger.Debug("add user to ldap admin group succeeded", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+			logger.Debug("remove user from ldap base group succeeded", zap.String("group", baseCN), zap.String("username", ldapUserInfo.Username))
 			return nil
 		},
 	})
@@ -978,25 +1009,33 @@ func (s *Service) updateRole(ctx context.Context, tx pgx.Tx, groupId uuid.UUID, 
 
 	if (oldRoleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() || oldRoleInfo.AccessLevel == grouprole.AccessLevelOwner.String()) && roleInfo.AccessLevel == grouprole.AccessLevelUser.String() {
 		// Remove from admin group, add to base group
+		// Only re-add on compensation if this step actually removed the user;
+		// a user who was not in the group beforehand must stay out.
+		var removedFromAdminGroup bool
 		saga.AddStep(internal.SagaStep{
 			Name: "RemoveUserFromLDAPAdminGroup",
 			Action: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+				err := s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
 					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
-						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						logger.Warn("user not in ldap admin group, treating removal as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 						return nil
 					}
 					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
+				removedFromAdminGroup = true
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+				if !removedFromAdminGroup {
+					logger.Debug("skip compensation, user was not in ldap admin group before this transaction", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
+				err := s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
 					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
-						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						logger.Warn("user already in ldap admin group, treating add as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 						return nil
 					}
 					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
@@ -1008,25 +1047,31 @@ func (s *Service) updateRole(ctx context.Context, tx pgx.Tx, groupId uuid.UUID, 
 	}
 
 	if oldRoleInfo.AccessLevel == grouprole.AccessLevelUser.String() && (roleInfo.AccessLevel == grouprole.AccessLevelAdmin.String() || roleInfo.AccessLevel == grouprole.AccessLevelOwner.String()) {
+		var addedToAdminGroup bool
 		saga.AddStep(internal.SagaStep{
 			Name: "AddUserToLDAPAdminGroup",
 			Action: func(ctx context.Context) error {
-				err = s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
+				err := s.ldapClient.AddUserToGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
 					if errors.Is(err, ldaputil.ErrUserAlreadyInGroup) {
-						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						logger.Warn("user already in ldap admin group, treating add as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 						return nil
 					}
 					logger.Error("add user to ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))
 					return err
 				}
+				addedToAdminGroup = true
 				return nil
 			},
 			Compensate: func(ctx context.Context) error {
-				err = s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
+				if !addedToAdminGroup {
+					logger.Debug("skip compensation, user was already in ldap admin group before this transaction", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+					return nil
+				}
+				err := s.ldapClient.RemoveUserFromGroup(adminCN, ldapUserInfo.Username)
 				if err != nil {
 					if errors.Is(err, ldaputil.ErrUserNotInGroup) {
-						logger.Warn("user not in ldap admin group, skipping removal", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
+						logger.Warn("user not in ldap admin group, treating removal as done", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username))
 						return nil
 					}
 					logger.Error("remove user from ldap admin group failed", zap.String("group", adminCN), zap.String("username", ldapUserInfo.Username), zap.Error(err))

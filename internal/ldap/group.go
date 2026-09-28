@@ -42,7 +42,9 @@ func (c *Client) CreateGroup(groupName string, gidNumber string, memberUids []st
 		addRequest.Attribute("memberUid", []string{memberUid})
 	}
 
-	err = c.Conn.Add(addRequest)
+	err = c.withConn(func(conn *ldap.Conn) error {
+		return conn.Add(addRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) {
@@ -84,7 +86,9 @@ func (c *Client) GetGroupInfo(groupName string) (*ldap.Entry, error) {
 func (c *Client) DeleteGroup(groupName string) error {
 	dn := fmt.Sprintf("cn=%s,%s", groupName, c.LDAPGroupDN)
 	deleteRequest := ldap.NewDelRequest(dn, nil)
-	err := c.Conn.Del(deleteRequest)
+	err := c.withConn(func(conn *ldap.Conn) error {
+		return conn.Del(deleteRequest)
+	})
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultNoSuchObject {
@@ -114,7 +118,9 @@ func (c *Client) AddUserToGroup(groupName string, memberUid string) error {
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Add("memberUid", []string{memberUid})
 
-	err = c.Conn.Modify(modifyRequest)
+	err = c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 	if err != nil {
 		c.Logger.Error("failed to add user to group", zap.String("group_name", groupName), zap.String("user_uid", memberUid), zap.Error(err))
 		return fmt.Errorf("failed to add user to group: %v", err)
@@ -139,7 +145,9 @@ func (c *Client) RemoveUserFromGroup(groupName string, memberUid string) error {
 	modifyRequest := ldap.NewModifyRequest(dn, nil)
 	modifyRequest.Delete("memberUid", []string{memberUid})
 
-	err = c.Conn.Modify(modifyRequest)
+	err = c.withConn(func(conn *ldap.Conn) error {
+		return conn.Modify(modifyRequest)
+	})
 	if err != nil {
 		c.Logger.Error("failed to remove user from group", zap.String("groupName", groupName), zap.String("memberUid", memberUid), zap.Error(err))
 		return fmt.Errorf("failed to remove user from group: %w", err)

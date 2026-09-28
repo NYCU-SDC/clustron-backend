@@ -217,3 +217,60 @@ func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 		})
 	}
 }
+
+func newAllowedLoginGroupsRequest(method string, serverID uuid.UUID, body []byte) *http.Request {
+	var r *http.Request
+	if body == nil {
+		r = httptest.NewRequest(method, "/api/servers/"+serverID.String()+"/allowedLoginGroups", nil)
+	} else {
+		r = httptest.NewRequest(method, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
+	}
+	r.SetPathValue("server_id", serverID.String())
+	return r
+}
+
+func TestHandler_UpdateAllowedLoginGroups_UsesGroupIDAndType(t *testing.T) {
+	serverID, baseGroupID, adminGroupID := uuid.New(), uuid.New(), uuid.New()
+	store := ansiblemocks.NewStore(t)
+	store.On("SetAllowedLoginGroups", mock.Anything, serverID, []ansible.AllowedLoginGroupSelection{
+		{GroupID: baseGroupID, Type: ansible.GroupTypeBASE},
+		{GroupID: adminGroupID, Type: ansible.GroupTypeADMIN},
+	}).Return(nil)
+	body := `[{"groupId":"` + baseGroupID.String() + `","groupType":"BASE"},{"groupId":"` + adminGroupID.String() + `","groupType":"ADMIN"}]`
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).UpdateAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodPut, serverID, []byte(body)))
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
+func TestHandler_UpdateAllowedLoginGroups_RejectsInvalidType(t *testing.T) {
+	serverID := uuid.New()
+	// No expectations: any store call fails the test.
+	store := ansiblemocks.NewStore(t)
+	body := `[{"groupId":"` + uuid.NewString() + `","groupType":"OWNER"}]`
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).UpdateAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodPut, serverID, []byte(body)))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "oneof")
+}
+
+func TestHandler_GetAllowedLoginGroups_ReturnsGroupType(t *testing.T) {
+	serverID, groupID := uuid.New(), uuid.New()
+	store := ansiblemocks.NewStore(t)
+	store.On("ListAllowedLoginGroups", mock.Anything, serverID).Return([]ansible.AllowedLoginGroupDetail{
+		{GroupID: groupID, Type: ansible.GroupTypeADMIN, Title: "Research", LdapCN: "research-admin"},
+	}, nil)
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).GetAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodGet, serverID, nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []ansible.AllowedLoginGroupResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, []ansible.AllowedLoginGroupResponse{
+		{GroupID: groupID.String(), Type: "ADMIN", Title: "Research", LdapCN: "research-admin"},
+	}, got)
+}
