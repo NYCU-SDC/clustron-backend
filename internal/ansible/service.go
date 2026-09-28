@@ -21,7 +21,6 @@ import (
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -780,9 +779,9 @@ func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName 
 }
 
 // SetPartitionAllowedGroups replaces a partition's allowed-group list with the given groups,
-// then re-renders slurm.conf in the background. Each group must already have a BASE LDAP
-// group, since its ldap_cn is the name of the group's top-level Slurm account. An empty list
-// leaves the partition unrestricted.
+// then re-renders slurm.conf in the background. Each group is stored as its BASE LDAP group,
+// whose ldap_cn is the name of the group's top-level Slurm account; a group without one is
+// rejected. An empty list leaves the partition unrestricted.
 func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName string, groupIDs []uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetPartitionAllowedGroups")
 	defer span.End()
@@ -792,14 +791,17 @@ func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName s
 		return err
 	}
 
-	for _, id := range groupIDs {
-		exist, err := s.queries.ExistBaseLdapGroup(traceCtx, id)
+	ldapGroupIDs := make([]uuid.UUID, len(groupIDs))
+	for i, id := range groupIDs {
+		ldapGroupID, err := s.ldapQueries.GetLDAPGroupIDByGroupIDAndType(traceCtx, ldapgroup.GetLDAPGroupIDByGroupIDAndTypeParams{
+			GroupID: id,
+			Type:    ldapgroup.GroupTypeBASE,
+		})
 		if err != nil {
-			return databaseutil.WrapDBError(err, logger, "check base ldap group exists")
+			value := fmt.Sprintf("%s/%s", id, ldapgroup.GroupTypeBASE)
+			return databaseutil.WrapDBErrorWithKeyValue(err, "ldap_groups", "group_id/type", value, logger, "find BASE LDAP group for partition allowed group")
 		}
-		if !exist {
-			return databaseutil.WrapDBErrorWithKeyValue(pgx.ErrNoRows, "ldap_groups", "group_id", id.String(), logger, "find base ldap group for partition allowed group")
-		}
+		ldapGroupIDs[i] = ldapGroupID
 	}
 
 	tx, err := s.db.Begin(traceCtx)
@@ -812,10 +814,10 @@ func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName s
 	if err = qtx.ClearPartitionAllowedGroups(traceCtx, partitionName); err != nil {
 		return databaseutil.WrapDBError(err, logger, "clear partition allowed groups")
 	}
-	for _, id := range groupIDs {
+	for _, id := range ldapGroupIDs {
 		if err = qtx.AddPartitionAllowedGroup(traceCtx, AddPartitionAllowedGroupParams{
 			PartitionName: partitionName,
-			GroupID:       id,
+			LdapGroupID:   id,
 		}); err != nil {
 			return mapPartitionAllowedGroupError(err, id, logger)
 		}
@@ -875,10 +877,10 @@ func validatePartitionExists(partitionName string, known []string) error {
 	return handlerutil.NewNotFoundError("partitions", "name", partitionName, "")
 }
 
-func mapPartitionAllowedGroupError(err error, groupID uuid.UUID, logger *zap.Logger) error {
+func mapPartitionAllowedGroupError(err error, ldapGroupID uuid.UUID, logger *zap.Logger) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
-		return handlerutil.NewNotFoundError("groups", "id", groupID.String(), "")
+		return handlerutil.NewNotFoundError("ldap_groups", "id", ldapGroupID.String(), "")
 	}
 	return databaseutil.WrapDBError(err, logger, "add partition allowed group")
 }

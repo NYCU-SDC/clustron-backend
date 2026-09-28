@@ -4,11 +4,12 @@
 --
 -- Keyed by partition name because partitions are not an entity: they exist only as the
 -- servers.slurm_partition label on each compute node, grouped into PartitionName lines by
--- the slurm_controller ansible template.
+-- the slurm_controller ansible template. Rows reference the group's BASE ldap_groups row,
+-- whose ldap_cn is the group's top-level Slurm account.
 CREATE TABLE IF NOT EXISTS partition_allowed_groups
 (
     partition_name VARCHAR(255) NOT NULL,
-    group_id       UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    ldap_group_id  UUID NOT NULL REFERENCES ldap_groups(id) ON DELETE CASCADE,
 
-    PRIMARY KEY (partition_name, group_id)
+    PRIMARY KEY (partition_name, ldap_group_id)
 );

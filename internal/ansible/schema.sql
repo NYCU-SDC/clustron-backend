@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS allowed_login_groups
 CREATE TABLE IF NOT EXISTS partition_allowed_groups
 (
     partition_name VARCHAR(255) NOT NULL,
-    group_id       UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    ldap_group_id  UUID NOT NULL REFERENCES ldap_groups(id) ON DELETE CASCADE,
 
-    PRIMARY KEY (partition_name, group_id)
+    PRIMARY KEY (partition_name, ldap_group_id)
 );

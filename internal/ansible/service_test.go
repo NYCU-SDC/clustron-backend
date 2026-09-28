@@ -530,13 +530,14 @@ func TestValidatePartitionExists(t *testing.T) {
 }
 
 func TestMapPartitionAllowedGroupError(t *testing.T) {
-	groupID := uuid.New()
+	ldapGroupID := uuid.New()
 
-	err := mapPartitionAllowedGroupError(&pgconn.PgError{Code: "23503", ConstraintName: "partition_allowed_groups_group_id_fkey"}, groupID, zap.NewNop())
+	err := mapPartitionAllowedGroupError(&pgconn.PgError{Code: "23503", ConstraintName: "partition_allowed_groups_ldap_group_id_fkey"}, ldapGroupID, zap.NewNop())
 	assert.ErrorIs(t, err, handlerutil.ErrNotFound)
-	assert.Contains(t, err.Error(), groupID.String())
+	assert.Contains(t, err.Error(), "ldap_groups")
+	assert.Contains(t, err.Error(), ldapGroupID.String())
 
-	other := mapPartitionAllowedGroupError(errors.New("connection reset"), groupID, zap.NewNop())
+	other := mapPartitionAllowedGroupError(errors.New("connection reset"), ldapGroupID, zap.NewNop())
 	assert.NotErrorIs(t, other, handlerutil.ErrNotFound)
 }
 
