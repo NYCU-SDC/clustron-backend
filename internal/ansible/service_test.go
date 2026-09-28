@@ -488,7 +488,7 @@ func TestKnownPartitionNames(t *testing.T) {
 			want: []string{defaultPartitionName},
 		},
 		{
-			name: "unset and an explicit normal do not duplicate the entry meaningfully",
+			name: "unset and an explicit normal both yield normal (duplicates are harmless for membership checks)",
 			rows: []pgtype.Text{{Valid: false}, {String: "normal", Valid: true}},
 			want: []string{"normal", defaultPartitionName},
 		},
