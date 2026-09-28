@@ -41,6 +41,7 @@ func TestPartitionAllowedGroupQueries(t *testing.T) {
 		grp := dbtestdata.NewBuilder(t, db).Group().Create(dbtestdata.GroupWithTitle("CS Lab"))
 		baseID := insertLdapGroup(t, db, grp.ID, ptr("cslab"), "BASE", 90001)
 		insertLdapGroup(t, db, grp.ID, ptr("cslab-admin"), "ADMIN", 90002)
+		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
 
 		require.NoError(t, q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "gpu", LdapGroupID: baseID}))
 
@@ -62,6 +63,7 @@ func TestPartitionAllowedGroupQueries(t *testing.T) {
 		q := ansible.New(db)
 		grp := dbtestdata.NewBuilder(t, db).Group().Create()
 		baseID := insertLdapGroup(t, db, grp.ID, ptr("gone"), "BASE", 90011)
+		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
 		require.NoError(t, q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "gpu", LdapGroupID: baseID}))
 
 		_, err := db.Exec(t.Context(), `DELETE FROM ldap_groups WHERE id = $1`, baseID)
@@ -75,6 +77,7 @@ func TestPartitionAllowedGroupQueries(t *testing.T) {
 	t.Run("rejects unknown ldap group with named FK", func(t *testing.T) {
 		db := resourceManager.SetupPostgres(t)
 		q := ansible.New(db)
+		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
 
 		err := q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "gpu", LdapGroupID: uuid.New()})
 
@@ -93,5 +96,68 @@ func TestPartitionAllowedGroupQueries(t *testing.T) {
 			Type:    ldapgroup.GroupTypeBASE,
 		})
 		assert.ErrorIs(t, err, pgx.ErrNoRows)
+	})
+}
+
+func TestPartitionQueries(t *testing.T) {
+	resourceManager, _, err := integration.GetOrInitResource()
+	require.NoError(t, err)
+	defer resourceManager.Cleanup(t.Context())
+
+	// computeNode satisfies the servers check constraints: a connection (ssh_config_host) and
+	// a cluster address (private_ip).
+	computeNode := func(name, privateIP, partition string) ansible.CreateParams {
+		return ansible.CreateParams{
+			AnsibleName:    name,
+			SshConfigHost:  pgtype.Text{String: name, Valid: true},
+			PrivateIp:      pgtype.Text{String: privateIP, Valid: true},
+			AnsibleRole:    "compute_nodes",
+			SlurmPartition: pgtype.Text{String: partition, Valid: partition != ""},
+			Status:         "unset",
+		}
+	}
+
+	t.Run("seeds the normal partition", func(t *testing.T) {
+		db := resourceManager.SetupPostgres(t)
+
+		exists, err := ansible.New(db).ExistPartition(t.Context(), "normal")
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("server with unknown partition violates FK", func(t *testing.T) {
+		db := resourceManager.SetupPostgres(t)
+
+		_, err := ansible.New(db).Create(t.Context(), computeNode("cpu1", "10.0.0.1", "ghost"))
+
+		var pgErr *pgconn.PgError
+		require.ErrorAs(t, err, &pgErr)
+		assert.Equal(t, "servers_slurm_partition_fkey", pgErr.ConstraintName)
+	})
+
+	t.Run("upsert then create server", func(t *testing.T) {
+		db := resourceManager.SetupPostgres(t)
+		q := ansible.New(db)
+
+		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
+		require.NoError(t, q.UpsertPartition(t.Context(), "gpu"))
+
+		_, err := q.Create(t.Context(), computeNode("gpu1", "10.0.0.2", "gpu"))
+		require.NoError(t, err)
+		_, err = q.Create(t.Context(), computeNode("cpu1", "10.0.0.3", ""))
+		require.NoError(t, err)
+	})
+
+	t.Run("allowed group needs an existing partition", func(t *testing.T) {
+		db := resourceManager.SetupPostgres(t)
+		q := ansible.New(db)
+		grp := dbtestdata.NewBuilder(t, db).Group().Create()
+		baseID := insertLdapGroup(t, db, grp.ID, ptr("lab"), "BASE", 90031)
+
+		err := q.AddPartitionAllowedGroup(t.Context(), ansible.AddPartitionAllowedGroupParams{PartitionName: "ghost", LdapGroupID: baseID})
+
+		var pgErr *pgconn.PgError
+		require.ErrorAs(t, err, &pgErr)
+		assert.Equal(t, "partition_allowed_groups_partition_name_fkey", pgErr.ConstraintName)
 	})
 }

@@ -143,6 +143,11 @@ func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server
 	servers := make([]Server, len(params))
 	for i := range params {
 		params[i].Status = "provisioning"
+		if params[i].SlurmPartition.Valid {
+			if err = qtx.UpsertPartition(traceCtx, params[i].SlurmPartition.String); err != nil {
+				return nil, databaseutil.WrapDBError(err, logger, "upsert partition")
+			}
+		}
 		server, err := qtx.Create(traceCtx, params[i])
 		if err != nil {
 			var pgErr *pgconn.PgError
@@ -819,7 +824,7 @@ func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName s
 			PartitionName: partitionName,
 			LdapGroupID:   id,
 		}); err != nil {
-			return mapPartitionAllowedGroupError(err, id, logger)
+			return mapPartitionAllowedGroupError(err, partitionName, id, logger)
 		}
 	}
 	if err = tx.Commit(traceCtx); err != nil {
@@ -837,8 +842,8 @@ func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName s
 	return nil
 }
 
-// ensurePartitionExists rejects partition names that slurm.conf will not contain. Partitions
-// are not an entity: they exist only as the slurm_partition label on compute nodes.
+// ensurePartitionExists rejects partition names that slurm.conf will not contain. A row in
+// partitions is not enough: slurm.conf only emits partitions that have compute nodes.
 func (s *Service) ensurePartitionExists(ctx context.Context, partitionName string) error {
 	logger := logutil.WithContext(ctx, s.logger)
 
@@ -877,9 +882,12 @@ func validatePartitionExists(partitionName string, known []string) error {
 	return handlerutil.NewNotFoundError("partitions", "name", partitionName, "")
 }
 
-func mapPartitionAllowedGroupError(err error, ldapGroupID uuid.UUID, logger *zap.Logger) error {
+func mapPartitionAllowedGroupError(err error, partitionName string, ldapGroupID uuid.UUID, logger *zap.Logger) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == databaseutil.PGErrForeignKeyViolation {
+		if pgErr.ConstraintName == "partition_allowed_groups_partition_name_fkey" {
+			return handlerutil.NewNotFoundError("partitions", "name", partitionName, "")
+		}
 		return handlerutil.NewNotFoundError("ldap_groups", "id", ldapGroupID.String(), "")
 	}
 	return databaseutil.WrapDBError(err, logger, "add partition allowed group")

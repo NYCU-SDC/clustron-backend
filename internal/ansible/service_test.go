@@ -531,13 +531,26 @@ func TestValidatePartitionExists(t *testing.T) {
 
 func TestMapPartitionAllowedGroupError(t *testing.T) {
 	ldapGroupID := uuid.New()
+	tests := []struct {
+		name       string
+		constraint string
+		wantTable  string
+		wantValue  string
+	}{
+		{name: "unknown partition", constraint: "partition_allowed_groups_partition_name_fkey", wantTable: "partitions", wantValue: "gpu"},
+		{name: "unknown ldap group", constraint: "partition_allowed_groups_ldap_group_id_fkey", wantTable: "ldap_groups", wantValue: ldapGroupID.String()},
+	}
 
-	err := mapPartitionAllowedGroupError(&pgconn.PgError{Code: "23503", ConstraintName: "partition_allowed_groups_ldap_group_id_fkey"}, ldapGroupID, zap.NewNop())
-	assert.ErrorIs(t, err, handlerutil.ErrNotFound)
-	assert.Contains(t, err.Error(), "ldap_groups")
-	assert.Contains(t, err.Error(), ldapGroupID.String())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := mapPartitionAllowedGroupError(&pgconn.PgError{Code: "23503", ConstraintName: tt.constraint}, "gpu", ldapGroupID, zap.NewNop())
+			assert.ErrorIs(t, err, handlerutil.ErrNotFound)
+			assert.Contains(t, err.Error(), tt.wantTable)
+			assert.Contains(t, err.Error(), tt.wantValue)
+		})
+	}
 
-	other := mapPartitionAllowedGroupError(errors.New("connection reset"), ldapGroupID, zap.NewNop())
+	other := mapPartitionAllowedGroupError(errors.New("connection reset"), "gpu", ldapGroupID, zap.NewNop())
 	assert.NotErrorIs(t, other, handlerutil.ErrNotFound)
 }
 

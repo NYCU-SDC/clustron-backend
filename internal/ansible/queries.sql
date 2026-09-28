@@ -73,6 +73,12 @@ ON CONFLICT DO NOTHING;
 -- name: ExistServerAllowedLoginGroup :one
 SELECT EXISTS (SELECT 1 FROM allowed_login_groups WHERE server_id = $1) AS exists;
 
+-- name: UpsertPartition :exec
+INSERT INTO partitions (name) VALUES ($1) ON CONFLICT DO NOTHING;
+
+-- name: ExistPartition :one
+SELECT EXISTS (SELECT 1 FROM partitions WHERE name = $1) AS exists;
+
 -- name: ListDistinctPartitionNames :many
 SELECT DISTINCT slurm_partition
 FROM servers
