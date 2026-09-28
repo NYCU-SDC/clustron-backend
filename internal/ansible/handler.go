@@ -57,6 +57,7 @@ type UpdateRoleRequest struct {
 	AnsibleRole string `json:"ansible_role" validate:"required,oneof=head_nodes compute_nodes"`
 }
 
+//mockery:generate: true
 type Store interface {
 	ListAll(ctx context.Context) ([]Server, error)
 	AddNode(ctx context.Context, params CreateParams) (Server, error)
@@ -68,6 +69,8 @@ type Store interface {
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Server, error)
 	ListAllowedLoginGroups(ctx context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error)
 	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error
+	ListPartitionAllowedGroups(ctx context.Context, partitionName string) ([]PartitionAllowedGroupDetail, error)
+	SetPartitionAllowedGroups(ctx context.Context, partitionName string, groups []AllowedLoginGroupSelection) error
 }
 
 type UpdateAllowedLoginGroupsRequest []AllowedLoginGroupRequest
@@ -78,6 +81,13 @@ type AllowedLoginGroupRequest struct {
 }
 
 type AllowedLoginGroupResponse struct {
+	GroupID string `json:"groupId"`
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	LdapCN  string `json:"ldapCn"`
+}
+
+type PartitionAllowedGroupResponse struct {
 	GroupID string `json:"groupId"`
 	Type    string `json:"type"`
 	Title   string `json:"title"`
@@ -271,38 +281,82 @@ func (h *Handler) UpdateAllowedLoginGroups(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req UpdateAllowedLoginGroupsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.problemWriter.WriteError(
-			traceCtx,
-			w,
-			handlerutil.NewValidationErrorWithErrors(
-				"invalid JSON payload",
-				[]string{err.Error()},
-			),
-			logger,
-		)
+	groups, err := h.decodeGroupSelections(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	for _, group := range req {
-		if err := h.validator.Struct(group); err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
+	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groups); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// decodeGroupSelections parses a JSON array of {groupId, groupType} entries, the request body of
+// both the allowed-login-group and the partition-allowed-group endpoints, and validates each one.
+// An empty array is valid.
+func (h *Handler) decodeGroupSelections(r *http.Request) ([]AllowedLoginGroupSelection, error) {
+	var req UpdateAllowedLoginGroupsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, handlerutil.NewValidationErrorWithErrors("invalid JSON payload", []string{err.Error()})
 	}
 
 	groups := make([]AllowedLoginGroupSelection, len(req))
 	for i, group := range req {
+		if err := h.validator.Struct(group); err != nil {
+			return nil, err
+		}
 		id, err := uuid.Parse(group.GroupID)
 		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
+			return nil, err
 		}
 		groups[i] = AllowedLoginGroupSelection{GroupID: id, Type: group.GroupType}
 	}
+	return groups, nil
+}
 
-	if err := h.store.SetAllowedLoginGroups(traceCtx, serverID, groups); err != nil {
+func (h *Handler) GetPartitionAllowedGroups(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetPartitionAllowedGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	partitionName := r.PathValue("partition_name")
+
+	groups, err := h.store.ListPartitionAllowedGroups(traceCtx, partitionName)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	responses := make([]PartitionAllowedGroupResponse, len(groups))
+	for i, g := range groups {
+		responses[i] = PartitionAllowedGroupResponse{
+			GroupID: g.GroupID.String(),
+			Type:    string(g.Type),
+			Title:   g.Title,
+			LdapCN:  g.LdapCN,
+		}
+	}
+	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) UpdatePartitionAllowedGroups(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdatePartitionAllowedGroups")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	partitionName := r.PathValue("partition_name")
+
+	// An empty array re-opens the partition to every group.
+	groups, err := h.decodeGroupSelections(r)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if err := h.store.SetPartitionAllowedGroups(traceCtx, partitionName, groups); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
