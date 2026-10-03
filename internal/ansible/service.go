@@ -40,9 +40,10 @@ const (
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
 	LogFilePath         = "ansible-deploy.log"
 
-	headNodeRole            = "head_nodes"
-	computeNodeRole         = "compute_nodes"
-	sssdTag                 = "sssd"
+	headNodeRole    = "head_nodes"
+	computeNodeRole = "compute_nodes"
+	sssdTag         = "sssd"
+
 	computePrerequisiteTags = "nfs_exports,slurm_config"
 )
 
@@ -612,11 +613,43 @@ func (s *Service) ResetNode(ctx context.Context, id uuid.UUID) (Server, error) {
 func (s *Service) SetupAllNodes(ctx context.Context) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetupAllNodes")
 	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
 
-	servers, err := s.ListAll(traceCtx)
+	tx, err := s.db.Begin(traceCtx)
 	if err != nil {
+		return databaseutil.WrapDBError(err, logger, "begin tx for setting up all servers")
+	}
+	defer func() { _ = tx.Rollback(traceCtx) }()
+
+	qtx := s.queries.WithTx(tx)
+	servers, err := qtx.ListAll(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list all servers")
 		span.RecordError(err)
 		return err
+	}
+
+	for i, server := range servers {
+		updated, err := qtx.UpdateStatus(traceCtx, UpdateStatusParams{ID: server.ID, Status: "provisioning"})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "set server status to provisioning")
+			span.RecordError(err)
+			return err
+		}
+		if err = qtx.UpdateProvisionDetail(traceCtx, UpdateProvisionDetailParams{
+			ID:              server.ID,
+			ProvisionDetail: pgtype.Text{Valid: false},
+		}); err != nil {
+			err = databaseutil.WrapDBError(err, logger, "clear provision detail")
+			span.RecordError(err)
+			return err
+		}
+		updated.ProvisionDetail = pgtype.Text{Valid: false}
+		servers[i] = updated
+	}
+
+	if err = tx.Commit(traceCtx); err != nil {
+		return databaseutil.WrapDBError(err, logger, "commit server status for setup all nodes")
 	}
 
 	bgCtx := context.WithoutCancel(traceCtx)
@@ -752,16 +785,30 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		return databaseutil.WrapDBError(err, s.logger, "list all servers from db")
 	}
 
+	ldapServerHost := s.ldapConfig.LDAPExternalHost
+	if ldapServerHost == "" {
+		ldapServerHost = s.ldapConfig.LDAPHost
+	}
+
 	inventory := InventoryFiles{
 		All: ServerGroup{
 			Vars: map[string]interface{}{
-				"slurm_version": "25.11.4-1",
-				"ldap_base_dn":  s.ldapConfig.LDAPBaseDN,
-				"ldap_bind_dn":  s.ldapConfig.LDAPBindDN,
-				"ldap_bind_pwd": s.ldapConfig.LDAPBindPwd,
+				"slurm_version":      "25.11.4-1",
+				"ldap_external_host": ldapServerHost,
+				"ldap_external_port": s.ldapConfig.ExternalPort(),
+				"ldap_uri_scheme":    s.ldapConfig.ExternalScheme(),
+				"ldap_base_dn":       s.ldapConfig.LDAPBaseDN,
+				"ldap_bind_dn":       s.ldapConfig.LDAPBindDN,
+				"ldap_bind_pwd":      s.ldapConfig.LDAPBindPwd,
 			},
 			Children: make(map[string]ChildNode),
 		},
+	}
+
+	// Without a CA the nodes fall back to an unverified TLS connection, so the
+	// variable is only set when there is something to verify against.
+	if s.ldapConfig.LDAPCACertFile != "" {
+		inventory.All.Vars["ldap_tls_cacert_src"] = s.ldapConfig.LDAPCACertFile
 	}
 
 	for _, srv := range servers {

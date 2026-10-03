@@ -100,7 +100,10 @@ services:
       - ALLOW_ORIGINS=* # change as needed
       - LDAP_DEBUG=true
       - LDAP_HOST=ldap # change as needed
+      - LDAP_EXTERNAL_HOST=ldap.example.com # change as needed
       - LDAP_PORT=389 # change as needed
+      - LDAP_EXTERNAL_PORT=636 # change as needed
+      - LDAP_EXTERNAL_SCHEME=ldaps # recommended, or password login could be broken
       - LDAP_BASE_DN=dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_DN=cn=admin,dc=clustron,dc=prj,dc=internal,dc=sdc,dc=nycu,dc=club # change as needed
       - LDAP_BIND_PWD=password # change as needed
@@ -150,26 +153,75 @@ We recommend to configure with environment variables.
 
 ### LDAP
 
-| Variable           | Description                                                                                            | Required |
-|--------------------|--------------------------------------------------------------------------------------------------------| -------- |
-| LDAP_DEBUG         | Enable LDAP debug logging (`true` / `false`)                                                           | No       |
-| LDAP_HOST          | Hostname of the LDAP server                                                                            | Yes      |
-| LDAP_PORT          | Port of the LDAP server (default: `389`)                                                               | Yes      |
-| LDAP_BASE_DN       | Base Distinguished Name for LDAP queries                                                               | Yes      |
-| LDAP_USER_OU_NAME  | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes      |
-| LDAP_GROUP_OU_NAME | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes      |
-| LDAP_BIND_DN       | Distinguished Name used to bind to the LDAP server                                                     | Yes      |
-| LDAP_BIND_PWD      | Password for the LDAP bind DN                                                                          | Yes      |
+| Variable             | Description                                                                                            | Required        |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | --------------- |
+| LDAP_DEBUG           | Enable LDAP debug logging (`true` / `false`)                                                           | No              |
+| LDAP_HOST            | Hostname of the LDAP server                                                                            | Yes             |
+| LDAP_EXTERNAL_HOST   | Externally reachable hostname or IP of the LDAP server, used by managed nodes (SSSD) to connect.       | No<sup>\*</sup> |
+| LDAP_PORT            | Port of the LDAP server (default: `389`)                                                               | Yes             |
+| LDAP_EXTERNAL_PORT   | Externally reachable port of the LDAP server, used by managed nodes (SSSD) to connect.                 | No<sup>\*</sup> |
+| LDAP_EXTERNAL_SCHEME | URI scheme managed nodes (SSSD) use to reach LDAP: `ldaps` (default) or `ldap`.                        | No<sup>\*</sup> |
+| LDAP_BASE_DN         | Base Distinguished Name for LDAP queries                                                               | Yes             |
+| LDAP_USER_OU_NAME    | OU for storing user entries. The base of user entries will be: `LDAP_BASE_DN` + `LDAP_USER_OU_NAME`    | Yes             |
+| LDAP_GROUP_OU_NAME   | OU for storing group entries. The base of group entries will be: `LDAP_BASE_DN` + `LDAP_GROUP_OU_NAME` | Yes             |
+| LDAP_BIND_DN         | Distinguished Name used to bind to the LDAP server                                                     | Yes             |
+| LDAP_BIND_PWD        | Password for the LDAP bind DN                                                                          | Yes             |
+| LDAP_CA_CERT_FILE    | CA certificate the backend hands to managed nodes so they can verify the LDAP server.                  | No              |
+
+> \* Provision cluster feature will fallback using LDAP_HOST if not supplied.
+> When LDAP_EXTERNAL_SCHEME is `ldaps` (the default), the external ldap port falls back to `636`, else it will fallback to LDAP_PORT.
+
+The same `slapd` serves both schemes, so the backend can keep talking plain `ldap://` over the
+internal network while managed nodes use `ldaps://`. Two things the LDAP server must provide:
+port `636` has to be reachable from the nodes, and `olcTLSVerifyClient` must not be `demand`,
+which would ask SSSD for a client certificate it does not have. With the `osixia/openldap:2.6`
+image the listeners are on `3890`/`6360` inside the container (published as `389`/`636`), TLS is
+enabled with `OPENLDAP_BOOTSTRAP_TLS=true`, and `OPENLDAP_BOOTSTRAP_TLS_VERIFY_CLIENT` already
+defaults to `allow`.
+
+#### TLS certificates
+
+Without `LDAP_CA_CERT_FILE`, nodes run with `ldap_tls_reqcert = allow`: the connection is
+encrypted, but the server is not authenticated, so a machine in the path can impersonate it.
+Point that variable at a CA and the node provisioning installs it and switches SSSD to
+`ldap_tls_reqcert = demand`.
+
+The image never generates a certificate of its own, and it only applies TLS settings during
+bootstrap, so the certificates have to exist before the LDAP container starts for the first time
+— otherwise `slapd` fails to start. They also need to cover the address in `LDAP_EXTERNAL_HOST`,
+since nodes usually dial an IP rather than the container name. `scripts/create_ldap_certs.sh`
+signs such a certificate:
+
+```bash
+# Every name or address nodes use to reach LDAP has to be listed.
+./scripts/create_ldap_certs.sh .deploy/stage/certs ldap ldap.example.com 10.1.253.28
+```
+
+`make gen_ldaps_ca` wraps the same script, defaulting to `.deploy/local/certs` with the SANs
+`ldap localhost`. Override `LDAP_CERT_DIR` and `LDAP_CERT_SANS` to sign for another environment:
+
+```bash
+make gen_ldaps_ca LDAP_CERT_DIR=.deploy/stage/certs LDAP_CERT_SANS="ldap ldap.example.com 10.1.253.28"
+```
+
+It writes `ca.crt`, `ca.key`, `ldap.crt` and `ldap.key` into `.deploy/<env>/certs/`, which is
+mounted into both containers: the LDAP server serves `ldap.crt`, and the backend reads `ca.crt`
+to hand to the nodes. After generating them, uncomment `LDAP_CA_CERT_FILE` in the compose file
+and re-run the cluster setup — the SSSD role installs the CA into the node's trust store at
+`/usr/local/share/ca-certificates/clustron-ldap-ca.crt`.
+
+Regenerating certificates replaces the server identity, so nodes that still trust the previous CA
+will refuse to connect until the setup runs again.
 
 ### Slurm
 
-| Variable                   | Description                                         | Required |
-|----------------------------|-----------------------------------------------------| -------- |
-| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service               | Yes      |
-| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service       | Yes      |
-| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node              | Yes      |
-| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`)  | Yes      |
-| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                  | Yes      |
+| Variable                   | Description                                        | Required |
+| -------------------------- | -------------------------------------------------- | -------- |
+| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service              | Yes      |
+| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service      | Yes      |
+| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node             | Yes      |
+| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
+| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                 | Yes      |
 
 **Slurm Token Helper** is a service that retrieves a Slurm JWT token for Slurm RESTful API access.
 

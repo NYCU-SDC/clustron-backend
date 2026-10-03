@@ -1,6 +1,7 @@
 - name: Install NFS Server
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name: nfs-kernel-server
     state: present
 

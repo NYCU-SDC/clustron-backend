@@ -33,11 +33,24 @@ services:
       OPENLDAP_BOOTSTRAP_DATA_ROOT_PASSWORD_HASHED: "password"
       OPENLDAP_BOOTSTRAP_CONFIG_ROOT_PASSWORD_HASHED: "password"
       CONTAINER_LOG_LEVEL: "debug"
+      # TLS is off by default in the 2.6 image and is only applied during
+      # bootstrap, so ./certs must exist before the first start
+      # (make gen_ldaps_ca). Unlike 1.5.0 the image never self-signs a fallback.
+      OPENLDAP_BOOTSTRAP_TLS: "true"
+      # slapd serves 3890 and 6360 from the same process; demanding a client
+      # certificate would break SSSD, which does not present one.
+      OPENLDAP_BOOTSTRAP_TLS_VERIFY_CLIENT: "allow"
+      # Signed by scripts/create_ldap_certs.sh. These are full paths, not filenames.
+      OPENLDAP_BOOTSTRAP_TLS_CERT: "/container/services/openldap/assets/certs/ldap.crt"
+      OPENLDAP_BOOTSTRAP_TLS_CERT_KEY: "/container/services/openldap/assets/certs/ldap.key"
+      OPENLDAP_BOOTSTRAP_TLS_CA_CERT: "/container/services/openldap/assets/certs/ca.crt"
     volumes:
       - ./ldif:/container/services/openldap-bootstrap/assets/ldif/data/custom:ro
       - ./schema/openssh-lpk.ldif:/container/services/openldap/assets/schema/openssh-lpk.ldif:ro
+      - ./certs:/container/services/openldap/assets/certs
     ports:
       - "389:3890"
+      - "636:6360"
 
   redis:
     image: redis:8.6.4
