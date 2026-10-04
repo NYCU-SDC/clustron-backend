@@ -28,6 +28,10 @@ enable_internal_login: false # Set to true if you are in the testing phase.
 linux_username_blacklist:
   - blacklist1
   - blacklist2
+# Server-local group names that can never be registered as system groups.
+# Always added to the built-in list: root, sudo, admin, wheel, adm, shadow, disk, kmem, sys, staff,
+# lxd, libvirt, systemd-journal, tty
+system_group_denylist: []
 ldap:
   ldap_debug: true
   ldap_host: "LDAP_HOST"

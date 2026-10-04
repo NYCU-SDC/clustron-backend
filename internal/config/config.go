@@ -53,6 +53,7 @@ type Config struct {
 	LDAP                    ldap.Config                    `yaml:"ldap"`
 	EnableInternalLogin     bool                           `yaml:"enable_internal_login" envconfig:"ENABLE_INTERNAL_LOGIN"`
 	LinuxUsernameBlacklist  []string                       `yaml:"linux_username_blacklist" envconfig:"LINUX_USERNAME_BLACKLIST"`
+	SystemGroupDenylist     []string                       `yaml:"system_group_denylist" envconfig:"SYSTEM_GROUP_DENYLIST"`
 }
 
 type LogBuffer struct {
@@ -206,6 +207,12 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 	allowOrigins := os.Getenv("ALLOW_ORIGINS")
 	if allowOrigins != "" {
 		config.AllowOrigins = strings.Split(allowOrigins, ",")
+	}
+
+	// System group denylist
+	systemGroupDenylist := os.Getenv("SYSTEM_GROUP_DENYLIST")
+	if systemGroupDenylist != "" {
+		config.SystemGroupDenylist = strings.Split(systemGroupDenylist, ",")
 	}
 
 	envConfig := &Config{
