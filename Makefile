@@ -5,7 +5,10 @@ BLUE = \033[0;34m
 RED = \033[0;31m
 NC = \033[0m
 
-.PHONY: all run build test gen clear slurm-up slurm-down slurm-token
+LDAP_CERT_DIR ?= .deploy/local/certs
+LDAP_CERT_SANS ?= ldap localhost
+
+.PHONY: all run build test gen gen_ldaps_ca clear slurm-up slurm-down slurm-token
 
 all: build
 
@@ -46,6 +49,12 @@ gen:
 	@echo -e "  -> Running go generate..."
 	@mockery
 	@echo -e "==> $(BLUE)Generation completed$(NC)"
+
+gen_ldaps_ca:
+	@echo -e ":: $(GREEN)Generating LDAP certificates...$(NC)"
+	@./scripts/create_ldap_certs.sh $(LDAP_CERT_DIR) $(LDAP_CERT_SANS) \
+		|| (echo -e "==> $(RED)Certificate generation failed$(NC)" && exit 1)
+	@echo -e "==> $(BLUE)Certificates written to $(LDAP_CERT_DIR)$(NC)"
 
 clear:
 	@echo -e ":: $(GREEN)Cleaning up...$(NC)"
