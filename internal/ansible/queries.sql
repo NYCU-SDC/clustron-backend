@@ -73,6 +73,40 @@ ON CONFLICT DO NOTHING;
 -- name: ExistServerAllowedLoginGroup :one
 SELECT EXISTS (SELECT 1 FROM allowed_login_groups WHERE server_id = $1) AS exists;
 
+-- name: UpsertPartition :exec
+INSERT INTO partitions (name) VALUES ($1) ON CONFLICT DO NOTHING;
+
+-- name: ExistPartition :one
+SELECT EXISTS (SELECT 1 FROM partitions WHERE name = $1) AS exists;
+
+-- name: ListDistinctPartitionNames :many
+SELECT DISTINCT slurm_partition
+FROM servers
+WHERE ansible_role = 'compute_nodes'
+ORDER BY slurm_partition;
+
+-- name: ListPartitionAllowedGroups :many
+SELECT lg.group_id, lg.type, g.title, lg.ldap_cn
+FROM partition_allowed_groups pag
+JOIN ldap_groups lg ON lg.id = pag.ldap_group_id
+JOIN groups g ON g.id = lg.group_id
+WHERE pag.partition_name = $1
+ORDER BY g.title, lg.type;
+
+-- name: ListAllPartitionAllowedAccounts :many
+SELECT pag.partition_name, lg.ldap_cn
+FROM partition_allowed_groups pag
+JOIN ldap_groups lg ON lg.id = pag.ldap_group_id
+WHERE lg.ldap_cn IS NOT NULL
+ORDER BY pag.partition_name, lg.ldap_cn;
+
+-- name: ClearPartitionAllowedGroups :exec
+DELETE FROM partition_allowed_groups WHERE partition_name = $1;
+
+-- name: AddPartitionAllowedGroup :exec
+INSERT INTO partition_allowed_groups (partition_name, ldap_group_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
 -- name: DeleteLocalGroupsByServerID :exec
 DELETE FROM server_local_groups WHERE server_id = $1;
 

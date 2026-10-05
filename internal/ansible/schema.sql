@@ -1,3 +1,9 @@
+-- Slurm partitions; servers with a NULL slurm_partition fall into 'normal'
+CREATE TABLE IF NOT EXISTS partitions
+(
+    name VARCHAR(255) PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS servers
 (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -18,7 +24,7 @@ CREATE TABLE IF NOT EXISTS servers
 
     -- Ansible & Slurm properties
     ansible_role     VARCHAR(255) NOT NULL,
-    slurm_partition  VARCHAR(255),
+    slurm_partition  VARCHAR(255) REFERENCES partitions(name) ON UPDATE CASCADE,
     status           VARCHAR(255) NOT NULL DEFAULT 'unset',
     provision_detail TEXT,
 
@@ -58,6 +64,14 @@ CREATE TABLE IF NOT EXISTS allowed_login_groups
     PRIMARY KEY (server_id, ldap_group_id)
 );
 
+-- rendered into slurm.conf as PartitionName=... AllowAccounts=...
+CREATE TABLE IF NOT EXISTS partition_allowed_groups
+(
+    partition_name VARCHAR(255) NOT NULL REFERENCES partitions(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    ldap_group_id  UUID NOT NULL REFERENCES ldap_groups(id) ON DELETE CASCADE,
+
+    PRIMARY KEY (partition_name, ldap_group_id)
+);
 -- local /etc/group entries discovered on compute nodes
 CREATE TABLE IF NOT EXISTS server_local_groups
 (

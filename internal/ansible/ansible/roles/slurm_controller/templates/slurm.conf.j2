@@ -15,6 +15,13 @@ SlurmdLogFile=/var/log/slurm/slurmd.log
 AccountingStorageType=accounting_storage/slurmdbd
 AccountingStorageHost={{ ansible_facts['nodename'] }}
 AccountingStoragePort=6819
+# Both lines are required for partition AllowAccounts to take effect (verified on Slurm
+# 25.11): without them slurmctld runs jobs from any account in a restricted partition. With
+# them, AllowAccounts=<group cn> admits the group's -base and -admin child accounts and
+# rejects other accounts at submit time. ANY still accepts a multi-partition job (-p a,b)
+# that may run in at least one of its partitions.
+AccountingStorageEnforce=associations
+EnforcePartLimits=ANY
 
 # restd
 AuthAltTypes=auth/jwt
@@ -50,7 +57,9 @@ NodeName={{ host }} NodeAddr={{ node_addr }} CPUs={{ hostvars[host].cpu_cores | 
     {% endif %}
 {% endfor %}
 
+{% set allowed_accounts = slurm_partition_allowed_accounts | default({}) %}
 {% for p_name, nodes in partitions.items() %}
-PartitionName={{ p_name }} Nodes={{ nodes }} Default={% if loop.first %}YES{% else %}NO{% endif %} MaxTime=INFINITE State=UP
+PartitionName={{ p_name }} Nodes={{ nodes }} Default={% if loop.first %}YES{% else %}NO{% endif %} MaxTime=INFINITE State=UP{% if allowed_accounts.get(p_name) %} AllowAccounts={{ allowed_accounts[p_name] | join(',') }}{% endif %}
+
 {% endfor %}
 {% endif %}
