@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS partition_allowed_groups
     ldap_group_id  UUID NOT NULL REFERENCES ldap_groups(id) ON DELETE CASCADE,
 
     PRIMARY KEY (partition_name, ldap_group_id)
+);
 -- local /etc/group entries discovered on compute nodes
 CREATE TABLE IF NOT EXISTS server_local_groups
 (
