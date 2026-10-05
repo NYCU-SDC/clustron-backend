@@ -8,6 +8,9 @@ bin
 .env
 config.yaml
 
+# generated TLS material
+.deploy/*/certs/
+
 # generated files
 mocks/
 db.go

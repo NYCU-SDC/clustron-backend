@@ -6,7 +6,7 @@ domains = default
 id_provider = ldap
 auth_provider = ldap
 
-ldap_uri = ldap://{{ head_node_ip }}
+ldap_uri = {{ ldap_uri_scheme | default('ldaps') }}://{{ ldap_external_host }}:{{ ldap_external_port }}
 
 ldap_search_base = {{ ldap_base_dn }}
 
@@ -15,8 +15,16 @@ ldap_user_ssh_public_key = sshPublicKey
 ldap_default_bind_dn = {{ ldap_bind_dn }}
 ldap_default_authtok = {{ ldap_bind_pwd }}
 
+# StartTLS upgrades a plain ldap:// connection on 389; it is mutually exclusive
+# with an ldaps:// URI, which is already TLS from the first byte.
 ldap_id_use_start_tls = false
+{% if ldap_tls_cacert is defined and ldap_tls_cacert | length > 0 %}
+ldap_tls_cacert = {{ ldap_tls_cacert }}
+ldap_tls_reqcert = demand
+{% else %}
+# No CA pinned: the channel is encrypted but the server is not authenticated.
 ldap_tls_reqcert = allow
+{% endif %}
 enumerate = false
 cache_credentials = false
 
@@ -24,5 +32,5 @@ cache_credentials = false
 access_provider = simple
 simple_allow_groups = {{ ldap_simple_allow_groups }}
 {% else %}
-access_provider = permit
+access_provider = deny
 {% endif %}

@@ -107,3 +107,15 @@ DELETE FROM partition_allowed_groups WHERE partition_name = $1;
 INSERT INTO partition_allowed_groups (partition_name, ldap_group_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
+-- name: DeleteLocalGroupsByServerID :exec
+DELETE FROM server_local_groups WHERE server_id = $1;
+
+-- name: InsertLocalGroup :exec
+INSERT INTO server_local_groups (server_id, name, gid_number) VALUES ($1, $2, $3);
+
+-- name: ListLocalGroups :many
+SELECT s.ansible_name, slg.name, slg.gid_number
+FROM server_local_groups slg
+JOIN servers s ON s.id = slg.server_id
+WHERE s.ansible_role = 'compute_nodes' AND s.status = 'active'
+ORDER BY slg.name, s.ansible_name;

@@ -1,0 +1,7 @@
+- name: Discover local groups
+  hosts: compute_nodes
+  gather_facts: false
+  tasks:
+    - name: Read local groups
+      ansible.builtin.command: getent -s files group
+      changed_when: false

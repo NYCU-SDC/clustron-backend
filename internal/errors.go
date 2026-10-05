@@ -4,8 +4,12 @@ import (
 	"clustron-backend/internal/ldap"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -45,6 +49,12 @@ var (
 
 	// Group Errors
 	ErrGroupNotFound = errors.New("group not found or user not in group")
+
+	// System Group Errors
+	ErrInvalidSystemGroupName   = errors.New("invalid system group name")
+	ErrSystemGroupDenied        = errors.New("system group is denylisted or privileged")
+	ErrSystemGroupNotDiscovered = errors.New("system group not found on any compute node")
+	ErrUserHasNoLDAPAccount     = errors.New("user has no LDAP account")
 )
 
 type ErrInvalidLinuxUsername struct {
@@ -79,6 +89,42 @@ type ErrInvalidSetting struct {
 
 func (e ErrInvalidSetting) Error() string {
 	return e.Reason
+}
+
+// ErrSystemGroupGIDInconsistent reports a local group whose gid differs across compute nodes.
+type ErrSystemGroupGIDInconsistent struct {
+	Name string
+	GIDs map[int64][]string
+}
+
+func (e ErrSystemGroupGIDInconsistent) Error() string {
+	gids := make([]int64, 0, len(e.GIDs))
+	for gid := range e.GIDs {
+		gids = append(gids, gid)
+	}
+	slices.Sort(gids)
+	parts := make([]string, len(gids))
+	for i, gid := range gids {
+		parts[i] = fmt.Sprintf("%d on %s", gid, strings.Join(e.GIDs[gid], ", "))
+	}
+	return fmt.Sprintf("group %q has different gids across compute nodes: %s", e.Name, strings.Join(parts, "; "))
+}
+
+// ErrSystemGroupGIDConflict reports a gid that a different local group uses on some
+// compute node; registering it would grant that other group there.
+type ErrSystemGroupGIDConflict struct {
+	Name      string
+	GIDNumber int64
+	UsedBy    map[string]string // server -> other group name
+}
+
+func (e ErrSystemGroupGIDConflict) Error() string {
+	servers := slices.Sorted(maps.Keys(e.UsedBy))
+	parts := make([]string, len(servers))
+	for i, server := range servers {
+		parts[i] = fmt.Sprintf("%s on %s", e.UsedBy[server], server)
+	}
+	return fmt.Sprintf("gid %d of group %q is used by another group: %s", e.GIDNumber, e.Name, strings.Join(parts, ", "))
 }
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -152,6 +198,19 @@ func ErrorHandler(err error) problem.Problem {
 	// Group Errors
 	case errors.Is(err, ErrGroupNotFound):
 		return problem.NewNotFoundProblem(err.Error())
+	// System Group Errors
+	case errors.Is(err, ErrInvalidSystemGroupName):
+		return problem.NewValidateProblem(err.Error())
+	case errors.Is(err, ErrSystemGroupDenied):
+		return problem.NewForbiddenProblem(err.Error())
+	case errors.Is(err, ErrSystemGroupNotDiscovered):
+		return problem.NewNotFoundProblem(err.Error())
+	case errors.Is(err, ErrUserHasNoLDAPAccount):
+		return problem.NewBadRequestProblem(err.Error())
+	case errors.As(err, &ErrSystemGroupGIDInconsistent{}):
+		return NewConflictProblem(err.Error())
+	case errors.As(err, &ErrSystemGroupGIDConflict{}):
+		return NewConflictProblem(err.Error())
 	// LDAP Client Errors
 	case errors.Is(err, ldap.ErrGIDNumberInUse):
 		return NewConflictProblem(err.Error())
