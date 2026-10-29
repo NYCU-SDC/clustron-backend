@@ -822,7 +822,7 @@ func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName 
 
 // SetPartitionAllowedGroups replaces a partition's allowed-group list with the selected LDAP
 // variants, then re-renders slurm.conf in the background. A selected variant without an
-// ldap_cn is rejected. An empty list leaves the partition unrestricted.
+// ldap_cn is rejected. An empty list closes the partition to everyone but root.
 func (s *Service) SetPartitionAllowedGroups(ctx context.Context, partitionName string, groups []AllowedLoginGroupSelection) error {
 	traceCtx, span := s.tracer.Start(ctx, "SetPartitionAllowedGroups")
 	defer span.End()
@@ -1044,8 +1044,8 @@ func (s *Service) generateInventory(ctx context.Context) error {
 	}
 
 	// Partition access is a property of the partition, not of any single node, so it goes in
-	// the play-wide vars. slurm.conf.j2 turns each entry into AllowAccounts= on that
-	// partition; partitions absent here stay unrestricted.
+	// the play-wide vars. slurm.conf.j2 renders AllowAccounts=root plus each entry on that
+	// partition; partitions absent here allow root only.
 	allowedRows, err := s.queries.ListAllPartitionAllowedAccounts(ctx)
 	if err != nil {
 		return databaseutil.WrapDBError(err, s.logger, "list partition allowed accounts")
