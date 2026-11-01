@@ -1,6 +1,6 @@
 module clustron-backend
 
-go 1.26.2
+go 1.26.10
 
 require (
 	github.com/NYCU-SDC/summer v1.0.2-0.20260526144851-62f3264b3024
