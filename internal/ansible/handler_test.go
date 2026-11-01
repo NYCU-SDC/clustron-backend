@@ -122,7 +122,7 @@ func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
 			},
 		},
 		{
-			name: "unrestricted partition returns an empty list",
+			name: "partition with no allowed groups returns an empty list",
 			setupMock: func(store *ansiblemocks.Store) {
 				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return([]ansible.PartitionAllowedGroupDetail{}, nil)
 			},
