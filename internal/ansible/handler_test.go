@@ -1,43 +1,87 @@
-package ansible
+package ansible_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"clustron-backend/internal"
-
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
+
+	"clustron-backend/internal/ansible"
+	ansiblemocks "clustron-backend/internal/ansible/mocks"
 )
 
-type addNodesStore struct {
-	Store
-	gotParams []CreateParams
+func newTestHandler(store *ansiblemocks.Store) *ansible.Handler {
+	return ansible.NewHandler(store, validator.New(), zap.NewNop(), problem.New())
 }
 
-type allowedLoginGroupsStore struct {
-	Store
-	gotServerID uuid.UUID
-	gotGroups   []AllowedLoginGroupSelection
-	groups      []AllowedLoginGroupDetail
+func newPartitionRequest(method, partitionName string, body []byte) *http.Request {
+	var r *http.Request
+	if body == nil {
+		r = httptest.NewRequest(method, "/api/partitions/"+partitionName+"/allowedGroups", nil)
+	} else {
+		r = httptest.NewRequest(method, "/api/partitions/"+partitionName+"/allowedGroups", bytes.NewReader(body))
+	}
+	r.SetPathValue("partition_name", partitionName)
+	return r
 }
 
-func (s *allowedLoginGroupsStore) SetAllowedLoginGroups(_ context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error {
-	s.gotServerID = serverID
-	s.gotGroups = groups
-	return nil
-}
+func TestHandlerAddNodes(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           string
+		setupMock      func(store *ansiblemocks.Store)
+		expectedStatus int
+		expectedCount  int
+	}{
+		{
+			name: "creates two servers",
+			body: `{
+				"servers": [
+					{
+						"ansible_name": "compute-01",
+						"ip_address": "192.0.2.1",
+						"ssh_user": "ubuntu",
+						"ansible_role": "compute_nodes"
+					},
+					{
+						"ansible_name": "compute-02",
+						"ssh_config_host": "compute-02",
+						"private_ip": "10.0.0.2",
+						"ansible_role": "compute_nodes"
+					}
+				]
+			}`,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("AddNodes", mock.Anything, mock.MatchedBy(func(params []ansible.CreateParams) bool {
+					return len(params) == 2
+				})).Return([]ansible.Server{
+					{ID: uuid.New(), AnsibleName: "compute-01", Status: "provisioning"},
+					{ID: uuid.New(), AnsibleName: "compute-02", Status: "provisioning"},
+				}, nil)
+			},
+			expectedStatus: http.StatusCreated,
+			expectedCount:  2,
+		},
+	}
 
-func (s *allowedLoginGroupsStore) ListAllowedLoginGroups(_ context.Context, serverID uuid.UUID) ([]AllowedLoginGroupDetail, error) {
-	s.gotServerID = serverID
-	return s.groups, nil
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := ansiblemocks.NewStore(t)
+			tc.setupMock(store)
+
+			h := ansible.NewHandler(store, validator.New(), zap.NewNop(), problem.New())
+			req := httptest.NewRequest(http.MethodPost, "/api/servers/batch", bytes.NewReader([]byte(tc.body)))
+			w := httptest.NewRecorder()
 
 func (s *addNodesStore) AddNodes(_ context.Context, params []CreateParams) ([]Server, error) {
 	s.gotParams = params
@@ -54,20 +98,37 @@ func (s *addNodesStore) AddNodes(_ context.Context, params []CreateParams) ([]Se
 			EnableSlurm:   param.EnableSlurm,
 			MountNfsHome:  param.MountNfsHome,
 		}
+			h.AddNodes(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+			if tc.expectedStatus == http.StatusCreated {
+				var response ansible.AddNodesResponse
+				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+				assert.Len(t, response.Servers, tc.expectedCount)
+				for _, server := range response.Servers {
+					assert.Equal(t, "provisioning", server.Status)
+				}
+			}
+		})
 	}
-	return servers, nil
 }
 
-func TestHandlerAddNodes(t *testing.T) {
-	store := &addNodesStore{}
-	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`{
-		"servers": [
-			{
-				"ansible_name": "compute-01",
-				"ip_address": "192.0.2.1",
-				"ssh_user": "ubuntu",
-				"ansible_role": "compute_nodes"
+func TestHandler_GetPartitionAllowedGroups(t *testing.T) {
+	groupID := uuid.New()
+
+	testCases := []struct {
+		name           string
+		setupMock      func(store *ansiblemocks.Store)
+		expectedStatus int
+		expectedGroups []ansible.PartitionAllowedGroupResponse
+	}{
+		{
+			name: "returns the allowed groups with their type",
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return([]ansible.PartitionAllowedGroupDetail{
+					{GroupID: groupID, Type: ansible.GroupTypeBASE, Title: "CS Lab", LdapCN: "cs-lab"},
+					{GroupID: groupID, Type: ansible.GroupTypeADMIN, Title: "CS Lab", LdapCN: "cs-lab-admin"},
+				}, nil)
 			},
 			{
 				"ansible_name": "compute-02",
@@ -80,11 +141,38 @@ func TestHandlerAddNodes(t *testing.T) {
 				}
 			}
 		]
-	}`)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/servers/batch", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
+			expectedStatus: http.StatusOK,
+			expectedGroups: []ansible.PartitionAllowedGroupResponse{
+				{GroupID: groupID.String(), Type: "BASE", Title: "CS Lab", LdapCN: "cs-lab"},
+				{GroupID: groupID.String(), Type: "ADMIN", Title: "CS Lab", LdapCN: "cs-lab-admin"},
+			},
+		},
+		{
+			name: "unrestricted partition returns an empty list",
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return([]ansible.PartitionAllowedGroupDetail{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedGroups: []ansible.PartitionAllowedGroupResponse{},
+		},
+		{
+			name: "unknown partition",
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("ListPartitionAllowedGroups", mock.Anything, "gpu").Return(
+					nil, handlerutil.NewNotFoundError("partitions", "name", "gpu", ""),
+				)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+	}
 
-	handler.AddNodes(recorder, req)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := ansiblemocks.NewStore(t)
+			tc.setupMock(store)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusCreated, recorder.Body.String())
@@ -120,94 +208,159 @@ func TestHandlerAddNodes(t *testing.T) {
 		if server.Status != "provisioning" {
 			t.Errorf("server %q status = %q, want provisioning", server.AnsibleName, server.Status)
 		}
+			w := httptest.NewRecorder()
+			newTestHandler(store).GetPartitionAllowedGroups(w, newPartitionRequest(http.MethodGet, "gpu", nil))
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+			if tc.expectedStatus == http.StatusOK {
+				var got []ansible.PartitionAllowedGroupResponse
+				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+				assert.Equal(t, tc.expectedGroups, got)
+			}
+		})
 	}
 }
 
-func TestHandlerUpdateAllowedLoginGroupsUsesGroupIDAndType(t *testing.T) {
-	serverID := uuid.New()
-	baseGroupID := uuid.New()
-	adminGroupID := uuid.New()
-	store := &allowedLoginGroupsStore{}
-	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`[
-			{"groupId": "` + baseGroupID.String() + `", "groupType": "BASE"},
-			{"groupId": "` + adminGroupID.String() + `", "groupType": "ADMIN"}
-	]`)
-	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
-	req.SetPathValue("server_id", serverID.String())
-	recorder := httptest.NewRecorder()
-
-	handler.UpdateAllowedLoginGroups(recorder, req)
-
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusNoContent, recorder.Body.String())
-	}
-	if store.gotServerID != serverID {
-		t.Fatalf("server ID = %s, want %s", store.gotServerID, serverID)
-	}
-	want := []AllowedLoginGroupSelection{
-		{GroupID: baseGroupID, Type: GroupTypeBASE},
-		{GroupID: adminGroupID, Type: GroupTypeADMIN},
-	}
-	if len(store.gotGroups) != len(want) {
-		t.Fatalf("groups length = %d, want %d", len(store.gotGroups), len(want))
-	}
-	for i := range want {
-		if store.gotGroups[i] != want[i] {
-			t.Errorf("group %d = %#v, want %#v", i, store.gotGroups[i], want[i])
-		}
-	}
-}
-
-func TestHandlerUpdateAllowedLoginGroupsRejectsInvalidType(t *testing.T) {
-	serverID := uuid.New()
-	store := &allowedLoginGroupsStore{}
-	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	body := []byte(`[{"groupId":"` + uuid.NewString() + `","groupType":"OWNER"}]`)
-	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
-	req.SetPathValue("server_id", serverID.String())
-	recorder := httptest.NewRecorder()
-
-	handler.UpdateAllowedLoginGroups(recorder, req)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
-	}
-	if !strings.Contains(recorder.Body.String(), "oneof") {
-		t.Fatalf("expected a oneof validation failure on groupType, got %s", recorder.Body.String())
-	}
-	if store.gotGroups != nil {
-		t.Fatal("store was called for an invalid group type")
-	}
-}
-
-func TestHandlerGetAllowedLoginGroupsReturnsGroupType(t *testing.T) {
-	serverID := uuid.New()
+func TestHandler_UpdatePartitionAllowedGroups(t *testing.T) {
 	groupID := uuid.New()
-	store := &allowedLoginGroupsStore{groups: []AllowedLoginGroupDetail{{
-		GroupID: groupID,
-		Type:    GroupTypeADMIN,
-		Title:   "Research",
-		LdapCN:  "research-admin",
-	}}}
-	handler := NewHandler(store, validator.New(), zap.NewNop(), internal.NewProblemWriter())
-	req := httptest.NewRequest(http.MethodGet, "/api/servers/"+serverID.String()+"/allowedLoginGroups", nil)
-	req.SetPathValue("server_id", serverID.String())
-	recorder := httptest.NewRecorder()
+	base := []ansible.AllowedLoginGroupSelection{{GroupID: groupID, Type: ansible.GroupTypeBASE}}
+	baseBody := `[{"groupId":"` + groupID.String() + `","groupType":"BASE"}]`
 
-	handler.GetAllowedLoginGroups(recorder, req)
+	testCases := []struct {
+		name           string
+		body           string
+		setupMock      func(store *ansiblemocks.Store)
+		expectedStatus int
+	}{
+		{
+			name: "assigns a group's BASE account to a partition",
+			body: baseBody,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+		},
+		{
+			name: "assigns a group's ADMIN account to a partition",
+			body: `[{"groupId":"` + groupID.String() + `","groupType":"ADMIN"}]`,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu",
+					[]ansible.AllowedLoginGroupSelection{{GroupID: groupID, Type: ansible.GroupTypeADMIN}}).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+		},
+		{
+			name: "empty list re-opens the partition",
+			body: `[]`,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", []ansible.AllowedLoginGroupSelection{}).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+		},
+		{
+			name:           "non-uuid group id is rejected before reaching the store",
+			body:           `[{"groupId":"not-a-uuid","groupType":"BASE"}]`,
+			setupMock:      func(store *ansiblemocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "unknown group type is rejected before reaching the store",
+			body:           `[{"groupId":"` + groupID.String() + `","groupType":"OWNER"}]`,
+			setupMock:      func(store *ansiblemocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "old object body is rejected",
+			body:           `{"groupIds":["` + groupID.String() + `"]}`,
+			setupMock:      func(store *ansiblemocks.Store) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "unknown partition",
+			body: baseBody,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(
+					handlerutil.NewNotFoundError("partitions", "name", "gpu", ""),
+				)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "store failure",
+			body: baseBody,
+			setupMock: func(store *ansiblemocks.Store) {
+				store.On("SetPartitionAllowedGroups", mock.Anything, "gpu", base).Return(errors.New("db error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := ansiblemocks.NewStore(t)
+			tc.setupMock(store)
+
+			w := httptest.NewRecorder()
+			newTestHandler(store).UpdatePartitionAllowedGroups(w, newPartitionRequest(http.MethodPut, "gpu", []byte(tc.body)))
+
+			assert.Equal(t, tc.expectedStatus, w.Code, w.Body.String())
+		})
 	}
-	var response []AllowedLoginGroupResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
+}
+
+func newAllowedLoginGroupsRequest(method string, serverID uuid.UUID, body []byte) *http.Request {
+	var r *http.Request
+	if body == nil {
+		r = httptest.NewRequest(method, "/api/servers/"+serverID.String()+"/allowedLoginGroups", nil)
+	} else {
+		r = httptest.NewRequest(method, "/api/servers/"+serverID.String()+"/allowedLoginGroups", bytes.NewReader(body))
 	}
-	if len(response) != 1 {
-		t.Fatalf("response length = %d, want 1", len(response))
-	}
-	if response[0].GroupID != groupID.String() || response[0].Type != "ADMIN" || response[0].LdapCN != "research-admin" {
-		t.Fatalf("response = %#v, want group ID %s with ADMIN type and research-admin CN", response[0], groupID)
-	}
+	r.SetPathValue("server_id", serverID.String())
+	return r
+}
+
+func TestHandler_UpdateAllowedLoginGroups_UsesGroupIDAndType(t *testing.T) {
+	serverID, baseGroupID, adminGroupID := uuid.New(), uuid.New(), uuid.New()
+	store := ansiblemocks.NewStore(t)
+	store.On("SetAllowedLoginGroups", mock.Anything, serverID, []ansible.AllowedLoginGroupSelection{
+		{GroupID: baseGroupID, Type: ansible.GroupTypeBASE},
+		{GroupID: adminGroupID, Type: ansible.GroupTypeADMIN},
+	}).Return(nil)
+	body := `[{"groupId":"` + baseGroupID.String() + `","groupType":"BASE"},{"groupId":"` + adminGroupID.String() + `","groupType":"ADMIN"}]`
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).UpdateAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodPut, serverID, []byte(body)))
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
+func TestHandler_UpdateAllowedLoginGroups_RejectsInvalidType(t *testing.T) {
+	serverID := uuid.New()
+	// No expectations: any store call fails the test.
+	store := ansiblemocks.NewStore(t)
+	body := `[{"groupId":"` + uuid.NewString() + `","groupType":"OWNER"}]`
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).UpdateAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodPut, serverID, []byte(body)))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "oneof")
+}
+
+func TestHandler_GetAllowedLoginGroups_ReturnsGroupType(t *testing.T) {
+	serverID, groupID := uuid.New(), uuid.New()
+	store := ansiblemocks.NewStore(t)
+	store.On("ListAllowedLoginGroups", mock.Anything, serverID).Return([]ansible.AllowedLoginGroupDetail{
+		{GroupID: groupID, Type: ansible.GroupTypeADMIN, Title: "Research", LdapCN: "research-admin"},
+	}, nil)
+
+	w := httptest.NewRecorder()
+	newTestHandler(store).GetAllowedLoginGroups(w, newAllowedLoginGroupsRequest(http.MethodGet, serverID, nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []ansible.AllowedLoginGroupResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, []ansible.AllowedLoginGroupResponse{
+		{GroupID: groupID.String(), Type: "ADMIN", Title: "Research", LdapCN: "research-admin"},
+	}, got)
 }

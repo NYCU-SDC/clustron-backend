@@ -23,6 +23,7 @@
 - name: Install Debian packaging tools
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     name: [lbzip2, build-essential, fakeroot, devscripts, equivs]
     state: present
   when: slurm_builder_needs_build and slurm_builder_is_representative

@@ -8,3 +8,5 @@ p, admin, /api/servers/:server_id/reset, POST
 p, admin, /api/servers/:server_id/role, PATCH
 p, admin, /api/servers/:server_id/allowedLoginGroups, GET
 p, admin, /api/servers/:server_id/allowedLoginGroups, PUT
+p, admin, /api/partitions/:partition_name/allowedGroups, GET
+p, admin, /api/partitions/:partition_name/allowedGroups, PUT

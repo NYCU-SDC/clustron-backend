@@ -30,6 +30,7 @@
 - name: Install Compute packages
   become: true
   ansible.builtin.apt:
+    lock_timeout: 600
     deb: "/opt/clustron_share/{{ slurm_builder_env_dir }}/{{ item }}"
   loop:
     - "slurm-smd_{{ slurm_version }}_amd64.deb"
