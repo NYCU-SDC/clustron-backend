@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"clustron-backend/internal/ansible"
@@ -57,15 +58,20 @@ func TestHandlerAddNodes(t *testing.T) {
 						"ansible_name": "compute-02",
 						"ssh_config_host": "compute-02",
 						"private_ip": "10.0.0.2",
-						"ansible_role": "compute_nodes"
+						"ansible_role": "compute_nodes",
+						"features": {"slurm": false, "nfs_home": false}
 					}
 				]
 			}`,
 			setupMock: func(store *ansiblemocks.Store) {
 				store.On("AddNodes", mock.Anything, mock.MatchedBy(func(params []ansible.CreateParams) bool {
-					return len(params) == 2
+					return len(params) == 2 &&
+						params[0].IpAddress.Valid && params[0].IpAddress.String == "192.0.2.1" &&
+						params[1].SshConfigHost.Valid && params[1].SshConfigHost.String == "compute-02" &&
+						params[0].EnableSlurm && params[0].MountNfsHome &&
+						!params[1].EnableSlurm && !params[1].MountNfsHome
 				})).Return([]ansible.Server{
-					{ID: uuid.New(), AnsibleName: "compute-01", Status: "provisioning"},
+					{ID: uuid.New(), AnsibleName: "compute-01", Status: "provisioning", EnableSlurm: true, MountNfsHome: true},
 					{ID: uuid.New(), AnsibleName: "compute-02", Status: "provisioning"},
 				}, nil)
 			},
@@ -88,10 +94,13 @@ func TestHandlerAddNodes(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, w.Code)
 			if tc.expectedStatus == http.StatusCreated {
 				var response ansible.AddNodesResponse
-				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-				assert.Len(t, response.Servers, tc.expectedCount)
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+				require.Len(t, response.Servers, tc.expectedCount)
 				for _, server := range response.Servers {
 					assert.Equal(t, "provisioning", server.Status)
+					wantFeatures := server.AnsibleName == "compute-01"
+					assert.Equal(t, wantFeatures, server.Features.Slurm)
+					assert.Equal(t, wantFeatures, server.Features.NfsHome)
 				}
 			}
 		})

@@ -17,7 +17,10 @@
   roles:
     - common
     - ntp_client
-    - nfs_client
+    - role: nfs_client
+      when: (mount_nfs_home | default(true) | bool) or (enable_slurm | default(true) | bool)
     - ldap_client
-    - slurm_builder
-    - slurm_compute
+    - role: slurm_builder
+      when: enable_slurm | default(true) | bool
+    - role: slurm_compute
+      when: enable_slurm | default(true) | bool

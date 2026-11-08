@@ -332,9 +332,49 @@ func TestToCreateParams(t *testing.T) {
 		SlurmPartition: pgtype.Text{String: "gpu", Valid: true},
 		CpuCores:       pgtype.Int4{Int32: cpuCores, Valid: true},
 		MemoryMb:       pgtype.Int4{Int32: memoryMB, Valid: true},
+		EnableSlurm:    true,
+		MountNfsHome:   true,
 	}
 
 	assert.Equal(t, want, got)
+}
+
+func TestToCreateParamsNodeFeatures(t *testing.T) {
+	enabled, disabled := true, false
+	tests := []struct {
+		name             string
+		features         *NodeFeatures
+		wantEnableSlurm  bool
+		wantMountNfsHome bool
+	}{
+		{name: "features object omitted defaults to enabled", wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "empty features object defaults to enabled", features: &NodeFeatures{}, wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "explicitly enabled", features: &NodeFeatures{Slurm: &enabled, NfsHome: &enabled}, wantEnableSlurm: true, wantMountNfsHome: true},
+		{name: "explicitly disabled", features: &NodeFeatures{Slurm: &disabled, NfsHome: &disabled}},
+		{name: "only slurm disabled", features: &NodeFeatures{Slurm: &disabled}, wantMountNfsHome: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toCreateParams(AddNodeRequest{Features: tt.features})
+			if got.EnableSlurm != tt.wantEnableSlurm || got.MountNfsHome != tt.wantMountNfsHome {
+				t.Fatalf("toCreateParams() features = (%v, %v), want (%v, %v)",
+					got.EnableSlurm, got.MountNfsHome, tt.wantEnableSlurm, tt.wantMountNfsHome)
+			}
+		})
+	}
+}
+
+func TestHostVarsNodeFeaturesYAML(t *testing.T) {
+	data, err := yaml.Marshal(HostVars{EnableSlurm: false, MountNFSHome: true})
+	if err != nil {
+		t.Fatalf("yaml.Marshal() error = %v", err)
+	}
+	for _, want := range []string{"enable_slurm: false", "mount_nfs_home: true"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("yaml.Marshal() = %q, want to contain %q", data, want)
+		}
+	}
 }
 
 func TestHostVarsAnsibleUserYAML(t *testing.T) {
@@ -393,6 +433,54 @@ func TestValidateAllowedLoginGroupRoleChange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateAllowedLoginGroupRoleChange(tt.role, tt.hasAllowedLoginGroups)
 			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestValidateNodeFeatures(t *testing.T) {
+	tests := []struct {
+		name         string
+		role         string
+		enableSlurm  bool
+		mountNfsHome bool
+		wantErr      error
+	}{
+		{name: "compute node with all features", role: computeNodeRole, enableSlurm: true, mountNfsHome: true},
+		{name: "compute node account only", role: computeNodeRole},
+		{name: "head node with all features", role: headNodeRole, enableSlurm: true, mountNfsHome: true},
+		{name: "head node without slurm", role: headNodeRole, mountNfsHome: true, wantErr: internal.ErrNodeFeaturesUnsupported},
+		{name: "head node without nfs home", role: headNodeRole, enableSlurm: true, wantErr: internal.ErrNodeFeaturesUnsupported},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateNodeFeatures(tt.role, tt.enableSlurm, tt.mountNfsHome)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("validateNodeFeatures() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateNodeFeaturesRoleChange(t *testing.T) {
+	tests := []struct {
+		name         string
+		role         string
+		enableSlurm  bool
+		mountNfsHome bool
+		wantErr      error
+	}{
+		{name: "to head node with all features", role: headNodeRole, enableSlurm: true, mountNfsHome: true},
+		{name: "to head node without slurm", role: headNodeRole, mountNfsHome: true, wantErr: internal.ErrNodeFeaturesRoleConflict},
+		{name: "to compute node without features", role: computeNodeRole},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateNodeFeaturesRoleChange(tt.role, tt.enableSlurm, tt.mountNfsHome)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("validateNodeFeaturesRoleChange() error = %v, want %v", err, tt.wantErr)
+			}
 		})
 	}
 }
