@@ -2,6 +2,7 @@ package slurm
 
 import (
 	"bytes"
+	"clustron-backend/internal"
 	"clustron-backend/internal/setting"
 	"context"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -35,6 +37,29 @@ type settingStore interface {
 	GetLDAPUserInfoByUserID(ctx context.Context, userID uuid.UUID) (setting.LDAPUserInfo, error)
 }
 
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+type slurmHTTPClient struct {
+	client *http.Client
+}
+
+func (c slurmHTTPClient) Do(request *http.Request) (*http.Response, error) {
+	response, err := c.client.Do(request)
+	if err != nil {
+		return nil, internal.WrapSlurmUnavailable(err)
+	}
+	if response.StatusCode >= http.StatusInternalServerError {
+		status := response.StatusCode
+		if err := response.Body.Close(); err != nil {
+			return nil, internal.WrapSlurmUnavailable(fmt.Errorf("slurm returned HTTP %d and closing its response failed: %w", status, err))
+		}
+		return nil, internal.WrapSlurmUnavailable(fmt.Errorf("slurm returned HTTP %d", status))
+	}
+	return response, nil
+}
+
 type Service struct {
 	logger                 *zap.Logger
 	tracer                 trace.Tracer
@@ -43,7 +68,7 @@ type Service struct {
 	slurmTokenHelperURL    string
 	slurmRootToken         string
 	slurmTokenHelperAPIKey string
-	httpClient             *http.Client
+	httpClient             httpDoer
 	redisClient            redisClient
 
 	settingStore settingStore
@@ -58,11 +83,41 @@ func NewService(logger *zap.Logger, cfg Config, settingStore settingStore, redis
 		slurmTokenHelperAPIKey: cfg.SlurmTokenHelperAPIKey,
 		slurmTokenHelperURL:    cfg.SlurmTokenHelperURL,
 		slurmRootToken:         cfg.SlurmRootToken,
-		httpClient:             &http.Client{},
+		httpClient:             slurmHTTPClient{client: &http.Client{}},
 		redisClient:            redisClient,
 
 		settingStore: settingStore,
 	}
+}
+
+func (s Service) Probe(ctx context.Context) error {
+	probeURL := strings.TrimRight(s.slurmRestfulBaseURL, "/")
+	if index := strings.LastIndex(probeURL, "/slurm/"); index >= 0 {
+		probeURL = strings.TrimRight(probeURL[:index], "/")
+	}
+	probeURL += "/openapi/v3"
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+	if err != nil {
+		return internal.WrapSlurmUnavailable(fmt.Errorf("create slurm availability probe request: %w", err))
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return internal.WrapSlurmUnavailable(fmt.Errorf("slurm REST API availability probe failed: %w", err))
+	}
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			s.logger.Warn("failed to close Slurm availability probe response", zap.Error(err))
+		}
+	}()
+
+	if response.StatusCode >= http.StatusInternalServerError ||
+		(response.StatusCode < http.StatusOK && response.StatusCode != http.StatusUnauthorized && response.StatusCode != http.StatusForbidden) {
+		return internal.WrapSlurmUnavailable(fmt.Errorf("slurm REST API availability probe returned HTTP %d", response.StatusCode))
+	}
+	return nil
 }
 
 func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, error) {

@@ -20,6 +20,8 @@ Clustron depends on the following services to work properly.
 1. Postgres 18: for data storage.
 2. OpenLDAP 1.5.0: one of the main purpose of Clustron is to manage system user account with LDAP.
 
+Slurm is optional. When all Slurm settings are provided, Clustron probes the Slurm REST API at startup and enables Slurm operations. Without complete Slurm settings, non-Slurm functionality remains available and Slurm-dependent endpoints return HTTP 503. If Slurm is temporarily unreachable, Slurm-dependent operations return HTTP 503 rather than silently skipping required Slurm work.
+
 ## LDAP Initialization
 
 Clustron requires specific class and path to exist in LDAP.
@@ -223,11 +225,17 @@ will refuse to connect until the setup runs again.
 
 | Variable                   | Description                                        | Required |
 | -------------------------- | -------------------------------------------------- | -------- |
-| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service              | Yes      |
-| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service      | Yes      |
-| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node             | Yes      |
-| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Yes      |
-| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                 | Yes      |
+| SLURM_TOKEN_HELPER_URL     | URL of the Slurm token helper service              | Optional |
+| SLURM_TOKEN_HELPER_API_KEY | The API key of the Slurm token helper service      | Optional |
+| SLURM_RESTFUL_BASE_URL     | Base URL of the Slurm RESTful API node             | Optional |
+| SLURM_RESTFUL_VERSION      | Version of the Slurm RESTful API (e.g., `v0.0.43`) | Optional |
+| SLURM_ROOT_TOKEN           | Root JWT for the Slurm RESTful API                 | Optional |
+
+Slurm is detected automatically when all five settings are present. If any are
+missing, Clustron runs without Slurm integration; no enable/disable flag is
+needed. When configured, Clustron probes the REST API at startup. A failed
+probe is logged, and operations that require Slurm return HTTP 503 if Slurm
+remains unavailable.
 
 **Slurm Token Helper** is a service that retrieves a Slurm JWT token for Slurm RESTful API access.
 
