@@ -1,9 +1,12 @@
 package job
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/jwt"
 	"clustron-backend/internal/slurm"
 	"context"
+	"net/http"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/pagination"
@@ -13,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type store interface {
@@ -21,6 +23,7 @@ type store interface {
 }
 
 type slurmStore interface {
+	Probe(ctx context.Context) error
 	GetJobs(ctx context.Context, userID uuid.UUID) (slurm.JobsResponse, error)
 	CreateJob(ctx context.Context, userID uuid.UUID, req slurm.JobRequest) ([]slurm.JobResponse, error)
 	GetPartitions(ctx context.Context, userID uuid.UUID) (slurm.PartitionResponse, error)
@@ -34,11 +37,12 @@ type Handler struct {
 	problemWriter     *problem.HttpWriter
 	paginationFactory pagination.Factory[Response]
 
-	store      store
-	slurmStore slurmStore
+	store        store
+	slurmStore   slurmStore
+	slurmEnabled bool
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, store store, slurmStore slurmStore) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, store store, slurmStore slurmStore, slurmEnabled bool) *Handler {
 	return &Handler{
 		logger:        logger,
 		tracer:        otel.Tracer("slurm/handler"),
@@ -49,9 +53,24 @@ func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter
 			SortableColumns: []string{"id", "status", "partition", "user", "cpu", "memory"},
 		},
 
-		store:      store,
-		slurmStore: slurmStore,
+		store:        store,
+		slurmStore:   slurmStore,
+		slurmEnabled: slurmEnabled,
 	}
+}
+
+func (h Handler) requireSlurm(ctx context.Context, w http.ResponseWriter, logger *zap.Logger) bool {
+	if !h.slurmEnabled {
+		h.problemWriter.WriteError(ctx, w, internal.ErrSlurmNotConfigured, logger)
+		return false
+	}
+
+	if err := h.slurmStore.Probe(ctx); err != nil {
+		h.problemWriter.WriteError(ctx, w, err, logger)
+		return false
+	}
+
+	return true
 }
 
 func (h Handler) GetAllJobsHandler(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +116,10 @@ func (h Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	if !h.requireSlurm(traceCtx, w, logger) {
+		return
+	}
+
 	jwtUser, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
@@ -129,6 +152,10 @@ func (h Handler) GetPartitionsHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	if !h.requireSlurm(traceCtx, w, logger) {
+		return
+	}
+
 	jwtUser, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {
 		logger.DPanic("Can't find user in context, this should never happen")
@@ -155,6 +182,10 @@ func (h Handler) GetJobStateHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetJobStateHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
+
+	if !h.requireSlurm(traceCtx, w, logger) {
+		return
+	}
 
 	jwtUser, err := jwt.GetUserFromContext(traceCtx)
 	if err != nil {

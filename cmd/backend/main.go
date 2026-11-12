@@ -167,10 +167,23 @@ func main() {
 	settingService := setting.NewService(logger, settingQuerier, userService, ldapClient)
 	ldapGroupService := ldapgroup.NewService(logger, dbPool)
 	groupRoleService := grouprole.NewService(logger, ldapGroupService, ldapClient, dbPool)
+	slurmEnabled := cfg.Slurm.SlurmTokenHelperURL != "" &&
+		cfg.Slurm.SlurmTokenHelperAPIKey != "" &&
+		cfg.Slurm.SlurmRestfulBaseURL != "" &&
+		cfg.Slurm.SlurmRestfulVersion != "" &&
+		cfg.Slurm.SlurmRootToken != ""
 	slurmService := slurm.NewService(logger, cfg.Slurm, settingService, redisService)
-	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapGroupService, ldapClient, slurmService)
-	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient, slurmService)
-	jobService := job.NewService(logger, slurmService)
+	if !slurmEnabled {
+		logger.Info("Slurm configuration is incomplete; Slurm-dependent operations will be unavailable")
+	} else if err := slurmService.Probe(context.Background()); err != nil {
+		logger.Warn("Slurm is configured but currently unavailable; Slurm-dependent operations will return HTTP 503",
+			zap.Error(err))
+	} else {
+		logger.Info("Slurm availability probe succeeded")
+	}
+	memberService := membership.NewService(logger, dbPool, userService, groupRoleService, settingService, ldapGroupService, ldapClient, slurmEnabled, slurmService)
+	groupService := group.NewService(logger, dbPool, userService, settingService, groupRoleService, memberService, ldapGroupService, ldapClient, slurmEnabled, slurmService)
+	jobService := job.NewService(logger, slurmService, slurmEnabled)
 	moduleService := module.NewService(logger, dbPool)
 	ansibleService := ansible.NewService(logger, dbPool, cfg.LDAP)
 	systemGroupService := systemgroup.NewService(logger, systemgroup.New(dbPool), ldapClient, settingService, ansibleService, cfg.SystemGroupDenylist)
@@ -186,7 +199,7 @@ func main() {
 	groupHandler := group.NewHandler(logger, validator, problemWriter, groupService, memberService)
 	groupRoleHandler := grouprole.NewHandler(logger, validator, problemWriter, groupRoleService)
 	memberHandler := membership.NewHandler(logger, validator, problemWriter, memberService, userService)
-	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService)
+	jobHandler := job.NewHandler(logger, validator, problemWriter, jobService, slurmService, slurmEnabled)
 	moduleHandler := module.NewHandler(moduleService, validator, logger, problemWriter)
 	ansibleHandler := ansible.NewHandler(ansibleService, validator, logger, problemWriter)
 	systemGroupHandler := systemgroup.NewHandler(logger, validator, problemWriter, systemGroupService)

@@ -50,12 +50,23 @@ var (
 	// Group Errors
 	ErrGroupNotFound = errors.New("group not found or user not in group")
 
+	// Slurm Errors
+	ErrSlurmNotConfigured = errors.New("slurm integration is not configured")
+	ErrSlurmUnavailable   = errors.New("slurm service unavailable")
+
 	// System Group Errors
 	ErrInvalidSystemGroupName   = errors.New("invalid system group name")
 	ErrSystemGroupDenied        = errors.New("system group is denylisted or privileged")
 	ErrSystemGroupNotDiscovered = errors.New("system group not found on any compute node")
 	ErrUserHasNoLDAPAccount     = errors.New("user has no LDAP account")
 )
+
+func WrapSlurmUnavailable(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %w", ErrSlurmUnavailable, err)
+}
 
 type ErrInvalidLinuxUsername struct {
 	Reason string
@@ -75,6 +86,15 @@ func NewUnprocessableEntityProblem(reason string) problem.Problem {
 		Title:  "Unprocessable Content",
 		Status: http.StatusUnprocessableEntity,
 		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
+		Detail: reason,
+	}
+}
+
+func NewServiceUnavailableProblem(reason string) problem.Problem {
+	return problem.Problem{
+		Title:  "Service Unavailable",
+		Status: http.StatusServiceUnavailable,
+		Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503",
 		Detail: reason,
 	}
 }
@@ -198,6 +218,9 @@ func ErrorHandler(err error) problem.Problem {
 	// Group Errors
 	case errors.Is(err, ErrGroupNotFound):
 		return problem.NewNotFoundProblem(err.Error())
+	// Slurm Errors
+	case errors.Is(err, ErrSlurmNotConfigured), errors.Is(err, ErrSlurmUnavailable):
+		return NewServiceUnavailableProblem("Slurm operations are currently unavailable")
 	// System Group Errors
 	case errors.Is(err, ErrInvalidSystemGroupName):
 		return problem.NewValidateProblem(err.Error())

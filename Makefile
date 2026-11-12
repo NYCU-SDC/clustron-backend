@@ -21,7 +21,7 @@ run:
 	@docker compose -f ./.deploy/local/compose.yaml up -d --wait \
 		|| (echo -e "  -> $(RED)Depending services start failed.$(NC)" && exit 1)
 	@(exec 3<>/dev/tcp/localhost/6820) 2>/dev/null \
-		|| echo -e "  -> $(RED)Warning:$(NC) local Slurm cluster not reachable on :6820. Group creation and job endpoints will fail. Run 'make slurm-up' first if you need them."
+		|| echo -e "  -> $(RED)Warning:$(NC) local Slurm cluster not reachable on :6820. Slurm-dependent operations return HTTP 503 until Slurm is available. Run 'make slurm-up' first if you need them."
 	@make gen
 	@echo -e "-> starting backend..."
 	@go build -o bin/backend cmd/backend/main.go && \
