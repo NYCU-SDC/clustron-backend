@@ -54,7 +54,9 @@ func TestSlurmHTTPClientPassesThroughClientErrors(t *testing.T) {
 			response, err := (slurmHTTPClient{client: server.Client()}).Do(request)
 			require.NoError(t, err)
 			require.NotNil(t, response)
-			defer response.Body.Close()
+			defer func() {
+				require.NoError(t, response.Body.Close())
+			}()
 
 			require.Equal(t, status, response.StatusCode)
 			gotBody, err := io.ReadAll(response.Body)
