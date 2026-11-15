@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,6 +29,39 @@ func TestSlurmHTTPClientWrapsUnavailableResponses(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, internal.ErrSlurmUnavailable))
 	require.EqualError(t, err, fmt.Sprintf("%s: slurm returned HTTP 503", internal.ErrSlurmUnavailable))
+}
+
+func TestSlurmHTTPClientPassesThroughClientErrors(t *testing.T) {
+	for _, status := range []int{
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusNotFound,
+		http.StatusUnprocessableEntity,
+		http.StatusTooManyRequests,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			const body = `{"error":"request rejected"}`
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, body)
+			}))
+			defer server.Close()
+
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+			require.NoError(t, err)
+
+			response, err := (slurmHTTPClient{client: server.Client()}).Do(request)
+			require.NoError(t, err)
+			require.NotNil(t, response)
+			defer response.Body.Close()
+
+			require.Equal(t, status, response.StatusCode)
+			gotBody, err := io.ReadAll(response.Body)
+			require.NoError(t, err)
+			require.Equal(t, body, string(gotBody))
+		})
+	}
 }
 
 func TestProbe(t *testing.T) {
