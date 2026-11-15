@@ -91,21 +91,23 @@ func NewService(logger *zap.Logger, cfg Config, settingStore settingStore, redis
 }
 
 func (s Service) Probe(ctx context.Context) error {
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
 	probeURL := strings.TrimRight(s.slurmRestfulBaseURL, "/")
 	if index := strings.LastIndex(probeURL, "/slurm/"); index >= 0 {
 		probeURL = strings.TrimRight(probeURL[:index], "/")
 	}
 	probeURL += "/openapi/v3"
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+	request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, nil)
 	if err != nil {
 		return internal.WrapSlurmUnavailable(fmt.Errorf("create slurm availability probe request: %w", err))
 	}
 
-	client := &http.Client{Timeout: 3 * time.Second}
-	response, err := client.Do(request)
+	response, err := s.httpClient.Do(request)
 	if err != nil {
-		return internal.WrapSlurmUnavailable(fmt.Errorf("slurm REST API availability probe failed: %w", err))
+		return fmt.Errorf("slurm REST API availability probe failed: %w", err)
 	}
 	defer func() {
 		if err := response.Body.Close(); err != nil {
@@ -143,7 +145,7 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID) (JobsResponse, e
 
 	requestPath := fmt.Sprintf("%s/jobs", s.slurmRestfulBaseURL)
 
-	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodGet, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -216,7 +218,7 @@ func (s Service) CreateJob(ctx context.Context, userID uuid.UUID, jobRequest Job
 		return nil, err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -303,7 +305,7 @@ func (s Service) GetPartitions(ctx context.Context, userID uuid.UUID) (Partition
 
 	requestPath := fmt.Sprintf("%s/partitions", s.slurmRestfulBaseURL)
 
-	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodGet, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -373,7 +375,7 @@ func (s Service) CountJobStates(ctx context.Context, userID uuid.UUID) (JobState
 
 	requestPath := fmt.Sprintf("%s/jobs", s.slurmRestfulBaseURL)
 
-	httpRequest, err := http.NewRequest(http.MethodGet, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodGet, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -460,7 +462,7 @@ func (s Service) GetNewToken(ctx context.Context, userID uuid.UUID) (string, err
 	requestPath := fmt.Sprintf("%s/api/token/%s", s.slurmTokenHelperURL, ldapUserInfo.Username)
 	logger.Info("requesting new slurm token", zap.String("path", requestPath))
 
-	httpReq, err := http.NewRequest(http.MethodGet, requestPath, nil)
+	httpReq, err := http.NewRequestWithContext(traceCtx, http.MethodGet, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -520,7 +522,7 @@ func (s *Service) CreateUser(ctx context.Context, users []User) error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -603,7 +605,7 @@ func (s *Service) CreateAccount(ctx context.Context, accounts []Account) error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -686,7 +688,7 @@ func (s *Service) CreateAssociation(ctx context.Context, associations []Associat
 		return err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -774,7 +776,7 @@ func (s *Service) CreateUserAssociation(ctx context.Context, userNames, accountN
 		return ParsedUserAssociationResponse{}, err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -867,7 +869,7 @@ func (s *Service) CreateAccountAssociation(ctx context.Context, accountNames, cl
 		return ParsedAccountAssociationResponse{}, err
 	}
 
-	httpRequest, err := http.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, requestPath, bytes.NewReader(requestBody))
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -941,7 +943,7 @@ func (s *Service) DeleteUser(ctx context.Context, userName string) error {
 
 	requestPath := fmt.Sprintf("%s/user/%s", s.slurmDatabaseBaseURL, userName)
 
-	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodDelete, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -1012,7 +1014,7 @@ func (s *Service) DeleteAccount(ctx context.Context, accountName string) error {
 
 	requestPath := fmt.Sprintf("%s/account/%s", s.slurmDatabaseBaseURL, accountName)
 
-	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodDelete, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
@@ -1083,7 +1085,7 @@ func (s *Service) DeleteAssociation(ctx context.Context, userName, accountName s
 	// Delete association between designated user and account
 	requestPath := fmt.Sprintf("%s/associations/?user=%s&account=%s", s.slurmDatabaseBaseURL, userName, accountName)
 
-	httpRequest, err := http.NewRequest(http.MethodDelete, requestPath, nil)
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodDelete, requestPath, nil)
 	if err != nil {
 		logger.Error("failed to create http request", zap.Error(err))
 		span.RecordError(err)
