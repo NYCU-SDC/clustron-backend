@@ -132,6 +132,12 @@ func (s *Service) AddNodes(ctx context.Context, params []CreateParams) ([]Server
 	if len(params) == 0 {
 		return []Server{}, nil
 	}
+	for _, param := range params {
+		if err := validateNodeFeatures(param.AnsibleRole, param.EnableSlurm, param.MountNfsHome); err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+	}
 
 	tx, err := s.db.Begin(traceCtx)
 	if err != nil {
@@ -540,6 +546,14 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, role string) (Se
 
 	qtx := s.queries.WithTx(tx)
 	if role == headNodeRole {
+		current, err := qtx.GetByID(traceCtx, id)
+		if err != nil {
+			return Server{}, databaseutil.WrapDBError(err, logger, "get server by id")
+		}
+		if err = validateNodeFeaturesRoleChange(role, current.EnableSlurm, current.MountNfsHome); err != nil {
+			return Server{}, err
+		}
+
 		hasAllowedLoginGroups, err := qtx.ExistServerAllowedLoginGroup(traceCtx, id)
 		if err != nil {
 			return Server{}, databaseutil.WrapDBError(err, logger, "check server allowed login groups")
@@ -792,6 +806,20 @@ func validateAllowedLoginGroupRoleChange(role string, hasAllowedLoginGroups bool
 	return nil
 }
 
+func validateNodeFeatures(role string, enableSlurm, mountNfsHome bool) error {
+	if role != computeNodeRole && (!enableSlurm || !mountNfsHome) {
+		return internal.ErrNodeFeaturesUnsupported
+	}
+	return nil
+}
+
+func validateNodeFeaturesRoleChange(role string, enableSlurm, mountNfsHome bool) error {
+	if role == headNodeRole && (!enableSlurm || !mountNfsHome) {
+		return internal.ErrNodeFeaturesRoleConflict
+	}
+	return nil
+}
+
 // ListPartitionAllowedGroups returns the Clustron groups allowed to submit jobs to a Slurm
 // partition (rendered into that partition's slurm.conf AllowAccounts list).
 func (s *Service) ListPartitionAllowedGroups(ctx context.Context, partitionName string) ([]PartitionAllowedGroupDetail, error) {
@@ -1006,9 +1034,11 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 
 		hostVars := HostVars{
-			UserName: srv.SshUser.String,
-			CPUCores: srv.CpuCores.Int32,
-			MemoryMB: srv.MemoryMb.Int32,
+			UserName:     srv.SshUser.String,
+			CPUCores:     srv.CpuCores.Int32,
+			MemoryMB:     srv.MemoryMb.Int32,
+			EnableSlurm:  srv.EnableSlurm,
+			MountNFSHome: srv.MountNfsHome,
 		}
 
 		if srv.IpAddress.Valid {

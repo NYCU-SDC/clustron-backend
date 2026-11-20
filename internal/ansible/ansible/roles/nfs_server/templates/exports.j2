@@ -3,9 +3,13 @@
 {% for host in groups['compute_nodes'] %}
 {% set real_ip = hostvars[host].private_ip | default(hostvars[host].ansible_host, true) %}
 {% if real_ip %}
-/home       {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
-/opt        {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
-/etc/slurm  {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+{% if hostvars[host].mount_nfs_home | default(true) | bool %}
+/home                {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+{% endif %}
+{% if hostvars[host].enable_slurm | default(true) | bool %}
+/opt/clustron_share  {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+/etc/slurm           {{ real_ip }}(rw,sync,no_subtree_check,no_root_squash)
+{% endif %}
 {% endif %}
 {% endfor %}
 {% endif %}
