@@ -1,27 +1,31 @@
 package job
 
 import (
+	"clustron-backend/internal"
 	"clustron-backend/internal/slurm"
 	"context"
+	"sort"
+
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"sort"
 )
 
 type Service struct {
-	logger     *zap.Logger
-	tracer     trace.Tracer
-	slurmStore slurmStore
+	logger       *zap.Logger
+	tracer       trace.Tracer
+	slurmStore   slurmStore
+	slurmEnabled bool
 }
 
-func NewService(logger *zap.Logger, slurmStore slurmStore) *Service {
+func NewService(logger *zap.Logger, slurmStore slurmStore, slurmEnabled bool) *Service {
 	return &Service{
-		logger:     logger,
-		tracer:     otel.Tracer("job/service"),
-		slurmStore: slurmStore,
+		logger:       logger,
+		tracer:       otel.Tracer("job/service"),
+		slurmStore:   slurmStore,
+		slurmEnabled: slurmEnabled,
 	}
 }
 
@@ -29,6 +33,14 @@ func (s Service) GetJobs(ctx context.Context, userID uuid.UUID, page, size int, 
 	traceCtx, span := s.tracer.Start(ctx, "GetSlurmJobs")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if !s.slurmEnabled {
+		return nil, 0, internal.ErrSlurmNotConfigured
+	}
+
+	if err := s.slurmStore.Probe(traceCtx); err != nil {
+		return nil, 0, err
+	}
 
 	jobs, err := s.slurmStore.GetJobs(traceCtx, userID)
 	if err != nil {
