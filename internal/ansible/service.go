@@ -36,6 +36,7 @@ import (
 const (
 	ExecuteFolder       = "internal/ansible/ansible"
 	InventoryFile       = "hosts.yaml"
+	KnownHostsFile      = "known_hosts"
 	MainPlaybook        = "playbooks/nodes.yaml"
 	UpdateRolesPlaybook = "playbooks/update_roles.yaml"
 	LogFilePath         = "ansible-deploy.log"
@@ -1024,6 +1025,7 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		}
 	}
 
+	var knownHostsLines []string
 	for _, srv := range servers {
 		roleGroup := srv.AnsibleRole
 
@@ -1045,6 +1047,10 @@ func (s *Service) generateInventory(ctx context.Context) error {
 			hostVars.HostName = srv.IpAddress.String
 			if srv.SshKeyName.Valid && srv.SshKeyName.String != "" {
 				hostVars.SSHKeyPath = fmt.Sprintf("~/.ssh/%s", srv.SshKeyName.String)
+			}
+			if srv.HostKey.Valid && strings.TrimSpace(srv.HostKey.String) != "" {
+				knownHostsLines = append(knownHostsLines,
+					fmt.Sprintf("%s %s", srv.IpAddress.String, strings.TrimSpace(srv.HostKey.String)))
 			}
 		} else if srv.SshConfigHost.Valid {
 			hostVars.HostName = srv.SshConfigHost.String
@@ -1091,6 +1097,15 @@ func (s *Service) generateInventory(ctx context.Context) error {
 		inventory.All.Vars["slurm_partition_allowed_accounts"] = allowedAccounts
 	}
 
+	// Render a known_hosts file from the pinned host keys and point SSH at it.
+	// The file is regenerated from the DB on every run.
+	knownHostsPath, err := s.writeKnownHosts(knownHostsLines)
+	if err != nil {
+		return fmt.Errorf("write known_hosts: %w", err)
+	}
+	inventory.All.Vars["ansible_ssh_common_args"] = fmt.Sprintf(
+		"-o UserKnownHostsFile=%s -o StrictHostKeyChecking=accept-new", knownHostsPath)
+
 	yamlData, err := yaml.Marshal(&inventory)
 	if err != nil {
 		return fmt.Errorf("YAML marshal failed: %w", err)
@@ -1119,4 +1134,42 @@ func (s *Service) generateInventory(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// writeKnownHosts atomically writes the pinned host-key lines to the Ansible known_hosts file and
+// returns its absolute path (for UserKnownHostsFile). An empty set still writes an empty file, so
+// the path always exists for accept-new to append alias keys to during the run.
+func (s *Service) writeKnownHosts(lines []string) (string, error) {
+	filePath := filepath.Join(ExecuteFolder, KnownHostsFile)
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve known_hosts path: %w", err)
+	}
+
+	content := ""
+	if len(lines) > 0 {
+		content = strings.Join(lines, "\n") + "\n"
+	}
+
+	tempFile, err := os.CreateTemp(ExecuteFolder, ".known_hosts-*")
+	if err != nil {
+		return "", fmt.Errorf("create temporary known_hosts: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+	if _, err = tempFile.WriteString(content); err != nil {
+		_ = tempFile.Close()
+		return "", fmt.Errorf("write temporary known_hosts: %w", err)
+	}
+	if err = tempFile.Chmod(0644); err != nil {
+		_ = tempFile.Close()
+		return "", fmt.Errorf("set known_hosts permissions: %w", err)
+	}
+	if err = tempFile.Close(); err != nil {
+		return "", fmt.Errorf("close temporary known_hosts: %w", err)
+	}
+	if err = os.Rename(tempPath, filePath); err != nil {
+		return "", fmt.Errorf("replace known_hosts: %w", err)
+	}
+	return absPath, nil
 }

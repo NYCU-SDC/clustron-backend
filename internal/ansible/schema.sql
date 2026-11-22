@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS servers
     enable_slurm    BOOLEAN NOT NULL DEFAULT true,
     mount_nfs_home  BOOLEAN NOT NULL DEFAULT true,
 
+    -- Pinned SSH host key (authorized-key form, e.g. "ssh-ed25519 AAAA...")
+    host_key        TEXT,
+
     CONSTRAINT servers_ansible_name_hostname_check CHECK (
         char_length(ansible_name) <= 253
         AND ansible_name ~ '^([a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62}){1}(\.[a-zA-Z0-9]{1}[a-zA-Z0-9-]{0,62})*?$'

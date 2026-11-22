@@ -277,6 +277,7 @@ func main() {
 	mux.HandleFunc("GET /api/servers", authMiddleware.HandlerFunc(ansibleHandler.List))
 	mux.HandleFunc("POST /api/servers", authMiddleware.HandlerFunc(ansibleHandler.AddNode))
 	mux.HandleFunc("POST /api/servers/batch", authMiddleware.HandlerFunc(ansibleHandler.AddNodes))
+	mux.HandleFunc("POST /api/servers/healthCheck", authMiddleware.HandlerFunc(ansibleHandler.HealthCheck))
 	mux.HandleFunc("POST /api/servers/setup", authMiddleware.HandlerFunc(ansibleHandler.SetupAll))
 	mux.HandleFunc("GET /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.GetByID))
 	mux.HandleFunc("DELETE /api/servers/{server_id}", authMiddleware.HandlerFunc(ansibleHandler.Delete))

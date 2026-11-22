@@ -23,6 +23,7 @@ type AddNodeRequest struct {
 	PrivateIp      string        `json:"private_ip"       validate:"required_without=IpAddress,omitempty,ip"`
 	SshUser        string        `json:"ssh_user"         validate:"required_with=IpAddress,max=255"`
 	SshKeyName     string        `json:"ssh_key_name"     validate:"max=255"`
+	HostKey        string        `json:"host_key"         validate:"max=1024"`
 	AnsibleRole    string        `json:"ansible_role"     validate:"required,oneof=head_nodes compute_nodes"`
 	SlurmPartition string        `json:"slurm_partition"  validate:"max=255"`
 	CpuCores       *int32        `json:"cpu_cores"       validate:"omitempty,min=1"`
@@ -67,6 +68,7 @@ type ServerResponse struct {
 	PrivateIp       string               `json:"private_ip,omitempty"`
 	SshUser         string               `json:"ssh_user,omitempty"`
 	SshKeyName      string               `json:"ssh_key_name,omitempty"`
+	HostKey         string               `json:"host_key,omitempty"`
 	AnsibleRole     string               `json:"ansible_role"`
 	SlurmPartition  string               `json:"slurm_partition,omitempty"`
 	Status          string               `json:"status"`
@@ -94,6 +96,31 @@ type Store interface {
 	SetAllowedLoginGroups(ctx context.Context, serverID uuid.UUID, groups []AllowedLoginGroupSelection) error
 	ListPartitionAllowedGroups(ctx context.Context, partitionName string) ([]PartitionAllowedGroupDetail, error)
 	SetPartitionAllowedGroups(ctx context.Context, partitionName string, groups []AllowedLoginGroupSelection) error
+	HealthCheck(ctx context.Context, params HealthCheckParams) (HealthCheckResult, error)
+}
+
+// HealthCheckRequest carries the connection details to validate before a server row is created.
+// The fields mirror the connection subset of AddNodeRequest, plus the host key the client has
+// chosen to trust (empty on the first call, which returns the scanned key for confirmation).
+type HealthCheckRequest struct {
+	AnsibleName    string `json:"ansible_name"    validate:"required,max=253,hostname_rfc1123"`
+	IpAddress      string `json:"ip_address"      validate:"required_without=SshConfigHost,omitempty,ip"`
+	SshConfigHost  string `json:"ssh_config_host" validate:"required_without=IpAddress,max=255"`
+	SshUser        string `json:"ssh_user"        validate:"required_with=IpAddress,max=255"`
+	SshKeyName     string `json:"ssh_key_name"    validate:"max=255"`
+	TrustedHostKey string `json:"trusted_host_key" validate:"max=1024"`
+}
+
+type HealthCheckResponse struct {
+	Ok            bool   `json:"ok"`
+	Stage         string `json:"stage"`
+	Reachable     bool   `json:"reachable"`
+	HostKey       string `json:"host_key,omitempty"`
+	Fingerprint   string `json:"fingerprint,omitempty"`
+	HostKeyStatus string `json:"host_key_status"`
+	LoginOk       bool   `json:"login_ok"`
+	AnsiblePingOk bool   `json:"ansible_ping_ok"`
+	Detail        string `json:"detail,omitempty"`
 }
 
 type UpdateAllowedLoginGroupsRequest []AllowedLoginGroupRequest
@@ -170,6 +197,42 @@ func (h *Handler) AddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, toResponse(server))
+}
+
+func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "HealthCheck")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req HealthCheckRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	result, err := h.store.HealthCheck(traceCtx, HealthCheckParams{
+		AnsibleName:    req.AnsibleName,
+		IPAddress:      req.IpAddress,
+		SSHConfigHost:  req.SshConfigHost,
+		SSHUser:        req.SshUser,
+		SSHKeyName:     req.SshKeyName,
+		TrustedHostKey: req.TrustedHostKey,
+	})
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	handlerutil.WriteJSONResponse(w, http.StatusOK, HealthCheckResponse{
+		Ok:            result.OK,
+		Stage:         result.Stage,
+		Reachable:     result.Reachable,
+		HostKey:       result.HostKey,
+		Fingerprint:   result.Fingerprint,
+		HostKeyStatus: result.HostKeyStatus,
+		LoginOk:       result.LoginOK,
+		AnsiblePingOk: result.AnsiblePingOK,
+		Detail:        result.Detail,
+	})
 }
 
 func (h *Handler) AddNodes(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +506,9 @@ func toResponse(s Server) ServerResponse {
 	if s.SshKeyName.Valid {
 		resp.SshKeyName = s.SshKeyName.String
 	}
+	if s.HostKey.Valid {
+		resp.HostKey = s.HostKey.String
+	}
 	if s.SlurmPartition.Valid {
 		resp.SlurmPartition = s.SlurmPartition.String
 	}
@@ -469,6 +535,7 @@ func toCreateParams(req AddNodeRequest) CreateParams {
 		PrivateIp:     pgtype.Text{String: req.PrivateIp, Valid: req.PrivateIp != ""},
 		SshUser:       pgtype.Text{String: req.SshUser, Valid: req.SshUser != ""},
 		SshKeyName:    pgtype.Text{String: req.SshKeyName, Valid: req.SshKeyName != ""},
+		HostKey:       pgtype.Text{String: req.HostKey, Valid: req.HostKey != ""},
 		AnsibleRole:   req.AnsibleRole,
 		EnableSlurm:   req.Features.slurmEnabled(),
 		MountNfsHome:  req.Features.nfsHomeEnabled(),

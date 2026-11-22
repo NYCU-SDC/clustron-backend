@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE servers DROP COLUMN IF EXISTS host_key;
+
+COMMIT;
