@@ -100,22 +100,20 @@ func (s *Service) healthCheckDirectIP(ctx context.Context, logger *zap.Logger, p
 	hostKeyLine := marshalHostKey(liveKey)
 	fingerprint := ssh.FingerprintSHA256(liveKey)
 
-	switch {
-	case params.TrustedHostKey == "":
+	if params.TrustedHostKey == "" {
 		// First call: nothing to compare against. Ask the user to trust this key.
 		return HealthCheckResult{Stage: stageHostKey, Reachable: true, HostKey: hostKeyLine,
 			Fingerprint: fingerprint, HostKeyStatus: hostKeyNew}, nil
-	default:
-		matches, parseErr := sameHostKey(params.TrustedHostKey, liveKey)
-		if parseErr != nil {
-			return HealthCheckResult{Stage: stageHostKey, Reachable: true, HostKey: hostKeyLine,
-				Fingerprint: fingerprint, HostKeyStatus: hostKeyNew,
-				Detail: fmt.Sprintf("could not parse trusted host key: %v", parseErr)}, nil
-		}
-		if !matches {
-			return HealthCheckResult{Stage: stageHostKey, Reachable: true, HostKey: hostKeyLine,
-				Fingerprint: fingerprint, HostKeyStatus: hostKeyChanged}, nil
-		}
+	}
+	matches, parseErr := sameHostKey(params.TrustedHostKey, liveKey)
+	if parseErr != nil {
+		return HealthCheckResult{Stage: stageHostKey, Reachable: true, HostKey: hostKeyLine,
+			Fingerprint: fingerprint, HostKeyStatus: hostKeyNew,
+			Detail: fmt.Sprintf("could not parse trusted host key: %v", parseErr)}, nil
+	}
+	if !matches {
+		return HealthCheckResult{Stage: stageHostKey, Reachable: true, HostKey: hostKeyLine,
+			Fingerprint: fingerprint, HostKeyStatus: hostKeyChanged}, nil
 	}
 
 	// Stage 3: login with the provided identity, pinned to the trusted host key.
